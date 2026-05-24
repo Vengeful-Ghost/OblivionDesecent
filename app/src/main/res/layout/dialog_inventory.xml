@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="#F0000000"
+    android:padding="10dp">
+
+    <!-- LEFT: Equipped Panel -->
+    <LinearLayout
+        android:layout_width="210dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_dialog_bg"
+        android:padding="14dp"
+        android:layout_marginEnd="8dp">
+
+        <!-- Title -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Equipped"
+                android:textAllCaps="true"
+                android:textSize="18sp"
+                android:textColor="#33000000"
+                android:gravity="center"
+                android:letterSpacing="0.08"
+                android:translationX="2dp"
+                android:translationY="2dp"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Equipped"
+                android:textAllCaps="true"
+                android:textSize="18sp"
+                android:textColor="#FFD700"
+                android:gravity="center"
+                android:letterSpacing="0.08"
+                android:shadowColor="#FFB700"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="8"
+                tools:ignore="HardcodedText"/>
+
+        </FrameLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#2A2A2A"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- Weapon slot -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚔  WEAPON"
+                android:textColor="#555555"
+                android:textSize="10sp"
+                android:letterSpacing="0.15"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/txt_equipped_weapon"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Fists"
+                android:textColor="#AAAAAA"
+                android:textSize="13sp"
+                android:layout_marginTop="2dp"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+        <!-- Head slot -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🪖  HEAD"
+                android:textColor="#555555"
+                android:textSize="10sp"
+                android:letterSpacing="0.15"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/txt_equipped_head"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="#444444"
+                android:textSize="13sp"
+                android:layout_marginTop="2dp"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+        <!-- Chest slot -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🧥  CHEST"
+                android:textColor="#555555"
+                android:textSize="10sp"
+                android:letterSpacing="0.15"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/txt_equipped_chest"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="#444444"
+                android:textSize="13sp"
+                android:layout_marginTop="2dp"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+        <!-- Legs slot -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🩲  LEGS"
+                android:textColor="#555555"
+                android:textSize="10sp"
+                android:letterSpacing="0.15"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/txt_equipped_legs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="#444444"
+                android:textSize="13sp"
+                android:layout_marginTop="2dp"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+        <!-- Boots slot -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="👢  BOOTS"
+                android:textColor="#555555"
+                android:textSize="10sp"
+                android:letterSpacing="0.15"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/txt_equipped_boots"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="#444444"
+                android:textSize="13sp"
+                android:layout_marginTop="2dp"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+        <!-- Spacer -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"/>
+
+        <!-- Close button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_close_inventory"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:text="Close"
+            android:textAllCaps="false"
+            android:textColor="#AAAAAA"
+            android:textSize="14sp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            app:cornerRadius="20dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="#444444"
+            app:backgroundTint="@color/darkGray"
+            tools:ignore="HardcodedText"/>
+
+    </LinearLayout>
+
+    <!-- RIGHT: Inventory Panel -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_dialog_bg"
+        android:padding="14dp">
+
+        <!-- Title -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Inventory"
+                android:textAllCaps="true"
+                android:textSize="18sp"
+                android:textColor="#33000000"
+                android:gravity="center"
+                android:letterSpacing="0.08"
+                android:translationX="2dp"
+                android:translationY="2dp"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Inventory"
+                android:textAllCaps="true"
+                android:textSize="18sp"
+                android:textColor="#FFD700"
+                android:gravity="center"
+                android:letterSpacing="0.08"
+                android:shadowColor="#FFB700"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="8"
+                tools:ignore="HardcodedText"/>
+
+        </FrameLayout>
+
+        <!-- Filter tabs -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:id="@+id/filter_all"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="ALL"
+                android:textColor="#FFD700"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:paddingVertical="6dp"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/filter_weapons"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="WEAPONS"
+                android:textColor="#666666"
+                android:textSize="11sp"
+                android:gravity="center"
+                android:paddingVertical="6dp"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/filter_armor"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="ARMOR"
+                android:textColor="#666666"
+                android:textSize="11sp"
+                android:gravity="center"
+                android:paddingVertical="6dp"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/filter_consumables"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="CONSUMABLES"
+                android:textColor="#666666"
+                android:textSize="11sp"
+                android:gravity="center"
+                android:paddingVertical="6dp"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#2A2A2A"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- Item list -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <LinearLayout
+                android:id="@+id/inventory_list_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"/>
+
+        </ScrollView>
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="280dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="20dp"
+    android:background="@drawable/dialog_bg"
+    android:layout_gravity="center">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="💀"
+        android:textSize="48sp"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="GAME OVER"
+        android:textColor="#FF3333"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.15"
+        android:layout_marginBottom="4dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="You have fallen into the Oblivion..."
+        android:textColor="#AAAAAA"
+        android:textSize="12sp"
+        android:gravity="center"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:id="@+id/txt_checkpoint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🏁  Last checkpoint: Floor 1"
+        android:textColor="#CCCCCC"
+        android:textSize="13sp"
+        android:gravity="center"
+        android:layout_marginBottom="20dp"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_respawn"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:text="RESPAWN"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        app:backgroundTint="#CC2200AA"
+        app:cornerRadius="24dp"
+        app:strokeWidth="2dp"
+        app:strokeColor="#6644FF"
+        android:layout_marginBottom="8dp"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_game_over_menu"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:text="MAIN MENU"
+        android:textSize="15sp"
+        android:textColor="#AAAAAA"
+        app:backgroundTint="#CC222222"
+        app:cornerRadius="24dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="#555555"/>
+
+</LinearLayout>

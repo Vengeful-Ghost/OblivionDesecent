@@ -1,0 +1,9 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Base.Theme.OblivionDescent" parent="Theme.Material3.DayNight.NoActionBar">
+    </style>
+    <style name="AlertDialogDark" parent="Theme.MaterialComponents.Dialog.Alert">
+        <item name="android:background">#1E1E1E</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="colorAccent">#FFD700</item>
+    </style>
+</resources>

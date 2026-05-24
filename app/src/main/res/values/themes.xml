@@ -1,0 +1,16 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Base.Theme.OblivionDescent" parent="Theme.Material3.DayNight.NoActionBar">
+    </style>
+    <style name="Theme.OblivionDescent" parent="Base.Theme.OblivionDescent" />
+    <style name="LoadingDialogStyle" parent="Theme.AppCompat.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.65</item>
+    </style>
+    <style name="AlertDialogDark" parent="Theme.MaterialComponents.Dialog.Alert">
+        <item name="android:background">#1E1E1E</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="colorAccent">#FFD700</item>
+    </style>
+</resources>

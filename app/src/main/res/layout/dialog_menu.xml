@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:background="#88000000"
+    android:clickable="true"
+    android:focusable="true"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:id="@+id/dialog_menu"
+        android:layout_width="400dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_dialog_bg"
+        android:padding="24dp"
+        android:layout_gravity="center">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:paddingTop="8dp"
+            android:paddingBottom="24dp">
+
+            <TextView
+                android:id="@+id/GameTitleBack"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Oblivion Descent"
+                android:textAllCaps="true"
+                android:textSize="32sp"
+                android:singleLine="true"
+                android:textColor="#55000000"
+                android:gravity="center"
+                android:letterSpacing="0.06"
+                android:ellipsize="none"
+                android:scrollHorizontally="false"
+                android:translationX="3dp"
+                android:translationY="3dp"
+                tools:ignore="HardcodedText" />
+
+            <TextView
+                android:id="@+id/GameTitleFront"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Oblivion Descent"
+                android:textAllCaps="true"
+                android:textSize="32sp"
+                android:singleLine="true"
+                android:textColor="#FFD700"
+                android:ellipsize="none"
+                android:scrollHorizontally="false"
+                android:gravity="center"
+                android:letterSpacing="0.06"
+                tools:ignore="HardcodedText" />
+        </FrameLayout>
+
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_resume"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:text="Resume"
+            android:textSize="20sp"
+            android:textColor="@android:color/white"
+            app:cornerRadius="30dp"
+            app:strokeWidth="3dp"
+            app:strokeColor="@color/orange"
+            app:backgroundTint="@color/darkGray"
+            android:layout_marginBottom="16dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_settings"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:text="Settings"
+            android:textSize="20sp"
+            android:textColor="@android:color/white"
+            app:cornerRadius="30dp"
+            app:strokeWidth="3dp"
+            app:strokeColor="@color/orange"
+            app:backgroundTint="@color/darkGray"
+            android:layout_marginBottom="16dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_main_menu"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:text="Main Menu"
+            android:textSize="20sp"
+            android:textColor="@android:color/white"
+            app:cornerRadius="30dp"
+            app:strokeWidth="3dp"
+            app:strokeColor="@color/orange"
+            app:backgroundTint="@color/darkGray" />
+
+    </LinearLayout>
+
+</FrameLayout>

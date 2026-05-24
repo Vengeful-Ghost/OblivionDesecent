@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#CC000000"
+    android:clickable="true"
+    android:focusable="true">
+
+    <LinearLayout
+        android:layout_width="360dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_dialog_bg"
+        android:padding="20dp">
+
+        <!-- Header -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:id="@+id/btn_close_user_detail"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="start|center_vertical"
+                android:text="✕"
+                android:textColor="#888888"
+                android:textSize="18sp"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/user_detail_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:gravity="center"
+                android:paddingHorizontal="36dp"
+                android:text="Username"
+                android:textColor="#FFD700"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                tools:ignore="HardcodedText"/>
+
+        </FrameLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#2A2A2A"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- Stats list -->
+        <LinearLayout
+            android:id="@+id/user_detail_stats"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Follow button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_follow"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:text="Follow"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            app:cornerRadius="22dp"
+            app:strokeWidth="2dp"
+            app:strokeColor="#FFD700"
+            app:backgroundTint="@color/darkGray"
+            tools:ignore="HardcodedText"/>
+
+    </LinearLayout>
+
+</FrameLayout>

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="52dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="10dp"
+    android:paddingVertical="6dp"
+    android:layout_marginBottom="4dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Name + subtitle -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/inv_item_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Item Name"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"/>
+
+        <TextView
+            android:id="@+id/inv_item_subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="WEAPON"
+            android:textColor="#888888"
+            android:textSize="10sp"
+            android:layout_marginTop="1dp"/>
+
+    </LinearLayout>
+
+    <!-- Quantity badge (consumables only) -->
+    <TextView
+        android:id="@+id/inv_item_quantity"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="x2"
+        android:textColor="#FFD700"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        android:layout_marginEnd="8dp"/>
+
+    <!-- Equipped badge -->
+    <TextView
+        android:id="@+id/inv_equipped_badge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="EQUIPPED"
+        android:textColor="#00CC66"
+        android:textSize="9sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.1"
+        android:visibility="gone"/>
+
+</LinearLayout>

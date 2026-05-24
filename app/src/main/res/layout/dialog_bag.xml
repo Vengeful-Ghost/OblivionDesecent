@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#AA000000"
+    android:clickable="true"
+    android:focusable="true"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:id="@+id/dialog_inventory_layout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_dialog_bg"
+        android:padding="24dp"
+        android:minWidth="500dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="16dp">
+
+            <TextView
+                android:id="@+id/InventoryTitleBack"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Inventory"
+                android:textAllCaps="true"
+                android:textSize="32sp"
+                android:textColor="#55000000"
+                android:gravity="center"
+                android:letterSpacing="0.06"
+                android:translationX="3dp"
+                android:translationY="3dp" />
+
+            <TextView
+                android:id="@+id/InventoryTitleFront"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Inventory"
+                android:textAllCaps="true"
+                android:textSize="32sp"
+                android:textColor="#FFD700"
+                android:gravity="center"
+                android:letterSpacing="0.06" />
+        </FrameLayout>
+
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:scrollbars="vertical"
+            android:fadeScrollbars="false">
+
+            <GridLayout
+                android:id="@+id/weapon_grid"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:columnCount="5"
+                app:alignmentMode="alignMargins"
+                app:columnOrderPreserved="false"
+                android:orientation="horizontal"
+                android:padding="4dp" />
+
+        </androidx.core.widget.NestedScrollView>
+
+    </LinearLayout>
+</FrameLayout>
