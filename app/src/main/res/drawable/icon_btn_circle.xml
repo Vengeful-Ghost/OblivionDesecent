@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Circular gold-rimmed icon button frame (HUD menu/bag, settings cogs) -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/gold_translucent_strong">
+
+    <item android:id="@android:id/mask">
+        <shape android:shape="oval">
+            <solid android:color="@color/gold_bright"/>
+        </shape>
+    </item>
+
+    <item>
+        <layer-list>
+            <item>
+                <shape android:shape="oval">
+                    <solid android:color="@color/border_gold"/>
+                </shape>
+            </item>
+            <item android:left="2dp" android:top="2dp" android:right="2dp" android:bottom="2dp">
+                <shape android:shape="oval">
+                    <solid android:color="@color/gold_deep"/>
+                </shape>
+            </item>
+            <item android:left="3dp" android:top="3dp" android:right="3dp" android:bottom="3dp">
+                <shape android:shape="oval">
+                    <gradient
+                        android:type="radial"
+                        android:gradientRadius="32dp"
+                        android:startColor="@color/bg_surface_alt"
+                        android:endColor="@color/bg_deepest"/>
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+
+</ripple>

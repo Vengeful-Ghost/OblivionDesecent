@@ -5,13 +5,14 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#1E1E1E">
+    android:background="@drawable/game_background">
 
     <View
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/vignette_overlay"
-        android:alpha="0.92"
+        android:alpha="0.94"
+        android:animation="@anim/slow_pulse"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -35,16 +36,18 @@
             android:layout_gravity="center"
             android:text="Start Game"
             android:textAllCaps="true"
-            android:textSize="42sp"
-            android:textColor="#33000000"
+            android:textSize="44sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:textColor="#66000000"
             android:gravity="center"
-            android:letterSpacing="0.06"
-            android:shadowColor="#99000000"
-            android:shadowDx="3"
-            android:shadowDy="3"
-            android:shadowRadius="8"
-            android:translationX="-4dp"
-            android:translationY="4dp"
+            android:letterSpacing="0.08"
+            android:shadowColor="#CC000000"
+            android:shadowDx="4"
+            android:shadowDy="4"
+            android:shadowRadius="10"
+            android:translationX="-5dp"
+            android:translationY="5dp"
             tools:ignore="HardcodedText"/>
 
         <TextView
@@ -53,31 +56,36 @@
             android:layout_gravity="center"
             android:text="Start Game"
             android:textAllCaps="true"
-            android:textSize="42sp"
-            android:textColor="#FFD700"
+            android:textSize="44sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:textColor="@color/gold_bright"
             android:gravity="center"
-            android:letterSpacing="0.06"
-            android:shadowColor="#FFB700"
+            android:letterSpacing="0.08"
+            android:shadowColor="@color/gold_glow"
             android:shadowDx="0"
             android:shadowDy="0"
-            android:shadowRadius="16"
+            android:shadowRadius="18"
             android:animation="@anim/glow_pulse"
             tools:ignore="HardcodedText"/>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_back"
-            android:layout_width="180dp"
-            android:layout_height="52dp"
+            android:layout_width="200dp"
+            android:layout_height="54dp"
             android:layout_gravity="bottom|center_horizontal"
             android:layout_marginBottom="32dp"
             android:text="← Main Menu"
             android:textAllCaps="false"
-            android:textColor="#AAAAAA"
+            android:textColor="@color/gold_glow"
             android:textSize="15sp"
-            app:cornerRadius="26dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="#555555"
-            app:backgroundTint="@color/darkGray"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:letterSpacing="0.08"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@null"
+            android:background="@drawable/btn_gothic_secondary"
             tools:ignore="HardcodedText"/>
 
     </FrameLayout>
@@ -89,7 +97,7 @@
         android:layout_height="0dp"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
-        android:padding="16dp"
+        android:padding="18dp"
         app:layout_constraintWidth_percent="0.52"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -105,10 +113,9 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:background="@drawable/dialog_bg"
-            android:padding="14dp"
-            android:layout_marginBottom="10dp">
+            android:padding="16dp"
+            android:layout_marginBottom="12dp">
 
-            <!-- Top: label + info lines -->
             <LinearLayout
                 android:id="@+id/slot1_top"
                 android:layout_width="match_parent"
@@ -120,11 +127,12 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="SLOT 1"
-                    android:textColor="#FFD700"
+                    android:textColor="@color/gold_bright"
                     android:textSize="11sp"
                     android:textStyle="bold"
-                    android:letterSpacing="0.2"
-                    android:layout_marginBottom="4dp"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.28"
+                    android:layout_marginBottom="6dp"
                     tools:ignore="HardcodedText"/>
 
                 <TextView
@@ -132,21 +140,23 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Empty"
-                    android:textColor="#888888"
-                    android:textSize="14sp"/>
+                    android:textColor="@color/bone_muted"
+                    android:textSize="14sp"
+                    android:textStyle="italic"
+                    android:fontFamily="serif"/>
 
                 <TextView
                     android:id="@+id/slot1_info2"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text=""
-                    android:textColor="#AAAAAA"
+                    android:textColor="@color/bone_dim"
                     android:textSize="12sp"
+                    android:fontFamily="serif"
                     android:visibility="gone"/>
 
             </LinearLayout>
 
-            <!-- Bottom: buttons pinned to bottom -->
             <LinearLayout
                 android:id="@+id/slot1_buttons"
                 android:layout_width="match_parent"
@@ -158,53 +168,62 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/slot1_btn_load"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:text="Load"
                     android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/gold_glow"
                     android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.06"
                     android:visibility="gone"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="18dp"
-                    app:strokeWidth="2dp"
-                    app:strokeColor="@color/orange"
-                    app:backgroundTint="@color/darkGray"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/btn_gothic_secondary"
                     android:layout_marginEnd="8dp"
                     tools:ignore="HardcodedText"/>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/slot1_btn_delete"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:text="Delete"
                     android:textAllCaps="false"
-                    android:textColor="#FF4444"
+                    android:textColor="@color/crimson_glow"
                     android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.06"
                     android:visibility="gone"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="18dp"
-                    app:strokeWidth="2dp"
-                    app:strokeColor="#FF4444"
-                    app:backgroundTint="@color/darkGray"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/btn_gothic_danger"
                     android:layout_marginEnd="8dp"
                     tools:ignore="HardcodedText"/>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/slot1_btn_new"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:text="New Game"
                     android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/gold_glow"
                     android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.06"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="18dp"
-                    app:strokeWidth="2dp"
-                    app:strokeColor="@color/orange"
-                    app:backgroundTint="@color/darkGray"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/btn_login"
                     tools:ignore="HardcodedText"/>
 
             </LinearLayout>
@@ -217,8 +236,8 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:background="@drawable/dialog_bg"
-            android:padding="14dp"
-            android:layout_marginBottom="10dp">
+            android:padding="16dp"
+            android:layout_marginBottom="12dp">
 
             <LinearLayout
                 android:id="@+id/slot2_top"
@@ -231,11 +250,12 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="SLOT 2"
-                    android:textColor="#FFD700"
+                    android:textColor="@color/gold_bright"
                     android:textSize="11sp"
                     android:textStyle="bold"
-                    android:letterSpacing="0.2"
-                    android:layout_marginBottom="4dp"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.28"
+                    android:layout_marginBottom="6dp"
                     tools:ignore="HardcodedText"/>
 
                 <TextView
@@ -243,16 +263,19 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Empty"
-                    android:textColor="#888888"
-                    android:textSize="14sp"/>
+                    android:textColor="@color/bone_muted"
+                    android:textSize="14sp"
+                    android:textStyle="italic"
+                    android:fontFamily="serif"/>
 
                 <TextView
                     android:id="@+id/slot2_info2"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text=""
-                    android:textColor="#AAAAAA"
+                    android:textColor="@color/bone_dim"
                     android:textSize="12sp"
+                    android:fontFamily="serif"
                     android:visibility="gone"/>
 
             </LinearLayout>
@@ -268,53 +291,62 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/slot2_btn_load"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:text="Load"
                     android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/gold_glow"
                     android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.06"
                     android:visibility="gone"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="18dp"
-                    app:strokeWidth="2dp"
-                    app:strokeColor="@color/orange"
-                    app:backgroundTint="@color/darkGray"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/btn_gothic_secondary"
                     android:layout_marginEnd="8dp"
                     tools:ignore="HardcodedText"/>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/slot2_btn_delete"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:text="Delete"
                     android:textAllCaps="false"
-                    android:textColor="#FF4444"
+                    android:textColor="@color/crimson_glow"
                     android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.06"
                     android:visibility="gone"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="18dp"
-                    app:strokeWidth="2dp"
-                    app:strokeColor="#FF4444"
-                    app:backgroundTint="@color/darkGray"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/btn_gothic_danger"
                     android:layout_marginEnd="8dp"
                     tools:ignore="HardcodedText"/>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/slot2_btn_new"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:text="New Game"
                     android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/gold_glow"
                     android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.06"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="18dp"
-                    app:strokeWidth="2dp"
-                    app:strokeColor="@color/orange"
-                    app:backgroundTint="@color/darkGray"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/btn_login"
                     tools:ignore="HardcodedText"/>
 
             </LinearLayout>
@@ -327,7 +359,7 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:background="@drawable/dialog_bg"
-            android:padding="14dp">
+            android:padding="16dp">
 
             <LinearLayout
                 android:id="@+id/slot3_top"
@@ -340,11 +372,12 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="SLOT 3"
-                    android:textColor="#FFD700"
+                    android:textColor="@color/gold_bright"
                     android:textSize="11sp"
                     android:textStyle="bold"
-                    android:letterSpacing="0.2"
-                    android:layout_marginBottom="4dp"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.28"
+                    android:layout_marginBottom="6dp"
                     tools:ignore="HardcodedText"/>
 
                 <TextView
@@ -352,16 +385,19 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Empty"
-                    android:textColor="#888888"
-                    android:textSize="14sp"/>
+                    android:textColor="@color/bone_muted"
+                    android:textSize="14sp"
+                    android:textStyle="italic"
+                    android:fontFamily="serif"/>
 
                 <TextView
                     android:id="@+id/slot3_info2"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text=""
-                    android:textColor="#AAAAAA"
+                    android:textColor="@color/bone_dim"
                     android:textSize="12sp"
+                    android:fontFamily="serif"
                     android:visibility="gone"/>
 
             </LinearLayout>
@@ -377,53 +413,62 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/slot3_btn_load"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:text="Load"
                     android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/gold_glow"
                     android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.06"
                     android:visibility="gone"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="18dp"
-                    app:strokeWidth="2dp"
-                    app:strokeColor="@color/orange"
-                    app:backgroundTint="@color/darkGray"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/btn_gothic_secondary"
                     android:layout_marginEnd="8dp"
                     tools:ignore="HardcodedText"/>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/slot3_btn_delete"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:text="Delete"
                     android:textAllCaps="false"
-                    android:textColor="#FF4444"
+                    android:textColor="@color/crimson_glow"
                     android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.06"
                     android:visibility="gone"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="18dp"
-                    app:strokeWidth="2dp"
-                    app:strokeColor="#FF4444"
-                    app:backgroundTint="@color/darkGray"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/btn_gothic_danger"
                     android:layout_marginEnd="8dp"
                     tools:ignore="HardcodedText"/>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/slot3_btn_new"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:text="New Game"
                     android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/gold_glow"
                     android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.06"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="18dp"
-                    app:strokeWidth="2dp"
-                    app:strokeColor="@color/orange"
-                    app:backgroundTint="@color/darkGray"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/btn_login"
                     tools:ignore="HardcodedText"/>
 
             </LinearLayout>

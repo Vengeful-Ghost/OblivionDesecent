@@ -1,16 +1,40 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Base theme: dark fantasy gothic, no action bar -->
     <style name="Base.Theme.OblivionDescent" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/bg_base</item>
+        <item name="android:colorBackground">@color/bg_base</item>
+        <item name="colorPrimary">@color/gold_base</item>
+        <item name="colorPrimaryVariant">@color/gold_deep</item>
+        <item name="colorOnPrimary">@color/bg_deepest</item>
+        <item name="colorSecondary">@color/crimson_base</item>
+        <item name="colorOnSecondary">@color/bone_white</item>
+        <item name="colorSurface">@color/bg_surface</item>
+        <item name="colorOnSurface">@color/bone_white</item>
+        <item name="colorAccent">@color/gold_bright</item>
+        <item name="android:textColorPrimary">@color/bone_white</item>
+        <item name="android:textColorSecondary">@color/bone_dim</item>
+        <item name="android:textColorHint">@color/bone_muted</item>
     </style>
+
     <style name="Theme.OblivionDescent" parent="Base.Theme.OblivionDescent" />
+
+    <!-- Loading dialog: transparent so our custom drawable shows through -->
     <style name="LoadingDialogStyle" parent="Theme.AppCompat.Dialog">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:backgroundDimEnabled">true</item>
-        <item name="android:backgroundDimAmount">0.65</item>
+        <item name="android:backgroundDimAmount">0.78</item>
     </style>
+
+    <!-- Material alert dialog skin, dark gothic -->
     <style name="AlertDialogDark" parent="Theme.MaterialComponents.Dialog.Alert">
-        <item name="android:background">#1E1E1E</item>
-        <item name="android:textColor">#FFFFFF</item>
-        <item name="colorAccent">#FFD700</item>
+        <item name="android:background">@color/bg_surface</item>
+        <item name="android:textColor">@color/bone_white</item>
+        <item name="colorAccent">@color/gold_bright</item>
+        <item name="colorPrimary">@color/gold_base</item>
+        <item name="android:textColorPrimary">@color/bone_white</item>
+        <item name="android:textColorSecondary">@color/bone_dim</item>
     </style>
+
 </resources>

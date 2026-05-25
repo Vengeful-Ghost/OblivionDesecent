@@ -1,5 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Background particle: faint gold ember -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
     <size android:width="6dp" android:height="6dp"/>
-    <solid android:color="#4DFFFFFF"/>
-    <alpha android:value="0.3"/>
+    <solid android:color="@color/gold_glow"/>
+    <alpha android:value="0.35"/>
 </shape>

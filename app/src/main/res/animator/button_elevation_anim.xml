@@ -1,18 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_pressed="true">
-        <objectAnimator
-            android:propertyName="translationZ"
-            android:duration="100"
-            android:valueFrom="8dp"
-            android:valueTo="2dp"
-            android:valueType="floatType"/>
+        <set>
+            <objectAnimator
+                android:propertyName="translationZ"
+                android:duration="120"
+                android:valueFrom="6dp"
+                android:valueTo="1dp"
+                android:valueType="floatType"/>
+            <objectAnimator
+                android:propertyName="scaleX"
+                android:duration="120"
+                android:valueFrom="1.0"
+                android:valueTo="0.97"
+                android:valueType="floatType"/>
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:duration="120"
+                android:valueFrom="1.0"
+                android:valueTo="0.97"
+                android:valueType="floatType"/>
+        </set>
     </item>
     <item>
-        <objectAnimator
-            android:propertyName="translationZ"
-            android:duration="100"
-            android:valueFrom="2dp"
-            android:valueTo="8dp"
-            android:valueType="floatType"/>
+        <set>
+            <objectAnimator
+                android:propertyName="translationZ"
+                android:duration="160"
+                android:valueFrom="1dp"
+                android:valueTo="6dp"
+                android:valueType="floatType"/>
+            <objectAnimator
+                android:propertyName="scaleX"
+                android:duration="160"
+                android:valueFrom="0.97"
+                android:valueTo="1.0"
+                android:valueType="floatType"/>
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:duration="160"
+                android:valueFrom="0.97"
+                android:valueTo="1.0"
+                android:valueType="floatType"/>
+        </set>
     </item>
 </selector>

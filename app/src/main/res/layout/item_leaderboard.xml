@@ -4,9 +4,9 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingHorizontal="10dp"
-    android:paddingVertical="10dp"
-    android:layout_marginBottom="4dp"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="11dp"
+    android:layout_marginBottom="6dp"
     android:clickable="true"
     android:focusable="true"
     android:background="@drawable/dialog_bg">
@@ -14,13 +14,19 @@
     <!-- Rank number -->
     <TextView
         android:id="@+id/lb_rank"
-        android:layout_width="36dp"
+        android:layout_width="40dp"
         android:layout_height="wrap_content"
         android:text="#1"
-        android:textColor="#FFD700"
-        android:textSize="14sp"
+        android:textColor="@color/gold_bright"
+        android:textSize="15sp"
         android:textStyle="bold"
-        android:gravity="center"/>
+        android:fontFamily="serif"
+        android:letterSpacing="0.04"
+        android:gravity="center"
+        android:shadowColor="@color/ink_shadow"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="2"/>
 
     <!-- Name + subtitle -->
     <LinearLayout
@@ -28,16 +34,17 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:layout_marginStart="8dp">
+        android:layout_marginStart="10dp">
 
         <TextView
             android:id="@+id/lb_username"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Username"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/bone_white"
             android:textSize="14sp"
             android:textStyle="bold"
+            android:fontFamily="serif"
             android:maxLines="1"
             android:ellipsize="end"/>
 
@@ -46,8 +53,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Floor 1 • 0 kills"
-            android:textColor="#666666"
+            android:textColor="@color/bone_muted"
             android:textSize="11sp"
+            android:textStyle="italic"
+            android:fontFamily="serif"
             android:layout_marginTop="2dp"/>
 
     </LinearLayout>
@@ -64,18 +73,24 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="1"
-            android:textColor="#FFD700"
-            android:textSize="18sp"
+            android:textColor="@color/gold_bright"
+            android:textSize="20sp"
             android:textStyle="bold"
-            android:gravity="center"/>
+            android:fontFamily="serif"
+            android:gravity="center"
+            android:shadowColor="@color/gold_glow"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="6"/>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="FLOOR"
-            android:textColor="#555555"
+            android:textColor="@color/bone_muted"
             android:textSize="9sp"
-            android:letterSpacing="0.15"
+            android:fontFamily="serif"
+            android:letterSpacing="0.2"
             android:gravity="center"/>
 
     </LinearLayout>

@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:background="#1E1E1E"
+    android:background="@drawable/game_background"
     android:padding="12dp">
 
     <!-- LEFT: Personal Stats Panel -->
@@ -29,12 +29,14 @@
                 android:layout_height="wrap_content"
                 android:text="Personal Stats"
                 android:textAllCaps="true"
-                android:textSize="20sp"
-                android:textColor="#33000000"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:textColor="#66000000"
                 android:gravity="center"
-                android:letterSpacing="0.08"
-                android:translationX="2dp"
-                android:translationY="2dp"
+                android:letterSpacing="0.1"
+                android:translationX="3dp"
+                android:translationY="3dp"
                 tools:ignore="HardcodedText"/>
 
             <TextView
@@ -42,14 +44,16 @@
                 android:layout_height="wrap_content"
                 android:text="Personal Stats"
                 android:textAllCaps="true"
-                android:textSize="20sp"
-                android:textColor="#FFD700"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:textColor="@color/gold_bright"
                 android:gravity="center"
-                android:letterSpacing="0.08"
-                android:shadowColor="#FFB700"
+                android:letterSpacing="0.1"
+                android:shadowColor="@color/gold_glow"
                 android:shadowDx="0"
                 android:shadowDy="0"
-                android:shadowRadius="8"
+                android:shadowRadius="10"
                 tools:ignore="HardcodedText"/>
 
         </FrameLayout>
@@ -66,12 +70,14 @@
             <TextView
                 android:id="@+id/tab_lifetime"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="38dp"
                 android:layout_weight="1"
                 android:text="Lifetime"
-                android:textColor="#FFD700"
+                android:textColor="@color/gold_bright"
                 android:textSize="13sp"
                 android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.08"
                 android:gravity="center"
                 android:clickable="true"
                 android:focusable="true"
@@ -80,11 +86,13 @@
             <TextView
                 android:id="@+id/tab_current"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="38dp"
                 android:layout_weight="1"
                 android:text="Current Game"
-                android:textColor="#666666"
+                android:textColor="@color/bone_muted"
                 android:textSize="13sp"
+                android:fontFamily="serif"
+                android:letterSpacing="0.08"
                 android:gravity="center"
                 android:clickable="true"
                 android:focusable="true"
@@ -95,7 +103,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#2A2A2A"
+            android:background="@drawable/divider_gold"
             android:layout_marginBottom="12dp"/>
 
         <!-- Stats scroll -->
@@ -117,18 +125,19 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_back_stats"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
+            android:layout_height="48dp"
             android:layout_marginTop="12dp"
             android:text="← Back"
             android:textAllCaps="false"
-            android:textColor="#AAAAAA"
+            android:textColor="@color/gold_glow"
             android:textSize="14sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:letterSpacing="0.08"
             android:insetTop="0dp"
             android:insetBottom="0dp"
-            app:cornerRadius="22dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="#444444"
-            app:backgroundTint="@color/darkGray"
+            app:backgroundTint="@null"
+            android:background="@drawable/btn_gothic_secondary"
             tools:ignore="HardcodedText"/>
 
     </LinearLayout>
@@ -153,12 +162,14 @@
                 android:layout_height="wrap_content"
                 android:text="Leaderboard"
                 android:textAllCaps="true"
-                android:textSize="20sp"
-                android:textColor="#33000000"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:textColor="#66000000"
                 android:gravity="center"
-                android:letterSpacing="0.08"
-                android:translationX="2dp"
-                android:translationY="2dp"
+                android:letterSpacing="0.1"
+                android:translationX="3dp"
+                android:translationY="3dp"
                 tools:ignore="HardcodedText"/>
 
             <TextView
@@ -166,14 +177,16 @@
                 android:layout_height="wrap_content"
                 android:text="Leaderboard"
                 android:textAllCaps="true"
-                android:textSize="20sp"
-                android:textColor="#FFD700"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:textColor="@color/gold_bright"
                 android:gravity="center"
-                android:letterSpacing="0.08"
-                android:shadowColor="#FFB700"
+                android:letterSpacing="0.1"
+                android:shadowColor="@color/gold_glow"
                 android:shadowDx="0"
                 android:shadowDy="0"
-                android:shadowRadius="8"
+                android:shadowRadius="10"
                 tools:ignore="HardcodedText"/>
 
         </FrameLayout>
@@ -190,12 +203,14 @@
             <TextView
                 android:id="@+id/tab_global"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="38dp"
                 android:layout_weight="1"
                 android:text="Global"
-                android:textColor="#FFD700"
+                android:textColor="@color/gold_bright"
                 android:textSize="13sp"
                 android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.08"
                 android:gravity="center"
                 android:clickable="true"
                 android:focusable="true"
@@ -204,11 +219,13 @@
             <TextView
                 android:id="@+id/tab_following"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="38dp"
                 android:layout_weight="1"
                 android:text="Following"
-                android:textColor="#666666"
+                android:textColor="@color/bone_muted"
                 android:textSize="13sp"
+                android:fontFamily="serif"
+                android:letterSpacing="0.08"
                 android:gravity="center"
                 android:clickable="true"
                 android:focusable="true"
@@ -232,12 +249,13 @@
             <android.widget.EditText
                 android:id="@+id/search_input"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="38dp"
                 android:layout_weight="1"
                 android:hint="Search username..."
-                android:textColor="#FFFFFF"
-                android:textColorHint="#555555"
+                android:textColor="@color/bone_white"
+                android:textColorHint="@color/bone_muted"
                 android:textSize="13sp"
+                android:fontFamily="serif"
                 android:background="@null"
                 android:singleLine="true"
                 android:imeOptions="actionSearch"
@@ -246,17 +264,20 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_search"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
+                android:layout_height="34dp"
                 android:text="Search"
                 android:textAllCaps="false"
-                android:textColor="#FFD700"
+                android:textColor="@color/gold_glow"
                 android:textSize="12sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.06"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
-                app:cornerRadius="16dp"
-                app:strokeWidth="1dp"
-                app:strokeColor="#FFD700"
-                app:backgroundTint="@color/darkGray"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                app:backgroundTint="@null"
+                android:background="@drawable/btn_gothic_secondary"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
@@ -264,7 +285,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#2A2A2A"
+            android:background="@drawable/divider_gold"
             android:layout_marginBottom="8dp"/>
 
         <!-- RecyclerView for leaderboard -->
@@ -281,7 +302,7 @@
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:layout_gravity="center_horizontal"
-            android:indeterminateTint="#FFD700"
+            android:indeterminateTint="@color/gold_bright"
             android:visibility="gone"/>
 
         <!-- Empty state -->
@@ -290,8 +311,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="No players found"
-            android:textColor="#444444"
+            android:textColor="@color/bone_faint"
             android:textSize="14sp"
+            android:textStyle="italic"
+            android:fontFamily="serif"
             android:gravity="center"
             android:paddingVertical="32dp"
             android:visibility="gone"

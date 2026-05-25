@@ -4,17 +4,18 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#CC000000"
+    android:background="@color/bg_overlay"
     android:clickable="true"
     android:focusable="true">
 
     <LinearLayout
-        android:layout_width="380dp"
+        android:layout_width="400dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
-        android:padding="20dp">
+        android:padding="22dp"
+        android:animation="@anim/dialog_open">
 
         <!-- Header: X + Name -->
         <FrameLayout
@@ -24,12 +25,13 @@
 
             <TextView
                 android:id="@+id/btn_close_detail"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
                 android:layout_gravity="start|center_vertical"
                 android:text="✕"
-                android:textColor="#888888"
+                android:textColor="@color/bone_dim"
                 android:textSize="18sp"
+                android:fontFamily="serif"
                 android:gravity="center"
                 android:clickable="true"
                 android:focusable="true"
@@ -42,11 +44,17 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:gravity="center"
-                android:paddingHorizontal="36dp"
+                android:paddingHorizontal="40dp"
                 android:text="Void Blade"
-                android:textColor="#FFD700"
-                android:textSize="18sp"
+                android:textColor="@color/gold_bright"
+                android:textSize="20sp"
                 android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.06"
+                android:shadowColor="@color/gold_glow"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="10"
                 android:maxLines="2"
                 android:ellipsize="end"
                 tools:ignore="HardcodedText"/>
@@ -59,20 +67,21 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginBottom="10dp">
+            android:layout_marginBottom="12dp">
 
             <TextView
                 android:id="@+id/detail_type"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="WEAPON"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/bone_white"
                 android:textSize="10sp"
                 android:textStyle="bold"
-                android:letterSpacing="0.2"
+                android:fontFamily="serif"
+                android:letterSpacing="0.22"
                 android:background="@drawable/dialog_bg"
-                android:paddingHorizontal="10dp"
-                android:paddingVertical="4dp"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="5dp"
                 tools:ignore="HardcodedText"/>
 
             <View android:layout_width="8dp" android:layout_height="1dp"/>
@@ -82,13 +91,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="LEGENDARY"
-                android:textColor="#FFD700"
+                android:textColor="@color/gold_bright"
                 android:textSize="10sp"
                 android:textStyle="bold"
-                android:letterSpacing="0.2"
+                android:fontFamily="serif"
+                android:letterSpacing="0.22"
                 android:background="@drawable/dialog_bg"
-                android:paddingHorizontal="10dp"
-                android:paddingVertical="4dp"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="5dp"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
@@ -99,18 +109,21 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Description"
-            android:textColor="#888888"
-            android:textSize="12sp"
+            android:textColor="@color/bone_dim"
+            android:textSize="13sp"
+            android:textStyle="italic"
+            android:fontFamily="serif"
+            android:lineSpacingExtra="2dp"
             android:gravity="center"
-            android:layout_marginBottom="12dp"
+            android:layout_marginBottom="14dp"
             tools:ignore="HardcodedText"/>
 
         <!-- Divider -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#2A2A2A"
-            android:layout_marginBottom="12dp"/>
+            android:background="@drawable/divider_gold"
+            android:layout_marginBottom="14dp"/>
 
         <!-- Stats -->
         <TextView
@@ -118,10 +131,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text=""
-            android:textColor="#CCCCCC"
+            android:textColor="@color/bone_white"
             android:textSize="13sp"
+            android:fontFamily="serif"
             android:lineSpacingExtra="6dp"
-            android:layout_marginBottom="16dp"/>
+            android:layout_marginBottom="18dp"/>
 
         <!-- Price + Buy -->
         <LinearLayout
@@ -136,26 +150,34 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="🪙 50"
-                android:textColor="#FFD700"
-                android:textSize="20sp"
+                android:textColor="@color/gold_bright"
+                android:textSize="22sp"
                 android:textStyle="bold"
+                android:fontFamily="serif"
+                android:shadowColor="@color/gold_glow"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="10"
                 tools:ignore="HardcodedText"/>
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_buy_detail"
                 android:layout_width="wrap_content"
-                android:layout_height="44dp"
+                android:layout_height="48dp"
                 android:text="Buy"
                 android:textAllCaps="false"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/gold_glow"
                 android:textSize="15sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.08"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
-                android:paddingHorizontal="28dp"
-                app:cornerRadius="22dp"
-                app:strokeWidth="2dp"
-                app:strokeColor="#FFD700"
-                app:backgroundTint="@color/darkGray"
+                android:paddingHorizontal="30dp"
+                app:backgroundTint="@null"
+                android:background="@drawable/btn_login"
+                android:stateListAnimator="@animator/button_elevation_anim"
+                android:translationZ="4dp"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>

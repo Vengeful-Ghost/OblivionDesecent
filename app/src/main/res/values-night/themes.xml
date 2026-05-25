@@ -1,9 +1,29 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Night and Day are identical: this game is always dark gothic -->
     <style name="Base.Theme.OblivionDescent" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/bg_base</item>
+        <item name="android:colorBackground">@color/bg_base</item>
+        <item name="colorPrimary">@color/gold_base</item>
+        <item name="colorPrimaryVariant">@color/gold_deep</item>
+        <item name="colorOnPrimary">@color/bg_deepest</item>
+        <item name="colorSecondary">@color/crimson_base</item>
+        <item name="colorOnSecondary">@color/bone_white</item>
+        <item name="colorSurface">@color/bg_surface</item>
+        <item name="colorOnSurface">@color/bone_white</item>
+        <item name="colorAccent">@color/gold_bright</item>
+        <item name="android:textColorPrimary">@color/bone_white</item>
+        <item name="android:textColorSecondary">@color/bone_dim</item>
+        <item name="android:textColorHint">@color/bone_muted</item>
     </style>
+
     <style name="AlertDialogDark" parent="Theme.MaterialComponents.Dialog.Alert">
-        <item name="android:background">#1E1E1E</item>
-        <item name="android:textColor">#FFFFFF</item>
-        <item name="colorAccent">#FFD700</item>
+        <item name="android:background">@color/bg_surface</item>
+        <item name="android:textColor">@color/bone_white</item>
+        <item name="colorAccent">@color/gold_bright</item>
+        <item name="colorPrimary">@color/gold_base</item>
+        <item name="android:textColorPrimary">@color/bone_white</item>
+        <item name="android:textColorSecondary">@color/bone_dim</item>
     </style>
+
 </resources>

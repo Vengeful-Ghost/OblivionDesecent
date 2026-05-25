@@ -5,19 +5,18 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:background="#F0000000"
-    android:padding="10dp">
+    android:background="@color/bg_overlay"
+    android:padding="12dp">
 
     <!-- LEFT: Equipped Panel -->
     <LinearLayout
-        android:layout_width="210dp"
+        android:layout_width="230dp"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
-        android:padding="14dp"
-        android:layout_marginEnd="8dp">
+        android:padding="16dp"
+        android:layout_marginEnd="10dp">
 
-        <!-- Title -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -28,10 +27,12 @@
                 android:layout_height="wrap_content"
                 android:text="Equipped"
                 android:textAllCaps="true"
-                android:textSize="18sp"
-                android:textColor="#33000000"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:textColor="#66000000"
                 android:gravity="center"
-                android:letterSpacing="0.08"
+                android:letterSpacing="0.1"
                 android:translationX="2dp"
                 android:translationY="2dp"
                 tools:ignore="HardcodedText"/>
@@ -41,14 +42,16 @@
                 android:layout_height="wrap_content"
                 android:text="Equipped"
                 android:textAllCaps="true"
-                android:textSize="18sp"
-                android:textColor="#FFD700"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:textColor="@color/gold_bright"
                 android:gravity="center"
-                android:letterSpacing="0.08"
-                android:shadowColor="#FFB700"
+                android:letterSpacing="0.1"
+                android:shadowColor="@color/gold_glow"
                 android:shadowDx="0"
                 android:shadowDy="0"
-                android:shadowRadius="8"
+                android:shadowRadius="10"
                 tools:ignore="HardcodedText"/>
 
         </FrameLayout>
@@ -56,8 +59,8 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#2A2A2A"
-            android:layout_marginBottom="12dp"/>
+            android:background="@drawable/divider_gold"
+            android:layout_marginBottom="14dp"/>
 
         <!-- Weapon slot -->
         <LinearLayout
@@ -70,9 +73,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="⚔  WEAPON"
-                android:textColor="#555555"
+                android:textColor="@color/border_gold"
                 android:textSize="10sp"
-                android:letterSpacing="0.15"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.2"
                 tools:ignore="HardcodedText"/>
 
             <TextView
@@ -80,9 +85,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Fists"
-                android:textColor="#AAAAAA"
+                android:textColor="@color/bone_white"
                 android:textSize="13sp"
-                android:layout_marginTop="2dp"
+                android:fontFamily="serif"
+                android:layout_marginTop="3dp"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
@@ -98,9 +104,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🪖  HEAD"
-                android:textColor="#555555"
+                android:textColor="@color/border_gold"
                 android:textSize="10sp"
-                android:letterSpacing="0.15"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.2"
                 tools:ignore="HardcodedText"/>
 
             <TextView
@@ -108,9 +116,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="—"
-                android:textColor="#444444"
+                android:textColor="@color/bone_faint"
                 android:textSize="13sp"
-                android:layout_marginTop="2dp"
+                android:fontFamily="serif"
+                android:layout_marginTop="3dp"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
@@ -126,9 +135,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🧥  CHEST"
-                android:textColor="#555555"
+                android:textColor="@color/border_gold"
                 android:textSize="10sp"
-                android:letterSpacing="0.15"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.2"
                 tools:ignore="HardcodedText"/>
 
             <TextView
@@ -136,9 +147,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="—"
-                android:textColor="#444444"
+                android:textColor="@color/bone_faint"
                 android:textSize="13sp"
-                android:layout_marginTop="2dp"
+                android:fontFamily="serif"
+                android:layout_marginTop="3dp"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
@@ -154,9 +166,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🩲  LEGS"
-                android:textColor="#555555"
+                android:textColor="@color/border_gold"
                 android:textSize="10sp"
-                android:letterSpacing="0.15"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.2"
                 tools:ignore="HardcodedText"/>
 
             <TextView
@@ -164,9 +178,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="—"
-                android:textColor="#444444"
+                android:textColor="@color/bone_faint"
                 android:textSize="13sp"
-                android:layout_marginTop="2dp"
+                android:fontFamily="serif"
+                android:layout_marginTop="3dp"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
@@ -182,9 +197,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="👢  BOOTS"
-                android:textColor="#555555"
+                android:textColor="@color/border_gold"
                 android:textSize="10sp"
-                android:letterSpacing="0.15"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.2"
                 tools:ignore="HardcodedText"/>
 
             <TextView
@@ -192,9 +209,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="—"
-                android:textColor="#444444"
+                android:textColor="@color/bone_faint"
                 android:textSize="13sp"
-                android:layout_marginTop="2dp"
+                android:fontFamily="serif"
+                android:layout_marginTop="3dp"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
@@ -209,17 +227,18 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_close_inventory"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="44dp"
             android:text="Close"
             android:textAllCaps="false"
-            android:textColor="#AAAAAA"
+            android:textColor="@color/bone_dim"
             android:textSize="14sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:letterSpacing="0.08"
             android:insetTop="0dp"
             android:insetBottom="0dp"
-            app:cornerRadius="20dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="#444444"
-            app:backgroundTint="@color/darkGray"
+            app:backgroundTint="@null"
+            android:background="@drawable/btn_gothic_secondary"
             tools:ignore="HardcodedText"/>
 
     </LinearLayout>
@@ -231,9 +250,8 @@
         android:layout_weight="1"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
-        android:padding="14dp">
+        android:padding="16dp">
 
-        <!-- Title -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -244,10 +262,12 @@
                 android:layout_height="wrap_content"
                 android:text="Inventory"
                 android:textAllCaps="true"
-                android:textSize="18sp"
-                android:textColor="#33000000"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:textColor="#66000000"
                 android:gravity="center"
-                android:letterSpacing="0.08"
+                android:letterSpacing="0.1"
                 android:translationX="2dp"
                 android:translationY="2dp"
                 tools:ignore="HardcodedText"/>
@@ -257,14 +277,16 @@
                 android:layout_height="wrap_content"
                 android:text="Inventory"
                 android:textAllCaps="true"
-                android:textSize="18sp"
-                android:textColor="#FFD700"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:textColor="@color/gold_bright"
                 android:gravity="center"
-                android:letterSpacing="0.08"
-                android:shadowColor="#FFB700"
+                android:letterSpacing="0.1"
+                android:shadowColor="@color/gold_glow"
                 android:shadowDx="0"
                 android:shadowDy="0"
-                android:shadowRadius="8"
+                android:shadowRadius="10"
                 tools:ignore="HardcodedText"/>
 
         </FrameLayout>
@@ -282,11 +304,13 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="ALL"
-                android:textColor="#FFD700"
-                android:textSize="11sp"
+                android:textColor="@color/gold_bright"
+                android:textSize="12sp"
                 android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.12"
                 android:gravity="center"
-                android:paddingVertical="6dp"
+                android:paddingVertical="7dp"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
@@ -297,10 +321,12 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="WEAPONS"
-                android:textColor="#666666"
-                android:textSize="11sp"
+                android:textColor="@color/bone_muted"
+                android:textSize="12sp"
+                android:fontFamily="serif"
+                android:letterSpacing="0.12"
                 android:gravity="center"
-                android:paddingVertical="6dp"
+                android:paddingVertical="7dp"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
@@ -311,10 +337,12 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="ARMOR"
-                android:textColor="#666666"
-                android:textSize="11sp"
+                android:textColor="@color/bone_muted"
+                android:textSize="12sp"
+                android:fontFamily="serif"
+                android:letterSpacing="0.12"
                 android:gravity="center"
-                android:paddingVertical="6dp"
+                android:paddingVertical="7dp"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
@@ -325,10 +353,12 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="CONSUMABLES"
-                android:textColor="#666666"
-                android:textSize="11sp"
+                android:textColor="@color/bone_muted"
+                android:textSize="12sp"
+                android:fontFamily="serif"
+                android:letterSpacing="0.12"
                 android:gravity="center"
-                android:paddingVertical="6dp"
+                android:paddingVertical="7dp"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
@@ -338,14 +368,15 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#2A2A2A"
-            android:layout_marginBottom="8dp"/>
+            android:background="@drawable/divider_gold"
+            android:layout_marginBottom="10dp"/>
 
         <!-- Item list -->
         <ScrollView
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1">
+            android:layout_weight="1"
+            android:scrollbars="none">
 
             <LinearLayout
                 android:id="@+id/inventory_list_container"

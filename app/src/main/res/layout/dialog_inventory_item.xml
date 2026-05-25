@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="52dp"
+    android:layout_height="56dp"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingHorizontal="10dp"
+    android:paddingHorizontal="12dp"
     android:paddingVertical="6dp"
-    android:layout_marginBottom="4dp"
+    android:layout_marginBottom="6dp"
     android:clickable="true"
-    android:focusable="true">
+    android:focusable="true"
+    android:background="@drawable/dialog_bg">
 
-    <!-- Name + subtitle -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -22,9 +22,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Item Name"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
+            android:textColor="@color/bone_white"
+            android:textSize="14sp"
             android:textStyle="bold"
+            android:fontFamily="serif"
             android:maxLines="1"
             android:ellipsize="end"/>
 
@@ -33,34 +34,37 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="WEAPON"
-            android:textColor="#888888"
+            android:textColor="@color/bone_muted"
             android:textSize="10sp"
-            android:layout_marginTop="1dp"/>
+            android:textStyle="italic"
+            android:fontFamily="serif"
+            android:letterSpacing="0.08"
+            android:layout_marginTop="2dp"/>
 
     </LinearLayout>
 
-    <!-- Quantity badge (consumables only) -->
     <TextView
         android:id="@+id/inv_item_quantity"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="x2"
-        android:textColor="#FFD700"
-        android:textSize="12sp"
+        android:textColor="@color/gold_bright"
+        android:textSize="13sp"
         android:textStyle="bold"
+        android:fontFamily="serif"
         android:visibility="gone"
-        android:layout_marginEnd="8dp"/>
+        android:layout_marginEnd="10dp"/>
 
-    <!-- Equipped badge -->
     <TextView
         android:id="@+id/inv_equipped_badge"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="EQUIPPED"
-        android:textColor="#00CC66"
+        android:textColor="@color/success_green"
         android:textSize="9sp"
         android:textStyle="bold"
-        android:letterSpacing="0.1"
+        android:fontFamily="serif"
+        android:letterSpacing="0.18"
         android:visibility="gone"/>
 
 </LinearLayout>

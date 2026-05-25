@@ -1,16 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Input field default: dim bronze trim, recessed dark interior -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="#2A2A2A"/>
-            <corners android:radius="12dp"/>
+            <solid android:color="@color/gold_deep"/>
+            <corners android:radius="6dp"/>
         </shape>
     </item>
-    <item android:top="0dp" android:left="0dp" android:right="0dp" android:bottom="0dp">
+
+    <item
+        android:left="1dp"
+        android:top="1dp"
+        android:right="1dp"
+        android:bottom="1dp">
         <shape android:shape="rectangle">
-            <stroke
-                android:width="2dp"
-                android:color="#FFD700"/>
-            <corners android:radius="12dp"/>
+            <gradient
+                android:type="linear"
+                android:angle="270"
+                android:startColor="@color/bg_deepest"
+                android:endColor="@color/bg_base"/>
+            <corners android:radius="5dp"/>
         </shape>
     </item>
+
 </layer-list>

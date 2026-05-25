@@ -4,8 +4,8 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingVertical="10dp"
-    android:paddingHorizontal="4dp">
+    android:paddingVertical="11dp"
+    android:paddingHorizontal="6dp">
 
     <TextView
         android:id="@+id/stat_label"
@@ -13,16 +13,23 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:text="Highest Floor"
-        android:textColor="#888888"
-        android:textSize="13sp"/>
+        android:textColor="@color/bone_dim"
+        android:textSize="13sp"
+        android:fontFamily="serif"
+        android:letterSpacing="0.03"/>
 
     <TextView
         android:id="@+id/stat_value"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="0"
-        android:textColor="#FFD700"
-        android:textSize="14sp"
-        android:textStyle="bold"/>
+        android:textColor="@color/gold_bright"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:fontFamily="serif"
+        android:shadowColor="@color/ink_shadow"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="2"/>
 
 </LinearLayout>

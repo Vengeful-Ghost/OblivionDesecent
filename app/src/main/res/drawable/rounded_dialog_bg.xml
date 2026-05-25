@@ -1,5 +1,66 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#222222"/>
-    <corners android:radius="16dp"/>
-</shape>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gothic dialog frame: dark interior, double gold trim, subtle inner glow -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Outer dark shadow border (tarnished bronze) -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/border_gold_outer"/>
+            <corners android:radius="10dp"/>
+        </shape>
+    </item>
+
+    <!-- Outer gold trim line -->
+    <item
+        android:left="2dp"
+        android:top="2dp"
+        android:right="2dp"
+        android:bottom="2dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/border_gold"/>
+            <corners android:radius="9dp"/>
+        </shape>
+    </item>
+
+    <!-- Inner recess (dark) between gold lines -->
+    <item
+        android:left="4dp"
+        android:top="4dp"
+        android:right="4dp"
+        android:bottom="4dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bg_deepest"/>
+            <corners android:radius="8dp"/>
+        </shape>
+    </item>
+
+    <!-- Inner gold trim line -->
+    <item
+        android:left="5dp"
+        android:top="5dp"
+        android:right="5dp"
+        android:bottom="5dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/gold_deep"/>
+            <corners android:radius="7dp"/>
+        </shape>
+    </item>
+
+    <!-- Interior fill with subtle vertical gradient -->
+    <item
+        android:left="6dp"
+        android:top="6dp"
+        android:right="6dp"
+        android:bottom="6dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="270"
+                android:startColor="@color/bg_surface"
+                android:centerColor="@color/bg_surface_alt"
+                android:endColor="@color/bg_surface"/>
+            <corners android:radius="6dp"/>
+        </shape>
+    </item>
+
+</layer-list>

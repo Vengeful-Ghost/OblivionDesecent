@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Danger button: blood-red trim, dark crimson interior (respawn, delete, etc.) -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#66E04848">
+
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/crimson_bright"/>
+            <corners android:radius="10dp"/>
+        </shape>
+    </item>
+
+    <item>
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/crimson_deep"/>
+                    <corners android:radius="10dp"/>
+                </shape>
+            </item>
+            <item
+                android:left="1dp" android:top="1dp"
+                android:right="1dp" android:bottom="1dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/crimson_base"/>
+                    <corners android:radius="9dp"/>
+                </shape>
+            </item>
+            <item
+                android:left="3dp" android:top="3dp"
+                android:right="3dp" android:bottom="3dp">
+                <shape android:shape="rectangle">
+                    <gradient
+                        android:type="linear"
+                        android:angle="270"
+                        android:startColor="#3A0A0A"
+                        android:endColor="#1A0505"/>
+                    <corners android:radius="7dp"/>
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+
+</ripple>

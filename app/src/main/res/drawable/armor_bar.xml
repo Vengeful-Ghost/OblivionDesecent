@@ -1,20 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Armor bar: gold-trimmed frame, steel-blue fill -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Background -->
     <item android:id="@android:id/background">
-        <shape>
-            <solid android:color="#444444"/>
-            <corners android:radius="10dp"/>
-        </shape>
+        <layer-list>
+            <item>
+                <shape>
+                    <solid android:color="@color/border_gold"/>
+                    <corners android:radius="6dp"/>
+                </shape>
+            </item>
+            <item
+                android:left="1dp" android:top="1dp"
+                android:right="1dp" android:bottom="1dp">
+                <shape>
+                    <solid android:color="@color/armor_blue_track"/>
+                    <corners android:radius="5dp"/>
+                </shape>
+            </item>
+        </layer-list>
     </item>
 
-    <!-- Progress (health left) -->
     <item android:id="@android:id/progress">
         <clip>
             <shape>
-                <solid android:color="#000EB6"/>
-                <corners android:radius="10dp"/>
+                <gradient
+                    android:type="linear"
+                    android:angle="270"
+                    android:startColor="@color/armor_blue"
+                    android:endColor="@color/armor_blue_dim"/>
+                <corners android:radius="5dp"/>
             </shape>
         </clip>
     </item>

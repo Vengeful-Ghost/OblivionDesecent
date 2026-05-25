@@ -5,14 +5,14 @@
     android:id="@+id/game_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
+    android:background="@color/bg_deepest"
     tools:context=".GameActivity">
 
     <FrameLayout
         android:id="@+id/game_view_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#222222">
+        android:background="@color/bg_base">
 
         <com.example.obliviondescent.GameDisplay
             android:id="@+id/game_display"
@@ -26,7 +26,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="16dp"
+        android:padding="14dp"
         android:gravity="center_vertical"
         android:layout_alignParentTop="true">
 
@@ -34,12 +34,12 @@
             android:id="@+id/btn_menu"
             android:layout_width="50dp"
             android:layout_height="50dp"
-            app:cornerRadius="25dp"
-            android:backgroundTint="#CC222222"
+            app:backgroundTint="@null"
+            android:background="@drawable/icon_btn_circle"
             app:icon="@drawable/menu_btn"
             app:iconGravity="textStart"
             app:iconPadding="0dp"
-            app:iconTint="@android:color/white"
+            app:iconTint="@color/gold_bright"
             android:insetLeft="0dp"
             android:insetTop="0dp"
             android:insetRight="0dp"
@@ -47,10 +47,12 @@
             app:strokeWidth="0dp" />
 
         <LinearLayout
-            android:layout_width="220dp"
+            android:layout_width="240dp"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_marginStart="16dp">
+            android:padding="8dp"
+            android:background="@drawable/hud_panel"
+            android:layout_marginStart="14dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -62,7 +64,7 @@
                     android:id="@+id/healthBar"
                     style="@android:style/Widget.ProgressBar.Horizontal"
                     android:layout_width="0dp"
-                    android:layout_height="12dp"
+                    android:layout_height="14dp"
                     android:layout_weight="1"
                     android:max="100"
                     android:progress="100"
@@ -72,11 +74,16 @@
                     android:id="@+id/txt_health_value"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
+                    android:layout_marginStart="8dp"
                     android:text="100 / 100"
-                    android:textColor="#FF6666"
+                    android:textColor="@color/crimson_glow"
                     android:textSize="10sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:shadowColor="@color/ink_shadow"
+                    android:shadowDx="0"
+                    android:shadowDy="1"
+                    android:shadowRadius="2" />
 
             </LinearLayout>
 
@@ -91,7 +98,7 @@
                     android:id="@+id/armorBar"
                     style="@android:style/Widget.ProgressBar.Horizontal"
                     android:layout_width="0dp"
-                    android:layout_height="12dp"
+                    android:layout_height="14dp"
                     android:layout_weight="1"
                     android:max="100"
                     android:progress="1"
@@ -101,11 +108,16 @@
                     android:id="@+id/txt_armor_value"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
+                    android:layout_marginStart="8dp"
                     android:text="0 / 0"
-                    android:textColor="#88BBFF"
+                    android:textColor="@color/armor_blue"
                     android:textSize="10sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:shadowColor="@color/ink_shadow"
+                    android:shadowDx="0"
+                    android:shadowDy="1"
+                    android:shadowRadius="2" />
 
             </LinearLayout>
 
@@ -116,12 +128,12 @@
             android:layout_width="50dp"
             android:layout_height="50dp"
             android:layout_marginStart="12dp"
-            app:cornerRadius="25dp"
-            android:backgroundTint="#CC222222"
+            app:backgroundTint="@null"
+            android:background="@drawable/icon_btn_circle"
             app:icon="@drawable/bag_btn"
             app:iconGravity="textStart"
             app:iconPadding="0dp"
-            app:iconTint="@android:color/white"
+            app:iconTint="@color/gold_bright"
             android:insetLeft="0dp"
             android:insetTop="0dp"
             android:insetRight="0dp"
@@ -133,6 +145,8 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:layout_marginStart="12dp"
+            android:padding="8dp"
+            android:background="@drawable/hud_panel"
             android:gravity="center_horizontal">
 
             <TextView
@@ -140,26 +154,43 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Floor 1"
-                android:textColor="#AAAAAA"
-                android:textSize="11sp"
-                android:textStyle="bold"/>
+                android:textColor="@color/bone_white"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.06"
+                android:shadowColor="@color/ink_shadow"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="2"/>
 
             <TextView
                 android:id="@+id/txt_kill_progress"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="0 / 8"
-                android:textColor="#FF6666"
-                android:textSize="11sp"/>
+                android:textColor="@color/crimson_glow"
+                android:textSize="11sp"
+                android:fontFamily="serif"
+                android:textStyle="italic"
+                android:shadowColor="@color/ink_shadow"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="2"/>
 
             <TextView
                 android:id="@+id/txt_gold"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🪙 0"
-                android:textColor="#FFD700"
-                android:textSize="11sp"
-                android:textStyle="bold"/>
+                android:textColor="@color/gold_bright"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:shadowColor="@color/ink_shadow"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="2"/>
 
         </LinearLayout>
 
@@ -193,24 +224,27 @@
             android:layout_marginEnd="24dp"
             android:layout_marginBottom="12dp">
 
-            <com.example.obliviondescent.DashCooldownView
-                android:id="@+id/dash_cooldown_view"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"/>
-
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_dash"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                app:cornerRadius="32dp"
-                android:backgroundTint="#88444444"
+                app:backgroundTint="@null"
+                android:background="@drawable/icon_btn_circle"
                 android:text="D"
                 android:textSize="20sp"
+                android:textColor="@color/gold_bright"
+                android:fontFamily="serif"
+                android:textStyle="bold"
                 android:insetLeft="0dp"
                 android:insetTop="0dp"
                 android:insetRight="0dp"
                 android:insetBottom="0dp"
                 app:strokeWidth="0dp"/>
+
+            <com.example.obliviondescent.DashCooldownView
+                android:id="@+id/dash_cooldown_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"/>
 
         </FrameLayout>
 
@@ -220,16 +254,18 @@
             android:layout_width="96dp"
             android:layout_height="96dp"
             app:cornerRadius="48dp"
-            android:backgroundTint="#CC990000"
+            android:backgroundTint="@color/crimson_base"
             android:text="ATK"
             android:textSize="22sp"
             android:textStyle="bold"
+            android:textColor="@color/bone_white"
+            android:fontFamily="serif"
             android:insetLeft="0dp"
             android:insetTop="0dp"
             android:insetRight="0dp"
             android:insetBottom="0dp"
             app:strokeWidth="2dp"
-            app:strokeColor="#FF4444"
+            app:strokeColor="@color/crimson_glow"
             android:visibility="gone"/>
 
         <!-- Aim joystick — always visible -->
@@ -246,7 +282,7 @@
         android:id="@+id/floor_transition_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#000000"
+        android:background="@color/bg_deepest"
         android:visibility="gone"
         android:clickable="true"
         android:gravity="center">
@@ -257,10 +293,15 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:text="Floor 1"
-            android:textColor="#FFFFFF"
-            android:textSize="52sp"
+            android:textColor="@color/gold_bright"
+            android:textSize="56sp"
             android:textStyle="bold"
-            android:letterSpacing="0.12"
+            android:fontFamily="serif"
+            android:letterSpacing="0.16"
+            android:shadowColor="@color/gold_glow"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="20"
             android:alpha="0"/>
 
     </FrameLayout>
@@ -270,7 +311,7 @@
         android:id="@+id/loading_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#FF000000"
+        android:background="@color/bg_deepest"
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true">
@@ -285,24 +326,33 @@
             <ProgressBar
                 android:layout_width="64dp"
                 android:layout_height="64dp"
-                android:indeterminateTint="#FFD700"/>
+                android:indeterminateTint="@color/gold_bright"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Descending into the Void..."
-                android:textColor="#FFD700"
-                android:textSize="18sp"
+                android:textColor="@color/gold_bright"
+                android:textSize="20sp"
                 android:textStyle="bold"
-                android:layout_marginTop="16dp"
+                android:fontFamily="serif"
+                android:letterSpacing="0.1"
+                android:shadowColor="@color/gold_glow"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="14"
+                android:layout_marginTop="20dp"
                 tools:ignore="HardcodedText"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="The darkness is being summoned..."
-                android:textColor="#888888"
+                android:textColor="@color/bone_dim"
                 android:textSize="13sp"
+                android:textStyle="italic"
+                android:fontFamily="serif"
+                android:letterSpacing="0.08"
                 android:layout_marginTop="8dp"
                 tools:ignore="HardcodedText"/>
 

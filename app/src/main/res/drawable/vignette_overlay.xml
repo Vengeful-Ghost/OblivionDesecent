@@ -1,9 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stronger radial vignette: keeps center readable, corners pitch-black -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <gradient
         android:type="radial"
-        android:gradientRadius="500dp"
+        android:gradientRadius="640dp"
         android:startColor="#00000000"
-        android:endColor="#55000000"
+        android:centerColor="#88000000"
+        android:endColor="#FF000000"
         android:centerX="0.5"
         android:centerY="0.5"/>
 </shape>

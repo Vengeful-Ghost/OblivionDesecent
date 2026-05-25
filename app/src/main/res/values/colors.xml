@@ -1,9 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+    <!-- ============================================================ -->
+    <!-- LEGACY NAMES (referenced from existing Java + XML)            -->
+    <!-- ============================================================ -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="orange">#FF4500</color>
-    <color name="golden">#FFD700</color>
-    <color name="darkGray">#222222</color>
-    <color name="golden_ripple">#FFD700</color>
+    <color name="golden">#D4AF37</color>
+    <color name="darkGray">#1E1813</color>
+    <color name="golden_ripple">#66D4AF37</color>
+
+    <!-- ============================================================ -->
+    <!-- DARK FANTASY PALETTE                                          -->
+    <!-- Names are semantic so layouts read like prose                 -->
+    <!-- ============================================================ -->
+
+    <!-- Backgrounds: warm-tinted charcoals, ascending in lightness -->
+    <color name="bg_deepest">#0A0807</color>
+    <color name="bg_base">#14100D</color>
+    <color name="bg_surface">#1E1813</color>
+    <color name="bg_surface_alt">#2A211A</color>
+    <color name="bg_surface_hi">#36291F</color>
+    <color name="bg_overlay">#CC0A0807</color>
+    <color name="bg_scrim">#B3000000</color>
+
+    <!-- Aged gold (primary accent) -->
+    <color name="gold_deep">#7A5A1F</color>
+    <color name="gold_base">#B8911E</color>
+    <color name="gold_bright">#D4AF37</color>
+    <color name="gold_glow">#F4D77A</color>
+    <color name="gold_dim">#5C4517</color>
+    <color name="gold_translucent">#33D4AF37</color>
+    <color name="gold_translucent_strong">#66D4AF37</color>
+
+    <!-- Tarnished bronze trim / borders -->
+    <color name="border_gold">#8B6F2C</color>
+    <color name="border_gold_inner">#5C4517</color>
+    <color name="border_gold_outer">#3C2D1A</color>
+    <color name="divider_gold">#3C2D1A</color>
+
+    <!-- Crimson (danger / blood / health) -->
+    <color name="crimson_deep">#4A0A0A</color>
+    <color name="crimson_base">#8B1818</color>
+    <color name="crimson_bright">#B82828</color>
+    <color name="crimson_glow">#E04848</color>
+    <color name="health_red">#C13A2A</color>
+    <color name="health_red_dim">#5C1810</color>
+    <color name="health_red_track">#2A0E0A</color>
+
+    <!-- Arcane (magic / rare / mystery) -->
+    <color name="arcane_deep">#2B1840</color>
+    <color name="arcane_base">#5A3A8A</color>
+    <color name="arcane_bright">#8B5FBF</color>
+    <color name="arcane_glow">#B58CE0</color>
+
+    <!-- Armor (steel-blue) -->
+    <color name="armor_blue">#5688C7</color>
+    <color name="armor_blue_dim">#1F3252</color>
+    <color name="armor_blue_track">#0F1A2A</color>
+
+    <!-- Bone / parchment text colors -->
+    <color name="bone_white">#EAE0CA</color>
+    <color name="bone_dim">#B8AC91</color>
+    <color name="bone_muted">#7A7060</color>
+    <color name="bone_faint">#4A4338</color>
+    <color name="ink_shadow">#0A0807</color>
+
+    <!-- Rarity tints (loot frames) -->
+    <color name="rarity_common">#B8AC91</color>
+    <color name="rarity_uncommon">#7AB85C</color>
+    <color name="rarity_rare">#5688C7</color>
+    <color name="rarity_epic">#8B5FBF</color>
+    <color name="rarity_legendary">#D4AF37</color>
+    <color name="rarity_mythic">#E04848</color>
+
+    <!-- Status -->
+    <color name="success_green">#7A8B3D</color>
+    <color name="warning_amber">#D49A37</color>
+
 </resources>

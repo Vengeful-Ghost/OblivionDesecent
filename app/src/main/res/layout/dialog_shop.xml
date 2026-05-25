@@ -11,30 +11,37 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 
-    <!-- Gold display — top right, always visible above dialog -->
+    <!-- Gold display — top right -->
     <TextView
         android:id="@+id/shop_gold_display"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|end"
-        android:layout_margin="50dp"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="8dp"
+        android:layout_margin="42dp"
+        android:paddingHorizontal="18dp"
+        android:paddingVertical="10dp"
         android:text="🪙 0"
-        android:textColor="#FFD700"
-        android:textSize="16sp"
+        android:textColor="@color/gold_bright"
+        android:textSize="17sp"
         android:textStyle="bold"
-        android:background="@drawable/rounded_dialog_bg"
+        android:fontFamily="serif"
+        android:letterSpacing="0.06"
+        android:shadowColor="@color/gold_glow"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="10"
+        android:background="@drawable/hud_panel"
         tools:ignore="HardcodedText"/>
 
-    <!-- Centered shop card — not full screen -->
+    <!-- Centered shop card -->
     <LinearLayout
-        android:layout_width="600dp"
+        android:layout_width="620dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
-        android:padding="10dp">
+        android:padding="14dp"
+        android:animation="@anim/dialog_open">
 
         <!-- Title -->
         <FrameLayout
@@ -47,10 +54,12 @@
                 android:layout_height="wrap_content"
                 android:text="The Void Market"
                 android:textAllCaps="true"
-                android:textSize="20sp"
-                android:textColor="#33000000"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:textColor="#66000000"
                 android:gravity="center"
-                android:letterSpacing="0.08"
+                android:letterSpacing="0.1"
                 android:translationX="2dp"
                 android:translationY="2dp"
                 tools:ignore="HardcodedText"/>
@@ -60,23 +69,31 @@
                 android:layout_height="wrap_content"
                 android:text="The Void Market"
                 android:textAllCaps="true"
-                android:textSize="20sp"
-                android:textColor="#FFD700"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:textColor="@color/gold_bright"
                 android:gravity="center"
-                android:letterSpacing="0.08"
-                android:shadowColor="#FFB700"
+                android:letterSpacing="0.1"
+                android:shadowColor="@color/gold_glow"
                 android:shadowDx="0"
                 android:shadowDy="0"
-                android:shadowRadius="10"
+                android:shadowRadius="12"
                 tools:ignore="HardcodedText"/>
 
         </FrameLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@drawable/divider_gold"
+            android:layout_marginBottom="8dp"/>
 
         <!-- Loading state -->
         <LinearLayout
             android:id="@+id/shop_loading"
             android:layout_width="match_parent"
-            android:layout_height="160dp"
+            android:layout_height="170dp"
             android:orientation="vertical"
             android:gravity="center"
             android:visibility="gone">
@@ -84,20 +101,23 @@
             <ProgressBar
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:indeterminateTint="#FFD700"/>
+                android:indeterminateTint="@color/gold_bright"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="The Merchant is preparing..."
-                android:textColor="#AAAAAA"
+                android:textColor="@color/bone_dim"
                 android:textSize="14sp"
-                android:layout_marginTop="12dp"
+                android:textStyle="italic"
+                android:fontFamily="serif"
+                android:letterSpacing="0.04"
+                android:layout_marginTop="14dp"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
 
-        <!-- Items: 3 rows of 2, fixed height per row -->
+        <!-- Items: 3 rows of 2 -->
         <LinearLayout
             android:id="@+id/shop_items_container"
             android:layout_width="match_parent"
@@ -108,23 +128,23 @@
             <LinearLayout
                 android:id="@+id/shop_row_0"
                 android:layout_width="match_parent"
-                android:layout_height="80dp"
+                android:layout_height="86dp"
                 android:orientation="horizontal"
-                android:layout_marginBottom="4dp"/>
+                android:layout_marginBottom="6dp"/>
 
             <LinearLayout
                 android:id="@+id/shop_row_1"
                 android:layout_width="match_parent"
-                android:layout_height="80dp"
+                android:layout_height="86dp"
                 android:orientation="horizontal"
-                android:layout_marginBottom="4dp"/>
+                android:layout_marginBottom="6dp"/>
 
             <LinearLayout
                 android:id="@+id/shop_row_2"
                 android:layout_width="match_parent"
-                android:layout_height="80dp"
+                android:layout_height="86dp"
                 android:orientation="horizontal"
-                android:layout_marginBottom="4dp"/>
+                android:layout_marginBottom="6dp"/>
 
         </LinearLayout>
 
@@ -132,18 +152,19 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_close_shop"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
-            android:layout_marginTop="4dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="6dp"
             android:text="Leave Shop"
             android:textAllCaps="false"
-            android:textColor="#AAAAAA"
+            android:textColor="@color/bone_dim"
             android:textSize="14sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:letterSpacing="0.08"
             android:insetTop="0dp"
             android:insetBottom="0dp"
-            app:cornerRadius="20dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="#444444"
-            app:backgroundTint="@color/darkGray"
+            app:backgroundTint="@null"
+            android:background="@drawable/btn_gothic_secondary"
             tools:ignore="HardcodedText"/>
 
     </LinearLayout>
