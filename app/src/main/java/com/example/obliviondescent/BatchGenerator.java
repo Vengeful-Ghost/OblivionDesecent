@@ -115,7 +115,8 @@ public class BatchGenerator {
         sb.append("- All item stats use a continuous floor-based formula, NOT fixed brackets.\n");
         sb.append("- Rarity is the main driver of stat magnitude. A LEGENDARY on floor 3 can\n");
         sb.append("  legitimately outperform a COMMON on floor 10.\n");
-        sb.append("- Within each rarity tier add random variance (+/-30%) so no two items are identical.\n\n");
+        sb.append("- Within each rarity tier add random variance (+/-30%) so no two items are identical.\n");
+        sb.append("- When you generate Armor pieces, Make sure to add variations of Head, Chest, Legs, Boots.\n\n");
 
         sb.append("WEAPON damage (integer): base = floor * 3.\n");
         sb.append("  COMMON 0.7-1.3x, RARE 1.4-2.2x, EPIC 2.0-3.5x, LEGENDARY 3.0-7.0x base.\n");

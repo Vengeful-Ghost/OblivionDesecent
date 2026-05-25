@@ -194,8 +194,8 @@ public class GameActivity extends AppCompatActivity {
         float savedVol = soundPrefs.getFloat("sfx_volume", 1.0f);
         soundManager.setVolume(savedVol);
 
-        weapons.add(new Weapon("Fists", 5, 20f, 250,
-                Weapon.Rarity.COMMON, Color.WHITE, 0.02f));
+        weapons.add(new Weapon("Fists", 7, 30f, 250,
+                Weapon.Rarity.COMMON, Color.WHITE, 0.03f));
 
         playerHealthBar = findViewById(R.id.healthBar);
         playerArmorBar  = findViewById(R.id.armorBar);
@@ -219,6 +219,7 @@ public class GameActivity extends AppCompatActivity {
         isGamePaused = true;
         loadingOverlay.setVisibility(android.view.View.VISIBLE);
         generateBatchFromFloor2();
+//        generateBatch(1, 5);
 
         dbManager = new DBManager();
         SharedPreferences loginPrefs = getSharedPreferences("loginPrefs", MODE_PRIVATE);

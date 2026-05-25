@@ -118,7 +118,8 @@ public class FloorManager {
 
         if (hasExitRoom) {
             // Portals live inside the exit room
-            boolean hasShop = !bossFloor && currentFloor >= 2;
+//            boolean hasShop = !bossFloor && currentFloor >= 2;
+            boolean hasShop = !bossFloor;
             if (hasShop) {
                 // Exit portal slightly above center, shop portal slightly below
                 portalX = exitRoomCenterX;
@@ -136,7 +137,9 @@ public class FloorManager {
             portalX = playerX + (float)(Math.cos(angle) * PORTAL_SPAWN_DISTANCE);
             portalY = playerY + (float)(Math.sin(angle) * PORTAL_SPAWN_DISTANCE);
 
-            if (!bossFloor && currentFloor >= 2) {
+            //Spawn Shop portal only when the floor cleared isn't a boss floor
+//            if (!bossFloor  && currentFloor >= 2) {
+            if (!bossFloor) {
                 shopPortalOpen = true;
                 double shopAngle = angle + Math.PI;
                 shopPortalX = playerX + (float)(Math.cos(shopAngle) * SHOP_PORTAL_SPAWN_DISTANCE);
