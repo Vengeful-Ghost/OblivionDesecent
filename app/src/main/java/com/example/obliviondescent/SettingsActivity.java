@@ -29,6 +29,10 @@ public class SettingsActivity extends AppCompatActivity {
     public static final String PREFS_NAME    = "gameSettings";
     public static final String KEY_VIBRATION = "vibration_enabled";
 
+    // True when this screen was opened from the in-game pause menu — music must NOT play
+    public static final String EXTRA_FROM_GAME = "from_game";
+    private boolean fromGame = false;
+
     /* ============================================================
        UI
        ============================================================ */
@@ -40,6 +44,8 @@ public class SettingsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
         hideSystemUI();
+
+        fromGame = getIntent().getBooleanExtra(EXTRA_FROM_GAME, false);
 
         switchVibration = findViewById(R.id.switch_vibration);
         txtMiuiWarning  = findViewById(R.id.txt_miui_warning);
@@ -64,6 +70,7 @@ public class SettingsActivity extends AppCompatActivity {
                     .setTitle("Sign Out")
                     .setMessage("Are you sure you want to sign out?")
                     .setPositiveButton("Yes", (dialog, which) -> {
+                        SoundManager.stopMenuMusic(); // silence before leaving to login screen
                         FirebaseAuth.getInstance().signOut();
                         getSharedPreferences("loginPrefs", MODE_PRIVATE)
                                 .edit().clear().apply();
@@ -92,7 +99,50 @@ public class SettingsActivity extends AppCompatActivity {
             @Override public void onStopTrackingTouch(android.widget.SeekBar s) {}
         });
 
+        SeekBar menuMusicSlider = findViewById(R.id.seekbar_menu_music_volume);
+        int savedMenuProgress = (int)(prefs.getFloat("menu_music_volume", 0.85f) * 100);
+        menuMusicSlider.setProgress(savedMenuProgress);
+        menuMusicSlider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(android.widget.SeekBar seekBar,
+                                          int progress, boolean fromUser) {
+                float vol = progress / 100f;
+                prefs.edit().putFloat("menu_music_volume", vol).apply();
+                SoundManager.setMenuMusicVolume(vol);
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar s) {}
+            @Override public void onStopTrackingTouch(android.widget.SeekBar s) {}
+        });
+
+        SeekBar gameMusicSlider = findViewById(R.id.seekbar_game_music_volume);
+        int savedGameProgress = (int)(prefs.getFloat("game_music_volume", 0.85f) * 100);
+        gameMusicSlider.setProgress(savedGameProgress);
+        gameMusicSlider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(android.widget.SeekBar seekBar,
+                                          int progress, boolean fromUser) {
+                float vol = progress / 100f;
+                prefs.edit().putFloat("game_music_volume", vol).apply();
+                SoundManager.setGameMusicVolume(vol);
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar s) {}
+            @Override public void onStopTrackingTouch(android.widget.SeekBar s) {}
+        });
+
         startBouncingParticles();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        // Only play music when opened from the main menu, not from the in-game pause menu
+        if (!fromGame) SoundManager.registerMenuMusic(this);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (!fromGame) SoundManager.unregisterMenuMusic();
     }
 
     /* ============================================================

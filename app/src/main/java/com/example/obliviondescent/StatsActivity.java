@@ -98,6 +98,18 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        SoundManager.registerMenuMusic(this);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        SoundManager.unregisterMenuMusic();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         hideSystemUI();

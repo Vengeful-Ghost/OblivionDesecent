@@ -9,7 +9,19 @@
       "Bash(git commit *)",
       "Bash(git tag *)",
       "Bash(git checkout *)",
-      "Bash(grep -hoE 'R\\\\.drawable\\\\.[a-z_]+|R\\\\.color\\\\.[a-zA-Z_]+|R\\\\.anim\\\\.[a-z_]+' \"C:\\\\Users\\\\Cyber_User\\\\Desktop\\\\Schoo\\\\Computers\\\\Android\\\\Game\\\\app\\\\src\\\\main\\\\java\\\\com\\\\example\\\\obliviondescent\"\\\\\\\\*.java)"
+      "Bash(grep -hoE 'R\\\\.drawable\\\\.[a-z_]+|R\\\\.color\\\\.[a-zA-Z_]+|R\\\\.anim\\\\.[a-z_]+' \"C:\\\\Users\\\\Cyber_User\\\\Desktop\\\\Schoo\\\\Computers\\\\Android\\\\Game\\\\app\\\\src\\\\main\\\\java\\\\com\\\\example\\\\obliviondescent\"\\\\\\\\*.java)",
+      "Bash(where pdftoppm *)",
+      "Bash(magick --version)",
+      "Bash(convert --version)",
+      "Bash(pip install *)",
+      "Bash(python -c \"from PIL import Image; print\\('OK'\\)\")",
+      "Bash(where python *)",
+      "Bash(\"C:\\\\Users\\\\Cyber_User\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python38-32\\\\python.exe\" -m pip install Pillow --quiet)",
+      "Bash(\"C:\\\\Users\\\\Cyber_User\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python38-32\\\\python.exe\" -c \"from PIL import Image; print\\('Pillow OK on Python38-32'\\)\")",
+      "Bash(dir \"C:\\\\Users\\\\Cyber_User\\\\Desktop\\\\Schoo\\\\Computers\\\\Android\\\\Game\\\\app\\\\src\\\\main\\\\res\" /b)",
+      "Bash(cp \"/c/Users/Cyber_User/Downloads/Oblivion Descent.mp3\" \"/c/Users/Cyber_User/Desktop/Schoo/Computers/Android/Game/app/src/main/res/raw/menu_music.mp3\" && echo \"Copied OK\")",
+      "Bash(cp \"/mnt/c/Users/Cyber_User/Downloads/moodmode-a-creepy-music-258754.mp3\" \"/mnt/c/Users/Cyber_User/Desktop/Schoo/Computers/Android/Game/app/src/main/res/raw/game_music.mp3\" && echo \"Done\")",
+      "PowerShell(Copy-Item \"C:\\\\Users\\\\Cyber_User\\\\Downloads\\\\moodmode-a-creepy-music-258754.mp3\" \"C:\\\\Users\\\\Cyber_User\\\\Desktop\\\\Schoo\\\\Computers\\\\Android\\\\Game\\\\app\\\\src\\\\main\\\\res\\\\raw\\\\game_music.mp3\")"
     ]
   }
 }

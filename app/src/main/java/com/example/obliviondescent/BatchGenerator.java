@@ -1,11 +1,16 @@
 package com.example.obliviondescent;
 
+import android.content.Context;
 import android.graphics.Color;
 import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,7 +38,7 @@ public class BatchGenerator {
             .build();
 
     public interface OnBatchGeneratedListener {
-        void onSuccess(BatchResult result);
+        void onSuccess(BatchResult result, String jsonText);
         void onFailure(String error);
     }
 
@@ -91,8 +96,9 @@ public class BatchGenerator {
                     Log.d(TAG, "=== Raw batch response received ===");
 
                     try {
-                        BatchResult result = parseBatch(bodyStr, rangeStart, rangeEnd);
-                        listener.onSuccess(result);
+                        String jsonText = extractJsonText(bodyStr);
+                        BatchResult result = parseBatch(jsonText, rangeStart, rangeEnd);
+                        listener.onSuccess(result, jsonText);
                     } catch (Exception e) {
                         Log.e(TAG, "Parse error: " + e.getMessage(), e);
                         listener.onFailure("Parse error: " + e.getMessage());
@@ -165,9 +171,11 @@ public class BatchGenerator {
         return sb.toString();
     }
 
-    private BatchResult parseBatch(String rawResponse,
-                                   int rangeStart, int rangeEnd) throws Exception {
-        // Extract JSON from Gemini wrapper
+    /**
+     * Extracts the inner JSON text from the Gemini API response wrapper.
+     * Strips markdown fences if present.
+     */
+    private static String extractJsonText(String rawResponse) throws Exception {
         JSONObject apiResp = new JSONObject(rawResponse);
         String text = apiResp
                 .getJSONArray("candidates")
@@ -176,14 +184,19 @@ public class BatchGenerator {
                 .getJSONArray("parts")
                 .getJSONObject(0)
                 .getString("text");
-
-        // Strip markdown fences if present
         text = text.trim();
         if (text.startsWith("```")) {
             text = text.replaceAll("```json", "").replaceAll("```", "").trim();
         }
+        return text;
+    }
 
-        JSONObject root = new JSONObject(text);
+    /**
+     * Parses a pre-extracted JSON text string into a BatchResult.
+     * Package-private so GameActivity can call it when loading from local storage.
+     */
+    BatchResult parseBatch(String jsonText, int rangeStart, int rangeEnd) throws Exception {
+        JSONObject root = new JSONObject(jsonText);
 
         // Parse enemies — expected as a JSON array of 4 objects
         List<EnemyTemplate> enemyPool = new ArrayList<>();
@@ -290,5 +303,58 @@ public class BatchGenerator {
     private int parseColor(String hex) {
         try { return Color.parseColor(hex); }
         catch (Exception e) { return Color.parseColor("#FF4444"); }
+    }
+
+    // ============================================================
+    // LOCAL STORAGE — persistent batch cache across sessions
+    // ============================================================
+
+    private static String batchFileName(int rangeStart) {
+        return "batch_" + rangeStart + ".json";
+    }
+
+    /** Saves the inner JSON text for a batch range to the app's private files directory. */
+    static void saveRawBatch(Context ctx, int rangeStart, String jsonText) {
+        try {
+            File file = new File(ctx.getFilesDir(), batchFileName(rangeStart));
+            FileWriter fw = new FileWriter(file);
+            fw.write(jsonText);
+            fw.close();
+            Log.d(TAG, "Saved batch " + rangeStart + " → " + file.getAbsolutePath());
+        } catch (Exception e) {
+            Log.e(TAG, "saveRawBatch failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Loads the inner JSON text for a batch range from local storage.
+     * Returns null if the file does not exist or cannot be read.
+     */
+    static String loadRawBatch(Context ctx, int rangeStart) {
+        try {
+            File file = new File(ctx.getFilesDir(), batchFileName(rangeStart));
+            if (!file.exists()) return null;
+            BufferedReader br = new BufferedReader(new FileReader(file));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+            br.close();
+            Log.d(TAG, "Loaded batch " + rangeStart + " from local storage");
+            return sb.toString();
+        } catch (Exception e) {
+            Log.e(TAG, "loadRawBatch failed: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** Deletes all saved batch files. Call this when the player starts a New Game. */
+    static void clearAllBatches(Context ctx) {
+        File dir = ctx.getFilesDir();
+        File[] files = dir.listFiles((d, name) ->
+                name.startsWith("batch_") && name.endsWith(".json"));
+        if (files != null) {
+            for (File f : files) f.delete();
+        }
+        Log.d(TAG, "Cleared all local batch files");
     }
 }

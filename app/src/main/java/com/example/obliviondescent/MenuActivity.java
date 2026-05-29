@@ -68,6 +68,18 @@ public class MenuActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        SoundManager.registerMenuMusic(this);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        SoundManager.unregisterMenuMusic();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         hideSystemUI();
@@ -150,6 +162,9 @@ public class MenuActivity extends AppCompatActivity {
         if (userId == null) return;
         if (loadingDialog == null || !loadingDialog.isShowing()) showLoading("Creating new game...");
 
+        // Clear all locally stored batch files so the new game gets a fresh API call
+        BatchGenerator.clearAllBatches(this);
+
         dbManager.createGameSave(userId, 1, newGameId -> {
             if (newGameId != null) {
                 existingGameId = newGameId;
@@ -162,6 +177,7 @@ public class MenuActivity extends AppCompatActivity {
     }
 
     private void launchGame(String gameId) {
+        SoundManager.stopMenuMusic(); // silence music before entering the game
         Intent intent = new Intent(this, GameActivity.class);
         intent.putExtra("game_id", gameId);
         intent.putExtra("slot_index", 1);

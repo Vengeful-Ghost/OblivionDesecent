@@ -60,6 +60,10 @@ public class Enemy {
     public float knockbackVX = 0f;
     public float knockbackVY = 0f;
 
+    // Per-enemy hit cooldown — prevents the same enemy from being hit multiple times
+    // per swing. GameActivity sets this to System.currentTimeMillis() on each hit.
+    public long lastHitTime = 0;
+
     // Behavior state machine
     private enum BehaviorState {
         APPROACH,   // Moving toward player
@@ -96,35 +100,35 @@ public class Enemy {
         // --- Assign stats by type ---
         switch (type) {
             case GRUNT:
-                maxHealth = 80;  speed = 4f;  radius = 40f;
+                maxHealth = 25;  speed = 4f;  radius = 40f;
                 bodyPaint = makePaint(Color.rgb(200, 50, 50));
                 weapon = new Weapon("Club", 5, 10f, 800, Weapon.Rarity.COMMON, Color.GRAY, 0.04f);
                 goldDrop = 1 + (int)(Math.random() * 6);
                 triggerRadius = 350f + (float)(Math.random() * 100f);
                 break;
             case SPEEDER:
-                maxHealth = 50;  speed = 9f;  radius = 28f;
+                maxHealth = 18;  speed = 9f;  radius = 28f;
                 bodyPaint = makePaint(Color.rgb(255, 160, 0));
                 weapon = new Weapon("Shiv", 3, 5f, 400, Weapon.Rarity.COMMON, Color.LTGRAY, 0.01f);
                 goldDrop = 1 + (int)(Math.random() * 4);
                 triggerRadius = 480f + (float)(Math.random() * 120f);
                 break;
             case TANK:
-                maxHealth = 350; speed = 2f;  radius = 65f;
+                maxHealth = 120; speed = 2f;  radius = 65f;
                 bodyPaint = makePaint(Color.rgb(120, 0, 180));
                 weapon = new Weapon("Warhammer", 15, 20f, 1400, Weapon.Rarity.RARE, Color.rgb(0, 150, 255), 0.45f);
                 goldDrop = 5 + (int)(Math.random() * 6);
                 triggerRadius = 280f + (float)(Math.random() * 80f);
                 break;
             case BRUTE:
-                maxHealth = 200; speed = 5f;  radius = 52f;
+                maxHealth = 65;  speed = 5f;  radius = 52f;
                 bodyPaint = makePaint(Color.rgb(60, 160, 60));
                 weapon = new Weapon("Axe", 9, 15f, 1000, Weapon.Rarity.RARE, Color.rgb(0, 150, 255), 0.2f);
                 goldDrop = 3 + (int)(Math.random() * 6);
                 triggerRadius = 400f + (float)(Math.random() * 100f);
                 break;
             case BOSS:
-                maxHealth = 500; speed = 3f; radius = 100f;
+                maxHealth = 180; speed = 3f; radius = 100f;
                 bodyPaint = makePaint(Color.rgb(180, 0, 0));
                 weapon = new Weapon("Void Cleave", 25, 5f, 1000,
                         Weapon.Rarity.LEGENDARY, Color.rgb(255, 215, 0), 0.6f);

@@ -132,8 +132,7 @@ public class GameActivity extends AppCompatActivity {
     private Enemy activeBoss = null;
     private boolean bossSpawnHandled = false;
 
-    private List<TreasureChest> treasureChests =
-            Collections.synchronizedList(new ArrayList<>());
+    private List<TreasureChest> treasureChests = Collections.synchronizedList(new ArrayList<>());
 
     private boolean enteringShop = false;
 
@@ -170,15 +169,19 @@ public class GameActivity extends AppCompatActivity {
     private String currentBossTitle = null;
     private int    currentBossColor = android.graphics.Color.RED;
 
-    // Loading overlay (shown on new game until first batch is ready)
+    // Loading overlay (shown until layout is ready)
     private android.view.View loadingOverlay;
-    private boolean firstBatchReady = false;
 
     private PlayerBehaviorTracker behaviorTracker = new PlayerBehaviorTracker();
 
     private SoundManager soundManager;
 
     private Set<Integer> shopBoughtIndices = new HashSet<>();
+
+    // Tracks which enemies were already hit during the current melee swing so that
+    // each enemy can only be damaged once per swing regardless of frame rate.
+    private final Set<Enemy> hitThisSwing = new HashSet<>();
+    private long lastKnownSwingTime = -1;
 
     private DashCooldownView dashCooldownView;
 
@@ -218,8 +221,32 @@ public class GameActivity extends AppCompatActivity {
 
         isGamePaused = true;
         loadingOverlay.setVisibility(android.view.View.VISIBLE);
-        generateBatchFromFloor2();
-//        generateBatch(1, 5);
+
+        // Fire batch for floors 1-5 (floor 1 now included so it has shop items + named enemies)
+        generateBatch(1, 5);
+
+        // Start floor 1 immediately with generic placeholder enemies while the batch loads.
+        // When the batch arrives, applyBatchToCurrentFloorIfReady() will re-spawn with
+        // AI templates and the shop will auto-populate via pollForBatchThenPopulate().
+        loadingOverlay.setVisibility(android.view.View.GONE);
+        isGamePaused = false;
+
+        currentLayout = FloorLayout.generate(
+                floorManager.getCurrentFloor(),
+                floorManager.isBossFloor(),
+                floorManager.getKillsRequired());
+        gameDisplay.setFloorLayout(currentLayout);
+        player.x = currentLayout.entryRoom.centerX();
+        player.y = currentLayout.entryRoom.centerY();
+        currentLayout.entryRoom.explored = true;
+        if (currentLayout.exitRoom != null) {
+            floorManager.setExitRoomCenter(
+                    currentLayout.exitRoom.centerX(),
+                    currentLayout.exitRoom.centerY());
+        }
+        spawnEnemiesForLayout(currentLayout);
+        Log.d("FloorLayout", "Floor 1 layout ready: "
+                + currentLayout.rooms.size() + " rooms");
 
         dbManager = new DBManager();
         SharedPreferences loginPrefs = getSharedPreferences("loginPrefs", MODE_PRIVATE);
@@ -424,55 +451,6 @@ public class GameActivity extends AppCompatActivity {
         }).start();
     }
 
-    private void generateBatchFromFloor2() {
-        // Fire batch for floors 2-5 in the background while floor 1 plays with generic enemies
-        batchInFlight = 2;
-        batchGenerator.generateBatch(2, 5, new BatchGenerator.OnBatchGeneratedListener() {
-            @Override
-            public void onSuccess(BatchResult result) {
-                runOnUiThread(() -> {
-                    batchCache.put(2, result);
-                    batchInFlight = -1;
-                    Log.d("Batch", "=== Cached batch for floors 2-5 ===");
-                    applyBatchToCurrentFloorIfReady(2);
-                });
-            }
-
-            @Override
-            public void onFailure(String error) {
-                runOnUiThread(() -> {
-                    batchInFlight = -1;
-                    Log.e("GameActivity", "Batch 2-5 failed: " + error + " — retrying in 5s");
-                    new android.os.Handler(android.os.Looper.getMainLooper())
-                            .postDelayed(() -> generateBatch(2, 5), 5000);
-                });
-            }
-        });
-
-        // Start floor 1 immediately with generic enemies
-        firstBatchReady = true;
-        loadingOverlay.setVisibility(android.view.View.GONE);
-        isGamePaused = false;
-
-        // Generate the layout for floor 1
-        currentLayout = FloorLayout.generate(
-                floorManager.getCurrentFloor(),
-                floorManager.isBossFloor(),
-                floorManager.getKillsRequired());
-        gameDisplay.setFloorLayout(currentLayout);
-        player.x = currentLayout.entryRoom.centerX();
-        player.y = currentLayout.entryRoom.centerY();
-        currentLayout.entryRoom.explored = true;
-        if (currentLayout.exitRoom != null) {
-            floorManager.setExitRoomCenter(
-                    currentLayout.exitRoom.centerX(),
-                    currentLayout.exitRoom.centerY());
-        }
-        spawnEnemiesForLayout(currentLayout);
-        Log.d("FloorLayout", "Floor 1 layout ready: "
-                + currentLayout.rooms.size() + " rooms");
-    }
-
     /* ============================================================
        GAMEPLAY LOGIC
        ============================================================ */
@@ -526,12 +504,24 @@ public class GameActivity extends AppCompatActivity {
 
     private void checkAttackCollisions() {
         Weapon w = player.getWeapon();
+        long now = System.currentTimeMillis();
+
+        // Clear hit-set at the start of each new swing so each enemy is hit at most once
+        if (attackStartTime != lastKnownSwingTime) {
+            hitThisSwing.clear();
+            lastKnownSwingTime = attackStartTime;
+        }
+
         float attackRange = player.radius + w.range;
         float aimAngle = (float) Math.toDegrees(Math.atan2(aimDY, aimDX));
 
         synchronized (enemies) {
             for (Enemy e : enemies) {
                 if (e.isDead) continue;
+
+                // Each enemy can only be hit once per swing AND must respect weapon cooldown
+                if (hitThisSwing.contains(e)) continue;
+                if (now - e.lastHitTime < w.cooldown) continue;
 
                 float dist = getDistance(player.x, player.y, e.x, e.y);
                 if (dist > attackRange + e.radius) continue;
@@ -545,6 +535,8 @@ public class GameActivity extends AppCompatActivity {
                 behaviorTracker.recordAttack(dist);
 
                 e.takeDamage(w.damage);
+                e.lastHitTime = now;
+                hitThisSwing.add(e);
                 soundManager.playHitEnemy();
                 statsManager.onDamageGiven(w.damage);
                 float d = (float) Math.sqrt(dx * dx + dy * dy);
@@ -636,13 +628,11 @@ public class GameActivity extends AppCompatActivity {
 
     /**
      * Returns the rangeStart for a given floor.
-     * Floor 1    → -1 (no batch; generic enemies)
-     * Floor 2-5  →  2
+     * Floor 1-5  →  1
      * Floor 6-10 →  6, Floor 11-15 → 11, etc.
      */
     private int getRangeStart(int floor) {
-        if (floor <= 1) return -1;
-        if (floor <= 5) return 2;
+        if (floor <= 5) return 1;
         return 6 + ((floor - 6) / 5) * 5;
     }
 
@@ -653,16 +643,31 @@ public class GameActivity extends AppCompatActivity {
     private void generateBatch(int rangeStart, int rangeEnd) {
         if (batchCache.containsKey(rangeStart)) return;
         if (batchInFlight == rangeStart) return;
-        batchInFlight = rangeStart;
 
+        // Check local storage first — avoids a network call on load game
+        String cachedJson = BatchGenerator.loadRawBatch(this, rangeStart);
+        if (cachedJson != null) {
+            try {
+                BatchResult result = batchGenerator.parseBatch(cachedJson, rangeStart, rangeEnd);
+                batchCache.put(rangeStart, result);
+                Log.d("Batch", "=== Loaded batch " + rangeStart + "-" + rangeEnd + " from local storage ===");
+                runOnUiThread(() -> applyBatchToCurrentFloorIfReady(rangeStart));
+                return;
+            } catch (Exception e) {
+                Log.e("Batch", "Local batch parse failed: " + e.getMessage() + " — fetching fresh");
+            }
+        }
+
+        batchInFlight = rangeStart;
         Log.d("Batch", "=== Firing batch for floors " + rangeStart + "-" + rangeEnd + " ===");
 
         batchGenerator.generateBatch(rangeStart, rangeEnd, new BatchGenerator.OnBatchGeneratedListener() {
             @Override
-            public void onSuccess(BatchResult result) {
+            public void onSuccess(BatchResult result, String jsonText) {
+                BatchGenerator.saveRawBatch(GameActivity.this, rangeStart, jsonText);
                 batchCache.put(rangeStart, result);
                 batchInFlight = -1;
-                Log.d("Batch", "=== Cached batch for floors " + rangeStart + "-" + rangeEnd + " ===");
+                Log.d("Batch", "=== Cached + saved batch for floors " + rangeStart + "-" + rangeEnd + " ===");
                 runOnUiThread(() -> applyBatchToCurrentFloorIfReady(rangeStart));
             }
 
@@ -712,8 +717,16 @@ public class GameActivity extends AppCompatActivity {
                         float dy = player.y - e.y;
                         float dist = (float) Math.sqrt(dx * dx + dy * dy);
                         if (dist > 0) {
+                            float oldPX = player.x;
+                            float oldPY = player.y;
                             player.x += (dx / dist) * e.getWeapon().knockback * 80f;
                             player.y += (dy / dist) * e.getWeapon().knockback * 80f;
+                            if (currentLayout != null && !inShopRoom) {
+                                float[] resolved = currentLayout.resolveWallCollision(
+                                        oldPX, oldPY, player.x, player.y, player.radius);
+                                player.x = resolved[0];
+                                player.y = resolved[1];
+                            }
                         }
                     }
                 }
@@ -1060,7 +1073,9 @@ public class GameActivity extends AppCompatActivity {
         inShopRoom = true;
         shopRoom.isActive = true;
         gameDisplay.setInShopRoom(true);
-        shopBoughtIndices.clear();
+        // shopBoughtIndices is NOT cleared here — it persists across re-entries within
+        // the same floor so already-purchased items stay visually marked as sold.
+        // It is cleared in prepareNextFloor() when advancing to the next floor.
 
         // Move player to spawn corner
         player.x = ShopRoom.SPAWN_X;
@@ -1215,12 +1230,18 @@ public class GameActivity extends AppCompatActivity {
             typeView.setText(item.type.name());
             priceView.setText("🪙 " + item.price);
 
-            if (playerGold < item.price) card.setAlpha(0.5f);
-
-            card.setOnClickListener(v -> {
-                if (shopBoughtIndices.contains(index)) return;
-                showItemDetailDialog(dialog, item, card, goldDisplay, shopBoughtIndices, index);
-            });
+            if (shopBoughtIndices.contains(index)) {
+                // Already purchased — dim and disable the card
+                card.setAlpha(0.3f);
+                priceView.setText("SOLD");
+            } else if (playerGold < item.price) {
+                card.setAlpha(0.5f);
+                card.setOnClickListener(v ->
+                        showItemDetailDialog(dialog, item, card, goldDisplay, shopBoughtIndices, index));
+            } else {
+                card.setOnClickListener(v ->
+                        showItemDetailDialog(dialog, item, card, goldDisplay, shopBoughtIndices, index));
+            }
 
             rows[i / 2].addView(card);
         }
@@ -1446,6 +1467,7 @@ public class GameActivity extends AppCompatActivity {
 
         enemiesKilledOnPortalOpen = false;
         enteringShop = false;
+        shopBoughtIndices.clear(); // New floor → new shop stock, reset purchase state
 
         // Generate a fresh procedural layout for the new floor
         currentLayout = FloorLayout.generate(
@@ -1693,11 +1715,13 @@ public class GameActivity extends AppCompatActivity {
                 dialog.dismiss();
                 showMenuOnResume = true;
                 Intent intent = new Intent(GameActivity.this, SettingsActivity.class);
+                intent.putExtra(SettingsActivity.EXTRA_FROM_GAME, true);
                 startActivity(intent);
             });
         }
 
         btnMainMenu.setOnClickListener(v -> {
+            SoundManager.stopGameMusic();
             Intent intent = new Intent(GameActivity.this, MenuActivity.class);
             startActivity(intent);
             finish();
@@ -2172,7 +2196,15 @@ public class GameActivity extends AppCompatActivity {
     private void spawnGoldCoins(float x, float y, int amount) {
         synchronized (goldCoins) {
             for (int i = 0; i < amount; i++) {
-                goldCoins.add(new GoldCoin(x, y));
+                GoldCoin coin = new GoldCoin(x, y);
+                // If the coin landed out of bounds (e.g. enemy died near a wall),
+                // snap it back to the enemy's exact drop position.
+                if (currentLayout != null && !inShopRoom
+                        && !currentLayout.isFloor(coin.x, coin.y)) {
+                    coin.x = x;
+                    coin.y = y;
+                }
+                goldCoins.add(coin);
             }
         }
     }
@@ -2199,16 +2231,36 @@ public class GameActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        SoundManager.registerGameMusic(this);
+        float gameVol = getSharedPreferences("gameSettings", MODE_PRIVATE)
+                .getFloat("game_music_volume", 0.85f);
+        SoundManager.setGameMusicVolume(gameVol);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        SoundManager.unregisterGameMusic();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         hideSystemUI();
 
-        // Re-apply volume in case user changed it in Settings
+        // Re-apply SFX volume in case user changed it in Settings
         if (soundManager != null) {
             float vol = getSharedPreferences("gameSettings", MODE_PRIVATE)
                     .getFloat("sfx_volume", 1.0f);
             soundManager.setVolume(vol);
         }
+
+        // Re-apply game music volume in case user changed it in Settings
+        float gameVol = getSharedPreferences("gameSettings", MODE_PRIVATE)
+                .getFloat("game_music_volume", 0.85f);
+        SoundManager.setGameMusicVolume(gameVol);
 
         // CHECK IF WE CAME BACK FROM SETTINGS
         if (showMenuOnResume) {
@@ -2385,6 +2437,15 @@ public class GameActivity extends AppCompatActivity {
                         ? ((Number) data.get("currentFloor")).intValue() : 1;
                 floorManager.setCurrentFloor(savedFloor);
 
+                // Kick off a batch fetch for the loaded floor's range so that custom
+                // enemy templates are available. applyBatchToCurrentFloorIfReady() will
+                // automatically re-spawn enemies with templates once the fetch completes
+                // (provided no kills have happened yet, which is always true on load).
+                int loadedRangeStart = getRangeStart(savedFloor);
+                if (loadedRangeStart >= 0 && !batchCache.containsKey(loadedRangeStart)) {
+                    generateBatch(loadedRangeStart, loadedRangeStart + 4);
+                }
+
                 // Regenerate layout for the restored floor (floor 1 layout was built at
                 // startup; for loaded games it may be wrong floor, and for new games the
                 // layout is fine but enemies were already placed — clear and redo).
@@ -2423,8 +2484,13 @@ public class GameActivity extends AppCompatActivity {
                 player.x = currentLayout.entryRoom.centerX();
                 player.y = currentLayout.entryRoom.centerY();
 
-                // Update HUD bars immediately with restored values
+                // Update HUD bars immediately with restored values.
+                // Armor max isn't known yet (armor pieces load async), so temporarily
+                // set the bar max to the saved armor value so the bar renders correctly
+                // until recalculateMaxArmor() fires once the armor docs arrive.
                 playerHealthBar.setProgress(playerHealth);
+                maxArmor = playerArmor; // temporary; recalculateMaxArmor() will correct this
+                playerArmorBar.setMax(Math.max(1, maxArmor));
                 playerArmorBar.setProgress(playerArmor);
                 if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / 100");
                 if (txtArmorValue  != null) txtArmorValue.setText(playerArmor + " / " + maxArmor);

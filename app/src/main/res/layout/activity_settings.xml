@@ -294,6 +294,72 @@
                 android:progressBackgroundTint="@color/border_gold_outer"
                 android:layout_marginBottom="24dp"/>
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🎵  Menu Music Volume"
+                android:textColor="@color/bone_white"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:layout_marginBottom="4dp"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Adjust main menu background music"
+                android:textColor="@color/bone_dim"
+                android:textSize="12sp"
+                android:textStyle="italic"
+                android:fontFamily="serif"
+                android:layout_marginBottom="12dp"
+                tools:ignore="HardcodedText"/>
+
+            <SeekBar
+                android:id="@+id/seekbar_menu_music_volume"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:progress="85"
+                android:progressTint="@color/gold_bright"
+                android:thumbTint="@color/gold_bright"
+                android:progressBackgroundTint="@color/border_gold_outer"
+                android:layout_marginBottom="24dp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🎶  Game Music Volume"
+                android:textColor="@color/bone_white"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:layout_marginBottom="4dp"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Adjust in-game background music"
+                android:textColor="@color/bone_dim"
+                android:textSize="12sp"
+                android:textStyle="italic"
+                android:fontFamily="serif"
+                android:layout_marginBottom="12dp"
+                tools:ignore="HardcodedText"/>
+
+            <SeekBar
+                android:id="@+id/seekbar_game_music_volume"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:progress="85"
+                android:progressTint="@color/gold_bright"
+                android:thumbTint="@color/gold_bright"
+                android:progressBackgroundTint="@color/border_gold_outer"
+                android:layout_marginBottom="24dp"/>
+
             <!-- Divider -->
             <View
                 android:layout_width="match_parent"
