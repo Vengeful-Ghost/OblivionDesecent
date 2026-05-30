@@ -259,31 +259,6 @@
         android:animation="@anim/slow_pulse" />
 
     <TextView
-        android:id="@+id/GameTitleBack"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Oblivion Descent"
-        android:textAllCaps="true"
-        android:textSize="52sp"
-        android:textStyle="bold"
-        android:fontFamily="serif"
-        android:textColor="#66000000"
-        android:gravity="center"
-        android:letterSpacing="0.08"
-        android:shadowColor="#CC000000"
-        android:shadowDx="4"
-        android:shadowDy="4"
-        android:shadowRadius="10"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/usernameLayout"
-        android:layout_marginEnd="32dp"
-        android:translationX="-5dp"
-        android:translationY="5dp"
-        tools:ignore="HardcodedText" />
-
-    <TextView
         android:id="@+id/GameTitleFront"
         android:layout_width="0dp"
         android:layout_height="wrap_content"

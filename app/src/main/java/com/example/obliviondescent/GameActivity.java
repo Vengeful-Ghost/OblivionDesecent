@@ -2601,27 +2601,40 @@ public class GameActivity extends AppCompatActivity {
                         final String savedLegsId  = (String) data.get("equippedLegsId");
                         final String savedBootsId = (String) data.get("equippedBootsId");
 
+                        // Count-based pattern: collect ALL pieces first, then call
+                        // recalculateMaxArmor() exactly once after the last piece arrives.
+                        // Calling it on each individual piece would clamp playerArmor to a
+                        // partial maxArmor on every callback, corrupting the saved value.
+                        final int[] armorLoadedCount = {0};
+                        final int totalArmors = ids.size();
+
                         for (String aid : ids) {
                             dbManager.loadGeneratedArmor(aid, armorData -> {
-                                if (armorData == null) return;
-                                Armor a = StatsManager.armorFromMap(aid, armorData);
-                                if (a == null) return;
+                                Armor a = (armorData != null)
+                                        ? StatsManager.armorFromMap(aid, armorData)
+                                        : null;
                                 runOnUiThread(() -> {
-                                    inventoryArmors.add(a);
-                                    armorFirestoreIds.put(a, aid);
-                                    // Check if this armor was equipped
-                                    if (aid.equals(savedHeadId))  equippedArmor.put(Armor.Slot.HEAD,  a);
-                                    if (aid.equals(savedChestId)) equippedArmor.put(Armor.Slot.CHEST, a);
-                                    if (aid.equals(savedLegsId))  equippedArmor.put(Armor.Slot.LEGS,  a);
-                                    if (aid.equals(savedBootsId)) equippedArmor.put(Armor.Slot.BOOTS, a);
-                                    recalculateMaxArmor();
+                                    if (a != null) {
+                                        inventoryArmors.add(a);
+                                        armorFirestoreIds.put(a, aid);
+                                        if (aid.equals(savedHeadId))  equippedArmor.put(Armor.Slot.HEAD,  a);
+                                        if (aid.equals(savedChestId)) equippedArmor.put(Armor.Slot.CHEST, a);
+                                        if (aid.equals(savedLegsId))  equippedArmor.put(Armor.Slot.LEGS,  a);
+                                        if (aid.equals(savedBootsId)) equippedArmor.put(Armor.Slot.BOOTS, a);
+                                    }
+                                    armorLoadedCount[0]++;
+                                    if (armorLoadedCount[0] >= totalArmors) {
+                                        // All pieces collected — one final recalculate so
+                                        // playerArmor is clamped to the true full maxArmor.
+                                        recalculateMaxArmor();
+                                    }
                                 });
                             });
                         }
                     }
                 }
                 else {
-                    // No inventoryWeaponIds field at all — equip from default list
+                    // No inventoryArmorIds field — equip weapon from default list
                     String equippedName = (String) data.get("equippedWeaponName");
                     if (equippedName != null) {
                         for (Weapon w : weapons) {
@@ -2632,15 +2645,6 @@ public class GameActivity extends AppCompatActivity {
                         }
                     }
                     refreshAttackUI();
-                }
-
-                // Restore armor IDs — stored for when armor equip UI is built
-                if (data.containsKey("inventoryArmorIds")) {
-                    java.util.List<String> ids =
-                            (java.util.List<String>) data.get("inventoryArmorIds");
-                    if (ids != null) {
-                        inventoryArmorIds = new ArrayList<>(ids);
-                    }
                 }
             });
         });

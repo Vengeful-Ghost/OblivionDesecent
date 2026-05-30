@@ -41,32 +41,6 @@
         android:shadowRadius="3" />
 
     <TextView
-        android:id="@+id/GameTitleBack"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Oblivion Descent"
-        android:textAllCaps="true"
-        android:textSize="48sp"
-        android:textStyle="bold"
-        android:fontFamily="serif"
-        android:textColor="#66000000"
-        android:gravity="center"
-        android:letterSpacing="0.08"
-        android:shadowColor="#CC000000"
-        android:shadowDx="4"
-        android:shadowDy="4"
-        android:shadowRadius="10"
-        app:layout_constraintBottom_toTopOf="@+id/MainMenu"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/btn_new_game"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_chainStyle="packed"
-        android:layout_marginEnd="16dp"
-        android:translationX="-5dp"
-        android:translationY="5dp"
-        tools:ignore="HardcodedText" />
-
-    <TextView
         android:id="@+id/GameTitleFront"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -83,10 +57,12 @@
         android:shadowDy="0"
         android:shadowRadius="18"
         android:animation="@anim/glow_pulse"
-        app:layout_constraintBottom_toBottomOf="@+id/GameTitleBack"
-        app:layout_constraintStart_toStartOf="@+id/GameTitleBack"
-        app:layout_constraintEnd_toEndOf="@+id/GameTitleBack"
-        app:layout_constraintTop_toTopOf="@+id/GameTitleBack"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/MainMenu"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/btn_new_game"
+        app:layout_constraintVertical_chainStyle="packed"
+        android:layout_marginEnd="16dp"
         tools:ignore="HardcodedText" />
 
     <TextView
@@ -101,10 +77,10 @@
         android:gravity="center"
         android:letterSpacing="0.18"
         android:animation="@anim/fade_in_delayed"
-        app:layout_constraintTop_toBottomOf="@id/GameTitleBack"
+        app:layout_constraintTop_toBottomOf="@id/GameTitleFront"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="@+id/GameTitleBack"
-        app:layout_constraintEnd_toEndOf="@+id/GameTitleBack"
+        app:layout_constraintStart_toStartOf="@+id/GameTitleFront"
+        app:layout_constraintEnd_toEndOf="@+id/GameTitleFront"
         android:layout_marginTop="6dp"
         tools:ignore="HardcodedText" />
 
@@ -131,7 +107,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/btn_load_game"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/GameTitleBack"
+        app:layout_constraintStart_toEndOf="@+id/GameTitleFront"
         android:layout_marginBottom="14dp"
         tools:ignore="HardcodedText" />
 

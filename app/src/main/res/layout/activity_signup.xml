@@ -6,9 +6,7 @@
     android:id="@+id/signupRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/game_background"
-    android:paddingTop="24dp"
-    android:paddingBottom="24dp">
+    android:background="@drawable/game_background">
 
     <ImageView android:id="@+id/particle1" android:layout_width="6dp" android:layout_height="6dp"
         android:src="@drawable/particle"
@@ -319,30 +317,6 @@
         android:background="@drawable/vignette_overlay" />
 
     <TextView
-        android:id="@+id/GameTitleBack"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Oblivion Descent"
-        android:textAllCaps="true"
-        android:textSize="44sp"
-        android:textStyle="bold"
-        android:fontFamily="serif"
-        android:gravity="center"
-        android:letterSpacing="0.08"
-        android:textColor="#66000000"
-        android:shadowColor="#CC000000"
-        android:shadowDx="4"
-        android:shadowDy="4"
-        android:shadowRadius="10"
-        android:translationX="-5dp"
-        android:translationY="5dp"
-        app:layout_constraintEnd_toStartOf="@+id/signupUsernameLayout"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        android:layout_marginEnd="32dp"/>
-
-    <TextView
         android:id="@+id/GameTitleFront"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -359,10 +333,11 @@
         android:shadowDy="0"
         android:shadowRadius="18"
         android:animation="@anim/glow_pulse"
-        app:layout_constraintTop_toTopOf="@+id/GameTitleBack"
-        app:layout_constraintBottom_toBottomOf="@+id/GameTitleBack"
-        app:layout_constraintStart_toStartOf="@+id/GameTitleBack"
-        app:layout_constraintEnd_toEndOf="@+id/GameTitleBack"/>
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/signupUsernameLayout"
+        android:layout_marginEnd="32dp"/>
 
 
     <com.google.android.material.textfield.TextInputLayout

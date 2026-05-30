@@ -19,44 +19,23 @@
         android:layout_marginEnd="8dp">
 
         <!-- Title -->
-        <FrameLayout
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Personal Stats"
-                android:textAllCaps="true"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:textColor="#66000000"
-                android:gravity="center"
-                android:letterSpacing="0.1"
-                android:translationX="3dp"
-                android:translationY="3dp"
-                tools:ignore="HardcodedText"/>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Personal Stats"
-                android:textAllCaps="true"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:textColor="@color/gold_bright"
-                android:gravity="center"
-                android:letterSpacing="0.1"
-                android:shadowColor="@color/gold_glow"
-                android:shadowDx="0"
-                android:shadowDy="0"
-                android:shadowRadius="10"
-                tools:ignore="HardcodedText"/>
-
-        </FrameLayout>
+            android:text="Personal Stats"
+            android:textAllCaps="true"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:textColor="@color/gold_bright"
+            android:gravity="center"
+            android:letterSpacing="0.1"
+            android:shadowColor="@color/gold_glow"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="10"
+            android:layout_marginBottom="12dp"
+            tools:ignore="HardcodedText"/>
 
         <!-- Lifetime / Current Game toggle -->
         <LinearLayout
@@ -152,44 +131,23 @@
         android:padding="16dp">
 
         <!-- Title -->
-        <FrameLayout
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Leaderboard"
-                android:textAllCaps="true"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:textColor="#66000000"
-                android:gravity="center"
-                android:letterSpacing="0.1"
-                android:translationX="3dp"
-                android:translationY="3dp"
-                tools:ignore="HardcodedText"/>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Leaderboard"
-                android:textAllCaps="true"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:textColor="@color/gold_bright"
-                android:gravity="center"
-                android:letterSpacing="0.1"
-                android:shadowColor="@color/gold_glow"
-                android:shadowDx="0"
-                android:shadowDy="0"
-                android:shadowRadius="10"
-                tools:ignore="HardcodedText"/>
-
-        </FrameLayout>
+            android:text="Leaderboard"
+            android:textAllCaps="true"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:textColor="@color/gold_bright"
+            android:gravity="center"
+            android:letterSpacing="0.1"
+            android:shadowColor="@color/gold_glow"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="10"
+            android:layout_marginBottom="12dp"
+            tools:ignore="HardcodedText"/>
 
         <!-- Global / Following toggle -->
         <LinearLayout
