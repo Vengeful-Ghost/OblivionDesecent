@@ -1,11 +1,11 @@
 package com.example.obliviondescent;
 
 /**
- * מנהלת את כל מצב ההתקדמות בין הקומות.
- * עוקבת אחרי הקומה הנוכחית, ספירת הריגות, מיקום הפורטל ומצבי בוס.
- * GameActivity מפעילה onEnemyKilled() בכל מות אויב.
- * GameActivity מפעילה advanceFloor() לאחר סיום אנימציית המעבר.
- * GameDisplay קוראת getPortalX/Y() ו-isPortalOpen() לציור.
+ * Manages all floor-progression state.
+ * Tracks the current floor, kill count, portal position and boss states.
+ * GameActivity calls onEnemyKilled() on every enemy death.
+ * GameActivity calls advanceFloor() after the floor-transition animation completes.
+ * GameDisplay reads getPortalX/Y() and isPortalOpen() for rendering.
  */
 public class FloorManager {
 
@@ -92,9 +92,9 @@ public class FloorManager {
     }
 
     /**
-     * נקראת לאחר הריגת הבוס. פותחת את פורטל היציאה.
-     * @param playerX מיקום X הנוכחי של השחקן
-     * @param playerY מיקום Y הנוכחי של השחקן
+     * Called after the boss is defeated. Opens the exit portal.
+     * @param playerX current X position of the player
+     * @param playerY current Y position of the player
      */
     public void onBossDefeated(float playerX, float playerY) {
         bossDefeated = true;
@@ -174,16 +174,16 @@ public class FloorManager {
        ============================================================ */
 
     /**
-     * מחשבת את מספר ההריגות הנדרשות לפתיחת הפורטל בקומה הנוכחית.
-     * @return מספר הריגות נדרשות
+     * Calculates the number of kills required to open the portal on the current floor.
+     * @return required kill count
      */
     private int calculateKillsRequired() {
         return 6 + currentFloor / 3;
     }
 
     /**
-     * מגדירה את הקומה הנוכחית ומאפסת מצב הקומה. משמשת לטעינת משחק שמור.
-     * @param floor מספר הקומה לשחזור
+     * Sets the current floor and resets all floor state. Used when loading a saved game.
+     * @param floor the floor number to restore
      */
     // Add this setter so GameActivity can restore floor on load
     public void setCurrentFloor(int floor) {

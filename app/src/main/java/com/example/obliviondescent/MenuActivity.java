@@ -13,9 +13,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButton;
 
 /**
- * מנהלת את מסך התפריט הראשי של המשחק.
- * מציגה אפשרויות של משחק חדש, טעינת משחק קיים, סטטיסטיקות והגדרות.
- * בודקת אם קיים שמירה קיימת ומפעילה מוזיקת תפריט.
+ * Main menu screen of the game.
+ * Displays options for new game, load game, statistics and settings.
+ * Checks for an existing save and starts the menu music.
  */
 public class MenuActivity extends AppCompatActivity {
 
@@ -31,8 +31,8 @@ public class MenuActivity extends AppCompatActivity {
     private MaterialButton btnSettings;
 
     /**
-     * מאתחל את התפריט הראשי, טוען פרטי משתמש ובודק שמירה קיימת.
-     * @param savedInstanceState מצב שמור מהפעלה קודמת
+     * Initialises the main menu, loads user data and checks for an existing save.
+     * @param savedInstanceState previously saved instance state
      */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,7 +77,7 @@ public class MenuActivity extends AppCompatActivity {
     }
 
     /**
-     * מפעיל את מוזיקת התפריט בעת הצגת המסך.
+     * Starts the menu music when the screen becomes visible.
      */
     @Override
     protected void onStart() {
@@ -86,7 +86,7 @@ public class MenuActivity extends AppCompatActivity {
     }
 
     /**
-     * מפסיק את מוזיקת התפריט כאשר המסך יוצא לרקע.
+     * Stops the menu music when the screen goes to the background.
      */
     @Override
     protected void onStop() {
@@ -95,7 +95,7 @@ public class MenuActivity extends AppCompatActivity {
     }
 
     /**
-     * מחזיר את המסך למצב מלא ומרענן בדיקת שמירה קיימת.
+     * Restores full-screen mode and refreshes the existing-save check.
      */
     @Override
     protected void onResume() {
@@ -129,8 +129,8 @@ public class MenuActivity extends AppCompatActivity {
     }
 
     /**
-     * מגדירה את מצב הכפתור "טעינת משחק" (מופעל/מושבת).
-     * @param enabled האם הכפתור מופעל
+     * Enables or disables the Load Game button.
+     * @param enabled true to enable the button, false to disable it
      */
     private void setLoadGameEnabled(boolean enabled) {
         btnLoadGame.setEnabled(enabled);
@@ -168,7 +168,7 @@ public class MenuActivity extends AppCompatActivity {
     }
 
     /**
-     * מוחקת את השמירה הקיימת ואז יוצרת משחק חדש.
+     * Deletes the existing save and then creates a new game.
      */
     private void deleteSaveAndCreateNew() {
         if (existingGameId == null) {
@@ -184,7 +184,7 @@ public class MenuActivity extends AppCompatActivity {
     }
 
     /**
-     * יוצרת שמירה חדשה ב-Firestore ומפעילה את GameActivity.
+     * Creates a new game save in Firestore and launches GameActivity.
      */
     private void createNewGame() {
         if (userId == null) return;
@@ -205,8 +205,8 @@ public class MenuActivity extends AppCompatActivity {
     }
 
     /**
-     * מפעילה את GameActivity עם מזהה המשחק הנתון.
-     * @param gameId מזהה השמירה ב-Firestore
+     * Launches GameActivity with the given game save ID.
+     * @param gameId the Firestore save document ID
      */
     private void launchGame(String gameId) {
         SoundManager.stopMenuMusic(); // silence music before entering the game

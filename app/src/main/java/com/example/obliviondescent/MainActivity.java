@@ -29,9 +29,9 @@ import com.google.android.material.textfield.TextInputLayout;
 import java.util.Random;
 
 /**
- * מנהלת את מסך הכניסה הראשוני של האפליקציה.
- * אחראית על אימות פרטי כניסה מול Firebase, כניסה אוטומטית
- * עבור משתמשים שסימנו "זכור אותי", ואנימציית חלקיקים ברקע.
+ * Login screen of the application.
+ * Handles credential validation against Firebase, auto-login
+ * for users who checked "remember me", and a background particle animation.
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -61,8 +61,8 @@ public class MainActivity extends AppCompatActivity {
        ============================================================ */
 
     /**
-     * מאתחל את המסך, בודק כניסה אוטומטית ומגדיר מאזיני לחצנים.
-     * @param savedInstanceState מצב שמור מהפעלה קודמת
+     * Initialises the screen, checks for auto-login and sets up button listeners.
+     * @param savedInstanceState previously saved instance state
      */
     @SuppressLint("WrongViewCast")
     @Override
@@ -166,8 +166,8 @@ public class MainActivity extends AppCompatActivity {
        ============================================================ */
 
     /**
-     * מציגה דיאלוג טעינה עם הודעה מותאמת אישית.
-     * @param message הטקסט שיוצג בדיאלוג
+     * Shows a loading dialog with a custom message.
+     * @param message text to display in the dialog
      */
     private void showLoading(String message) {
         if (loadingDialog != null && loadingDialog.isShowing()) return;
@@ -180,7 +180,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * מסתירה את דיאלוג הטעינה אם הוא מוצג.
+     * Hides the loading dialog if it is currently showing.
      */
     private void hideLoading() {
         if (loadingDialog != null && loadingDialog.isShowing()) loadingDialog.dismiss();
@@ -188,10 +188,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * מחילה אפקט זוהר על שדה קלט בעת קבלת פוקוס.
-     * @param layout שדה הקלט
-     * @param defaultBg רקע ברירת מחדל
-     * @param focusedBg רקע במצב פוקוס
+     * Applies a glow effect to an input field when it gains focus.
+     * @param layout the input layout to style
+     * @param defaultBg background drawable resource for the unfocused state
+     * @param focusedBg background drawable resource for the focused state
      */
     private void applyFocusGlow(final TextInputLayout layout, final int defaultBg, final int focusedBg) {
 
@@ -217,7 +217,7 @@ public class MainActivity extends AppCompatActivity {
        ============================================================ */
 
     /**
-     * מפעילה אנימציית חלקיקים קופצים על כל חלקיקי הרקע במסך.
+     * Starts the bouncing-particle background animation for all particle views on screen.
      */
     private void startBouncingParticles() {
         int[] particleIds = {
@@ -251,8 +251,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * מפעילה אנימציית קפיצה בודדת עבור חלקיק יחיד, הקופץ בין גבולות המסך.
-     * @param particle תמונת החלקיק לאנימציה
+     * Starts the bounce animation for a single particle, reflecting off screen edges.
+     * @param particle the ImageView particle to animate
      */
     private void startSingleBouncingParticle(ImageView particle) {
         Handler handler = new Handler(Looper.getMainLooper());
@@ -294,7 +294,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * מסתירה את ממשק המשתמש של המערכת (סרגל ניווט וסטטוס) למצב מסך מלא.
+     * Hides the system UI (navigation and status bars) for a full-screen experience.
      */
     private void hideSystemUI() {
         getWindow().getDecorView().setSystemUiVisibility(

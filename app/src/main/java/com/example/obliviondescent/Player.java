@@ -5,16 +5,16 @@ import android.graphics.Color;
 import android.graphics.Paint;
 
 /**
- * מייצגת את דמות השחקן במשחק.
- * מנהלת מיקום, תנועה, ציוד נשק, ואנימציית מוות.
- * GameActivity מעדכנת את המיקום בכל פריים לוגי.
+ * Represents the player character in the game.
+ * Manages position, movement, weapon equipment and the death animation.
+ * GameActivity updates the position every logic frame.
  */
 public class Player {
 
-    /** מיקום השחקן בעולם המשחק. */
+    /** Player position in world space. */
     public float x = 1000f;
     public float y = 1000f;
-    /** רדיוס גוף השחקן לחישובי התנגשות. */
+    /** Player body radius used for collision detection. */
     public float radius = 50f;
 
     public float speed = 10f;
@@ -46,8 +46,8 @@ public class Player {
     }
 
     /**
-     * מצייד את השחקן בנשק חדש ומעדכן צבע דיבאג ההתקפה.
-     * @param weapon הנשק לציוד
+     * Equips a new weapon and updates the attack debug paint colour.
+     * @param weapon the weapon to equip
      */
     public void equipWeapon(Weapon weapon) {
         this.currentWeapon = weapon;
@@ -63,9 +63,9 @@ public class Player {
     }
 
     /**
-     * מעדכנת את מיקום השחקן לפי קלט הג'ויסטיק.
-     * @param joyDX כיוון אופקי מנורמל (-1 עד 1)
-     * @param joyDY כיוון אנכי מנורמל (-1 עד 1)
+     * Updates the player's position based on joystick input.
+     * @param joyDX normalised horizontal direction (-1 to 1)
+     * @param joyDY normalised vertical direction (-1 to 1)
      */
     public void update(float joyDX, float joyDY) {
         if (joyDX != 0 || joyDY != 0) {
@@ -89,9 +89,9 @@ public class Player {
     public long getDeathDuration() { return PLAYER_DEATH_DURATION; }
 
     /**
-     * מצייר את השחקן על הקנבס, כולל אנימציית מוות אם פעילה.
-     * @param canvas הקנבס לציור
-     * @param camera מצלמת המשחק לחישוב מיקום מסך
+     * Draws the player on the canvas, including the death animation when active.
+     * @param canvas the canvas to draw on
+     * @param camera game camera used to translate world position to screen position
      */
     public void draw(Canvas canvas, GameCamera camera) {
         float drawX = x - camera.getOffsetX();
@@ -131,7 +131,7 @@ public class Player {
     public void setAimAngle(float angle) { this.aimAngle = angle; }
 
     /**
-     * מאפסת את מצב אנימציית המוות כדי לאפשר הפעלה מחדש.
+     * Resets the death animation state so it can be triggered again.
      */
     public void resetDeathAnimation() {
         isDying = false;

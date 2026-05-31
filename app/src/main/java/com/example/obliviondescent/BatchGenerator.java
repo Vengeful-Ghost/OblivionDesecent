@@ -26,10 +26,10 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 /**
- * מייצרת תוכן משחק דינמי באמצעות Gemini AI API.
- * שולחת בקשה אחת (batch) לטווח קומות (5 קומות) ומקבלת בחזרה:
- * אויבים ייחודיים, פריטי חנות לפי קומה, ובוס ייחודי.
- * שומרת תוצאות מקומית לשימוש חוזר ללא גישה לרשת.
+ * Generates dynamic game content using the Gemini AI API.
+ * Sends a single batch request for a floor range (5 floors) and receives back:
+ * unique enemy templates, per-floor shop items and a unique boss.
+ * Results are cached locally so subsequent uses require no network call.
  */
 public class BatchGenerator {
 
@@ -49,11 +49,11 @@ public class BatchGenerator {
     }
 
     /**
-     * שולחת בקשת batch ל-Gemini API לטווח קומות נתון.
-     * מנסה שוב אוטומטית לאחר 3 שניות בשגיאת 503.
-     * @param rangeStart קומה ראשונה בטווח
-     * @param rangeEnd קומה אחרונה בטווח
-     * @param listener מאזין לתוצאה (onSuccess / onFailure)
+     * Sends a batch request to the Gemini API for the given floor range.
+     * Automatically retries after 3 seconds on a 503 error.
+     * @param rangeStart first floor in the range
+     * @param rangeEnd last floor in the range
+     * @param listener result listener (onSuccess / onFailure)
      */
     public void generateBatch(int rangeStart, int rangeEnd, OnBatchGeneratedListener listener) {
         int bossFloor = rangeEnd; // boss is always the last floor of the range
@@ -126,11 +126,11 @@ public class BatchGenerator {
     }
 
     /**
-     * בונה את הפרומפט המלא עבור Gemini API לטווח קומות נתון.
-     * @param rangeStart קומה ראשונה בטווח
-     * @param rangeEnd קומה אחרונה בטווח
-     * @param bossFloor קומת הבוס בטווח (תמיד האחרונה)
-     * @return מחרוזת הפרומפט
+     * Builds the full prompt string for the Gemini API covering the given floor range.
+     * @param rangeStart first floor in the range
+     * @param rangeEnd last floor in the range
+     * @param bossFloor boss floor within the range (always the last floor)
+     * @return the complete prompt string
      */
     private String buildPrompt(int rangeStart, int rangeEnd, int bossFloor) {
         StringBuilder sb = new StringBuilder();
@@ -214,15 +214,12 @@ public class BatchGenerator {
     /**
      * Parses a pre-extracted JSON text string into a BatchResult.
      * Package-private so GameActivity can call it when loading from local storage.
-     */
-    /**
-     * מנתחת מחרוזת JSON מעובדת לאובייקט BatchResult.
-     * גישה package-private כדי ש-GameActivity תוכל להפעיל בטעינה מאחסון מקומי.
-     * @param jsonText JSON מנוקה (ללא עטיפת API)
-     * @param rangeStart קומה ראשונה בטווח
-     * @param rangeEnd קומה אחרונה בטווח
-     * @return BatchResult המנותח
-     * @throws Exception אם הניתוח נכשל
+     *
+     * @param jsonText cleaned JSON (without the API response wrapper)
+     * @param rangeStart first floor in the range
+     * @param rangeEnd last floor in the range
+     * @return the parsed BatchResult
+     * @throws Exception if parsing fails
      */
     BatchResult parseBatch(String jsonText, int rangeStart, int rangeEnd) throws Exception {
         JSONObject root = new JSONObject(jsonText);

@@ -9,8 +9,8 @@ import android.view.View;
 import java.util.Random;
 
 /**
- * View המציגה אנימציית חלקיקים עפים ברקע דיאלוג החנות.
- * מאניימת 30 חלקיקים בצבעים שונים הקופצים בין גבולות המסך.
+ * View that displays a floating-particle animation behind the shop dialog.
+ * Animates 30 particles in various colours bouncing off the view boundaries.
  */
 public class ShopParticleView extends View {
 
@@ -78,7 +78,7 @@ public class ShopParticleView extends View {
     }
 
     /**
-     * עוצרת את לולאת האנימציה. יש לקרוא לפני סגירת הדיאלוג.
+     * Stops the animation loop. Must be called before the dialog is dismissed.
      */
     public void stopAnimation() { running = false; }
 }

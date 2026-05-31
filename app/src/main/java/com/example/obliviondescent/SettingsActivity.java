@@ -22,9 +22,9 @@ import com.google.firebase.auth.FirebaseAuth;
 import java.util.Random;
 
 /**
- * מנהלת את מסך ההגדרות.
- * מאפשרת שליטה על עוצמת קול מוזיקה ואפקטי קול, הדעדה,
- * וכפתור יציאה מהחשבון. ניתן לפתוח ממסך התפריט או מתוך המשחק.
+ * Settings screen.
+ * Allows control over music and SFX volume, vibration,
+ * and a sign-out button. Can be opened from the main menu or the in-game pause menu.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -45,8 +45,8 @@ public class SettingsActivity extends AppCompatActivity {
     private TextView txtMiuiWarning;
 
     /**
-     * מאתחל את מסך ההגדרות, טוען עדפות שמורות ומגדיר מחוונים.
-     * @param savedInstanceState מצב שמור מהפעלה קודמת
+     * Initialises the settings screen, loads saved preferences and sets up sliders.
+     * @param savedInstanceState previously saved instance state
      */
     @Override
     protected void onCreate(Bundle savedInstanceState) {

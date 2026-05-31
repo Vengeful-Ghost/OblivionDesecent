@@ -9,8 +9,8 @@ import android.view.MotionEvent;
 import android.view.View;
 
 /**
- * ג'ויסטיק אנלוגי על המסך לקלט תנועת השחקן.
- * מייצר וקטור כיוון מנורמל (dx, dy) בטווח [-1, 1].
+ * On-screen analogue joystick for player movement input.
+ * Produces a normalised direction vector (dx, dy) in the range [-1, 1].
  */
 public class JoystickView extends View {
 
@@ -87,7 +87,7 @@ public class JoystickView extends View {
        ============================================================ */
 
     /**
-     * מגדירה את מרכז הג'ויסטיק בעת שינוי גודל ה-View.
+     * Sets the joystick centre position when the view size changes.
      */
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
@@ -102,7 +102,7 @@ public class JoystickView extends View {
        ============================================================ */
 
     /**
-     * מצייר את בסיס הג'ויסטיק והידית הנעה.
+     * Draws the joystick base and the movable hat.
      */
     @Override
     protected void onDraw(Canvas canvas) {
@@ -168,10 +168,10 @@ public class JoystickView extends View {
        Public getters
        ============================================================ */
 
-    /** @return כיוון אופקי מנורמל (-1 עד 1) */
+    /** @return normalised horizontal direction (-1 to 1) */
     public float getDX() { return dx; }
-    /** @return כיוון אנכי מנורמל (-1 עד 1) */
+    /** @return normalised vertical direction (-1 to 1) */
     public float getDY() { return dy; }
-    /** @return true אם האצבע נוגעת בג'ויסטיק כרגע */
+    /** @return true if a finger is currently touching the joystick */
     public boolean isTouched() { return touched; }
 }

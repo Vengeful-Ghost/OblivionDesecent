@@ -6,9 +6,9 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 
 /**
- * מייצגת ארגז אוצר שמופיע לאחר הריגת בוס.
- * השחקן מתקרב מספיק כדי לפתוח אותו.
- * פריט הפרס (שנקבע על ידי GameActivity) ניתן לשחקן בפתיחה.
+ * Represents a treasure chest that appears after killing a boss.
+ * The player walks close enough to open it.
+ * The reward item (set by GameActivity) is granted to the player on opening.
  */
 public class TreasureChest {
 
@@ -32,9 +32,9 @@ public class TreasureChest {
     private Paint labelPaint;
 
     /**
-     * יוצר ארגז אוצר חדש במיקום הנתון.
-     * @param spawnX מיקום X בעולם המשחק
-     * @param spawnY מיקום Y בעולם המשחק
+     * Creates a new treasure chest at the given position.
+     * @param spawnX X position in world space
+     * @param spawnY Y position in world space
      */
     public TreasureChest(float spawnX, float spawnY) {
         this.x = spawnX;
@@ -64,9 +64,9 @@ public class TreasureChest {
     }
 
     /**
-     * מצייר את ארגז האוצר — סגור עם מנעול או פתוח עם שם הפרס.
-     * @param canvas הקנבס לציור
-     * @param camera מצלמת המשחק לחישוב מיקום מסך
+     * Draws the treasure chest — closed with a lock or open with the reward item name.
+     * @param canvas the canvas to draw on
+     * @param camera game camera used to translate world position to screen position
      */
     public void draw(Canvas canvas, GameCamera camera) {
         float drawX = x - camera.getOffsetX();

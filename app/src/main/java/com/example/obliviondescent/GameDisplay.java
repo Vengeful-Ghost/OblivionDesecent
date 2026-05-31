@@ -9,9 +9,9 @@ import android.view.View;
 import java.util.List;
 
 /**
- * View המציגה את עולם המשחק — השחקן, אויבים, קליעים, מטבעות, ארגזים,
- * פריסת הקומה, פורטלים, מיניאמפ ואנימציות.
- * מצוירת על ידי thread ייעודי דרך postInvalidate().
+ * View that renders the game world: player, enemies, projectiles, coins, chests,
+ * floor layout, portals, minimap and animations.
+ * Redrawn by a dedicated thread via postInvalidate().
  */
 public class GameDisplay extends View {
 
@@ -181,14 +181,14 @@ public class GameDisplay extends View {
     }
 
     /**
-     * מחברת אובייקטי לוגיקה לתצוגה להצגה בכל פריים ציור.
-     * @param player השחקן לציור
-     * @param enemies רשימת האויבים לציור
-     * @param camera מצלמת המשחק
-     * @param projectiles רשימת קליעים פעילים
-     * @param goldCoins רשימת מטבעות זהב
-     * @param treasureChests רשימת ארגזי אוצר
-     * @param shopRoom אובייקט חדר החנות
+     * Connects logic objects to this view so they are rendered each draw frame.
+     * @param player the player to draw
+     * @param enemies list of enemies to draw
+     * @param camera game camera
+     * @param projectiles list of active projectiles
+     * @param goldCoins list of gold coins
+     * @param treasureChests list of treasure chests
+     * @param shopRoom the shop room object
      */
     // Connect logic objects to this view
     public void setGameData(Player player, List<Enemy> enemies, GameCamera camera,
@@ -311,8 +311,8 @@ public class GameDisplay extends View {
     }
 
     /**
-     * מגדירה את פריסת הקומה לציור.
-     * @param layout פריסת הקומה הנוכחית
+     * Sets the floor layout to be rendered.
+     * @param layout the current floor layout
      */
     public void setFloorLayout(FloorLayout layout) {
         this.floorLayout = layout;
@@ -484,8 +484,8 @@ public class GameDisplay extends View {
     }
 
     /**
-     * מגדירה את מנהל הקומות לגישה לנתוני פורטל.
-     * @param floorManager מנהל הקומות הנוכחי
+     * Sets the floor manager used to access portal data for rendering.
+     * @param floorManager the current floor manager
      */
     public void setFloorManager(FloorManager floorManager) {
         this.floorManager = floorManager;
