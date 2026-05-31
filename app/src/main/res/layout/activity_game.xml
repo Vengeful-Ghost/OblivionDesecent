@@ -244,7 +244,8 @@
             <com.example.obliviondescent.DashCooldownView
                 android:id="@+id/dash_cooldown_view"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"/>
+                android:layout_height="match_parent"
+                android:translationZ="10dp"/>
 
         </FrameLayout>
 
@@ -306,58 +307,5 @@
 
     </FrameLayout>
 
-    <!-- Loading overlay shown on new game until first batch arrives -->
-    <FrameLayout
-        android:id="@+id/loading_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/bg_deepest"
-        android:visibility="gone"
-        android:clickable="true"
-        android:focusable="true">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:orientation="vertical"
-            android:gravity="center">
-
-            <ProgressBar
-                android:layout_width="64dp"
-                android:layout_height="64dp"
-                android:indeterminateTint="@color/gold_bright"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Descending into the Void..."
-                android:textColor="@color/gold_bright"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:letterSpacing="0.1"
-                android:shadowColor="@color/gold_glow"
-                android:shadowDx="0"
-                android:shadowDy="0"
-                android:shadowRadius="14"
-                android:layout_marginTop="20dp"
-                tools:ignore="HardcodedText"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="The darkness is being summoned..."
-                android:textColor="@color/bone_dim"
-                android:textSize="13sp"
-                android:textStyle="italic"
-                android:fontFamily="serif"
-                android:letterSpacing="0.08"
-                android:layout_marginTop="8dp"
-                tools:ignore="HardcodedText"/>
-
-        </LinearLayout>
-
-    </FrameLayout>
 
 </RelativeLayout>

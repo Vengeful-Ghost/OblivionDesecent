@@ -176,9 +176,6 @@ public class GameActivity extends AppCompatActivity {
     private String currentBossTitle = null;
     private int    currentBossColor = android.graphics.Color.RED;
 
-    // Loading overlay (shown until layout is ready)
-    private android.view.View loadingOverlay;
-
     private PlayerBehaviorTracker behaviorTracker = new PlayerBehaviorTracker();
 
     private SoundManager soundManager;
@@ -223,7 +220,6 @@ public class GameActivity extends AppCompatActivity {
         menuBtn = findViewById(R.id.btn_menu);
         btnDash = findViewById(R.id.btn_dash);
         txtGold = findViewById(R.id.txt_gold);
-        loadingOverlay = findViewById(R.id.loading_overlay);
         dashCooldownView = findViewById(R.id.dash_cooldown_view);
 
         player = new Player();
@@ -231,17 +227,12 @@ public class GameActivity extends AppCompatActivity {
 
         floorManager = new FloorManager();
 
-        isGamePaused = true;
-        loadingOverlay.setVisibility(android.view.View.VISIBLE);
-
         // Fire batch for floors 1-5 (floor 1 now included so it has shop items + named enemies)
         generateBatch(1, 5);
 
         // Start floor 1 immediately with generic placeholder enemies while the batch loads.
         // When the batch arrives, applyBatchToCurrentFloorIfReady() will re-spawn with
         // AI templates and the shop will auto-populate via pollForBatchThenPopulate().
-        loadingOverlay.setVisibility(android.view.View.GONE);
-        isGamePaused = false;
 
         currentLayout = FloorLayout.generate(
                 floorManager.getCurrentFloor(),

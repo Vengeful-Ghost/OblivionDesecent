@@ -22,7 +22,13 @@
       "Bash(cp \"/c/Users/Cyber_User/Downloads/Oblivion Descent.mp3\" \"/c/Users/Cyber_User/Desktop/Schoo/Computers/Android/Game/app/src/main/res/raw/menu_music.mp3\" && echo \"Copied OK\")",
       "Bash(cp \"/mnt/c/Users/Cyber_User/Downloads/moodmode-a-creepy-music-258754.mp3\" \"/mnt/c/Users/Cyber_User/Desktop/Schoo/Computers/Android/Game/app/src/main/res/raw/game_music.mp3\" && echo \"Done\")",
       "PowerShell(Copy-Item \"C:\\\\Users\\\\Cyber_User\\\\Downloads\\\\moodmode-a-creepy-music-258754.mp3\" \"C:\\\\Users\\\\Cyber_User\\\\Desktop\\\\Schoo\\\\Computers\\\\Android\\\\Game\\\\app\\\\src\\\\main\\\\res\\\\raw\\\\game_music.mp3\")",
-      "Bash(git restore *)"
+      "Bash(git restore *)",
+      "Bash(git rm *)",
+      "Bash(grep -v \"//\")",
+      "Bash(grep -v \"void \\\\|@\\\\|//\")",
+      "Bash(git merge worktree-agent-a53aa4da27f53077f --no-ff -m ' *)",
+      "Bash(git stash *)",
+      "Bash(git merge worktree-agent-a22584bc96813ada6 --no-ff -m ' *)"
     ]
   }
 }

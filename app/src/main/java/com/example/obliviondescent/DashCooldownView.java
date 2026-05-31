@@ -16,17 +16,26 @@ import android.view.View;
 public class DashCooldownView extends View {
 
     private Paint arcPaint;
+    private Paint dimPaint;
     private RectF arcRect;
     /** 0 = full cooldown, 1 = ready to dash. */
-    private float progress = 0f; // 0 = full cooldown, 1 = ready
+    private float progress = 0f;
 
     public DashCooldownView(Context context, AttributeSet attrs) {
         super(context, attrs);
+        float dp = context.getResources().getDisplayMetrics().density;
+
+        // Arc paint — thick gold stroke
         arcPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         arcPaint.setStyle(Paint.Style.STROKE);
-        arcPaint.setStrokeWidth(5f);
-        arcPaint.setColor(Color.WHITE);
+        arcPaint.setStrokeWidth(6f * dp);
+        arcPaint.setColor(Color.argb(255, 255, 200, 50));
         arcPaint.setStrokeCap(Paint.Cap.ROUND);
+
+        // Dim paint — dark fill to grey out the button while on cooldown
+        dimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        dimPaint.setStyle(Paint.Style.FILL);
+        dimPaint.setColor(Color.argb(160, 0, 0, 0));
     }
 
     @Override
@@ -47,14 +56,15 @@ public class DashCooldownView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         if (arcRect == null) return;
-        if (progress >= 1f) return; // fully ready — don't draw anything
+        if (progress >= 1f) return; // fully ready — draw nothing
 
-        // Gray background arc
-        arcPaint.setColor(Color.argb(80, 255, 255, 255));
-        canvas.drawArc(arcRect, -90, 360, false, arcPaint);
+        // 1. Dark circle overlay to clearly show the button is on cooldown
+        float cx = arcRect.centerX();
+        float cy = arcRect.centerY();
+        float r  = arcRect.width() / 2f + arcPaint.getStrokeWidth() / 2f;
+        canvas.drawCircle(cx, cy, r, dimPaint);
 
-        // White foreground arc — clockwise fill as cooldown recovers
-        arcPaint.setColor(Color.WHITE);
+        // 2. Bright gold arc growing clockwise as cooldown recovers
         float sweep = 360f * progress;
         canvas.drawArc(arcRect, -90, sweep, false, arcPaint);
     }
