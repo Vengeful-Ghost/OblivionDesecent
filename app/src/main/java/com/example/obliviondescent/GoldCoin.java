@@ -5,13 +5,10 @@ import android.graphics.Color;
 import android.graphics.Paint;
 
 /**
- * GoldCoin
- *
- * A physical collectible in the world.
- * Spawns at enemy death position with a small random offset.
- * Player collects it by walking close enough.
- * Each coin has a value of 1 — multiple coins are spawned for
- * higher value drops so they visually spread on the ground.
+ * מייצגת מטבע זהב שנאסף בעולם המשחק.
+ * מושלך במיקום מות האויב עם פיזור אקראי קטן.
+ * השחקן אוסף אותו על ידי הליכה מספיק קרוב.
+ * כל מטבע שווה 1 — מושלכים מספר מטבעות לשווי גבוה יותר.
  */
 public class GoldCoin {
 
@@ -26,6 +23,11 @@ public class GoldCoin {
     private Paint coinPaint;
     private Paint shinePaint;
 
+    /**
+     * יוצר מטבע חדש עם פיזור אקראי סביב נקודת ההשלכה.
+     * @param spawnX מיקום X של נקודת ההשלכה
+     * @param spawnY מיקום Y של נקודת ההשלכה
+     */
     public GoldCoin(float spawnX, float spawnY) {
         // Spread coins in a random radius around the drop point
         // so multiple coins don't stack on top of each other
@@ -43,6 +45,11 @@ public class GoldCoin {
         shinePaint.setStyle(Paint.Style.FILL);
     }
 
+    /**
+     * מצייר את המטבע על הקנבס אם טרם נאסף.
+     * @param canvas הקנבס לציור
+     * @param camera מצלמת המשחק לחישוב מיקום מסך
+     */
     public void draw(Canvas canvas, GameCamera camera) {
         if (collected) return;
 

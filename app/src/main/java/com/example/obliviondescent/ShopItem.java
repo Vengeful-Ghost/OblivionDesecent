@@ -1,11 +1,9 @@
 package com.example.obliviondescent;
 
 /**
- * ShopItem
- *
- * Represents a single AI-generated item from the Gemini API.
- * Type can be WEAPON, ARMOR, or CONSUMABLE.
- * Stats map directly to the relevant constructor for each type.
+ * מייצגת פריט בודד שנוצר על ידי Gemini AI.
+ * הסוג יכול להיות WEAPON, ARMOR או CONSUMABLE.
+ * הסטטיסטיקות ממופות ישירות לבנאי הרלוונטי של כל סוג.
  */
 public class ShopItem {
 
@@ -37,8 +35,9 @@ public class ShopItem {
     public int    effectValue;  // amount to heal/restore
 
     /**
-     * Converts this ShopItem into a Weapon object.
-     * Only valid if type == WEAPON.
+     * ממיר את ShopItem לאובייקט Weapon.
+     * תקף רק כאשר type == WEAPON.
+     * @return אובייקט Weapon המקביל
      */
     public Weapon toWeapon() {
         Weapon.Rarity r;
@@ -51,8 +50,9 @@ public class ShopItem {
     }
 
     /**
-     * Converts this ShopItem into an Armor object.
-     * Only valid if type == ARMOR.
+     * ממיר את ShopItem לאובייקט Armor.
+     * תקף רק כאשר type == ARMOR.
+     * @return אובייקט Armor המקביל
      */
     public Armor toArmor() {
         Armor.Rarity r;

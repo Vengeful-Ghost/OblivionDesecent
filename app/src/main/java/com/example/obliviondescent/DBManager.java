@@ -15,14 +15,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * DBManager
+ * מנהלת את כל הגישה ל-Firestore.
+ * אחראית על אימות, שמירת משחק, סטטיסטיקות, לוח מובילים ומערכת עקוב.
  *
- * Collections:
- *   players/{userId}           — lifetime stats + gameSlot IDs
- *   games/{gameId}             — per-run save state
- *   generated_weapons/{id}     — AI or system weapons
- *   generated_armors/{id}      — AI or system armor
- *   generated_enemies/{id}     — AI or system enemies
+ * אוספים ב-Firestore:
+ *   players/{userId}           — סטטיסטיקות לכל הזמן + מזהי חריצי משחק
+ *   games/{gameId}             — מצב שמירה לכל ריצה
+ *   generated_weapons/{id}     — נשק שנוצר על ידי AI או מערכת
+ *   generated_armors/{id}      — שריון שנוצר על ידי AI או מערכת
+ *   generated_enemies/{id}     — אויבים שנוצרו על ידי AI או מערכת
  */
 public class DBManager {
 
@@ -70,6 +71,11 @@ public class DBManager {
        AUTH — unchanged
        ============================================================ */
 
+    /**
+     * מוסיפה משתמש חדש לאוסף users (שיטה ישנה, לגיבוי).
+     * @param username שם המשתמש
+     * @param password הסיסמה
+     */
     public void insertUser(String username, String password) {
         Map<String, Object> user = new HashMap<>();
         user.put("username", username);
@@ -82,6 +88,11 @@ public class DBManager {
                 .addOnFailureListener(e -> Log.e(TAG, "insertUser failed", e));
     }
 
+    /**
+     * בודקת אם שם המשתמש קיים ב-Firestore.
+     * @param username שם המשתמש לבדיקה
+     * @param listener מאזין המקבל true אם קיים
+     */
     public void checkUsername(String username, OnUsernameCheckListener listener) {
         db.collection("users")
                 .whereEqualTo("username", username)
@@ -96,6 +107,12 @@ public class DBManager {
                 });
     }
 
+    /**
+     * מאמתת פרטי כניסה מול Firebase Auth.
+     * @param username שם המשתמש
+     * @param password הסיסמה
+     * @param listener מאזין המקבל (isValid, userId)
+     */
     public void checkUserCredentials(String username, String password, OnLoginCheckListener listener) {
         FirebaseAuth mAuth = FirebaseAuth.getInstance();
         mAuth.signInWithEmailAndPassword(username + "@app.com", password)
@@ -170,6 +187,11 @@ public class DBManager {
         }
     }
 
+    /**
+     * טוענת את מסמך הסטטיסטיקות של השחקן מ-Firestore.
+     * @param userId מזהה המשתמש
+     * @param listener מאזין המקבל מפת נתונים גולמית
+     */
     public void loadPlayerStats(String userId, OnGameLoadedListener listener) {
         db.collection("players")
                 .document(userId)
@@ -344,7 +366,11 @@ public class DBManager {
                 });
     }
 
-    /** Loads a single game save by ID. */
+    /**
+     * טוענת שמירה בודדת לפי מזהה.
+     * @param gameId מזהה המשחק ב-Firestore
+     * @param listener מאזין המקבל מפת נתונים גולמית (null אם לא נמצא)
+     */
     public void loadGame(String gameId, OnGameLoadedListener listener) {
         db.collection("games")
                 .document(gameId)
@@ -428,7 +454,11 @@ public class DBManager {
                 });
     }
 
-    /** Loads a generated weapon by ID and returns raw map. */
+    /**
+     * טוענת נשק שנוצר לפי מזהה ומחזירה מפה גולמית.
+     * @param weaponId מזהה מסמך הנשק ב-generated_weapons
+     * @param listener מאזין המקבל מפת נתונים גולמית
+     */
     public void loadGeneratedWeapon(String weaponId, OnGameLoadedListener listener) {
         db.collection("generated_weapons")
                 .document(weaponId)
@@ -483,7 +513,11 @@ public class DBManager {
                 });
     }
 
-    /** Loads a generated armor by ID. */
+    /**
+     * טוענת שריון שנוצר לפי מזהה.
+     * @param armorId מזהה מסמך השריון ב-generated_armors
+     * @param listener מאזין המקבל מפת נתונים גולמית
+     */
     public void loadGeneratedArmor(String armorId, OnGameLoadedListener listener) {
         db.collection("generated_armors")
                 .document(armorId)

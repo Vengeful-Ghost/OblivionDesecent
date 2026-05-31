@@ -27,6 +27,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
+/**
+ * מנהלת את מסך הרשמת המשתמש החדש.
+ * מאמתת פרטי הרשמה, בודקת ייחודיות שם המשתמש ב-Firestore,
+ * יוצרת חשבון Firebase Auth ומאתחלת מסמך שחקן חדש.
+ */
 public class SignUpActivity extends AppCompatActivity
 {
     /* =========================
@@ -50,6 +55,10 @@ public class SignUpActivity extends AppCompatActivity
        ACTIVITY LIFECYCLE
        ========================= */
 
+    /**
+     * מאתחל את מסך ההרשמה, מגדיר אימות שדות ומאזיני לחצנים.
+     * @param savedInstanceState מצב שמור מהפעלה קודמת
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
@@ -144,6 +153,11 @@ public class SignUpActivity extends AppCompatActivity
        FIREBASE USER CREATION
        ========================= */
 
+    /**
+     * יוצרת חשבון Firebase Auth חדש ושומרת את פרטי המשתמש ב-Firestore.
+     * @param username שם המשתמש הנבחר
+     * @param password הסיסמה הנבחרת
+     */
     private void createFirebaseUser(String username, String password)
     {
         mAuth.createUserWithEmailAndPassword(username + "@app.com", password)
@@ -197,6 +211,10 @@ public class SignUpActivity extends AppCompatActivity
        UI UTILITIES
        ========================= */
 
+    /**
+     * מציגה דיאלוג טעינה עם הודעה מותאמת אישית.
+     * @param message הטקסט שיוצג בדיאלוג
+     */
     private void showLoading(String message) {
         if (loadingDialog != null && loadingDialog.isShowing()) return;
         View view = getLayoutInflater().inflate(R.layout.dialog_loading, null);
@@ -207,6 +225,10 @@ public class SignUpActivity extends AppCompatActivity
         loadingDialog.show();
     }
 
+    /**
+     * מעדכנת את הטקסט בדיאלוג הטעינה הפתוח.
+     * @param message הודעה חדשה להצגה
+     */
     private void updateLoadingMessage(String message) {
         if (loadingDialog != null && loadingDialog.isShowing()) {
             TextView tv = loadingDialog.findViewById(R.id.txt_loading_message);
@@ -214,11 +236,20 @@ public class SignUpActivity extends AppCompatActivity
         }
     }
 
+    /**
+     * מסתירה את דיאלוג הטעינה אם הוא מוצג.
+     */
     private void hideLoading() {
         if (loadingDialog != null && loadingDialog.isShowing()) loadingDialog.dismiss();
         loadingDialog = null;
     }
 
+    /**
+     * מחילה אפקט זוהר על שדה קלט בעת קבלת פוקוס.
+     * @param layout שדה הקלט
+     * @param defaultBg רקע ברירת מחדל
+     * @param focusedBg רקע במצב פוקוס
+     */
     private void applyFocusGlow(final TextInputLayout layout,
                                 final int defaultBg,
                                 final int focusedBg)
@@ -241,6 +272,10 @@ public class SignUpActivity extends AppCompatActivity
        BACKGROUND PARTICLES
        ========================= */
 
+    /**
+     * מפעילה אנימציית קפיצה בודדת עבור חלקיק יחיד.
+     * @param particle תמונת החלקיק לאנימציה
+     */
     private void startSingleBouncingParticle(ImageView particle)
     {
         Handler handler = new Handler(Looper.getMainLooper());
@@ -281,6 +316,9 @@ public class SignUpActivity extends AppCompatActivity
         handler.post(runnable);
     }
 
+    /**
+     * מפעילה אנימציית חלקיקים קופצים על כל חלקיקי הרקע.
+     */
     private void startBouncingParticles()
     {
         int[] particleIds =

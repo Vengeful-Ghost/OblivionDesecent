@@ -1,17 +1,11 @@
 package com.example.obliviondescent;
 
 /**
- * FloorManager
- *
- * Owns all floor progression state:
- * - Which floor the player is on
- * - How many enemies need to be killed to open the portal
- * - Where the portal is in world space
- * - Whether the portal is currently open
- *
- * GameActivity calls onEnemyKilled() every time an enemy dies.
- * GameActivity calls advanceFloor() after the transition animation ends.
- * GameDisplay reads getPortalX/Y() and isPortalOpen() to know what to draw.
+ * מנהלת את כל מצב ההתקדמות בין הקומות.
+ * עוקבת אחרי הקומה הנוכחית, ספירת הריגות, מיקום הפורטל ומצבי בוס.
+ * GameActivity מפעילה onEnemyKilled() בכל מות אויב.
+ * GameActivity מפעילה advanceFloor() לאחר סיום אנימציית המעבר.
+ * GameDisplay קוראת getPortalX/Y() ו-isPortalOpen() לציור.
  */
 public class FloorManager {
 
@@ -97,6 +91,11 @@ public class FloorManager {
         }
     }
 
+    /**
+     * נקראת לאחר הריגת הבוס. פותחת את פורטל היציאה.
+     * @param playerX מיקום X הנוכחי של השחקן
+     * @param playerY מיקום Y הנוכחי של השחקן
+     */
     public void onBossDefeated(float playerX, float playerY) {
         bossDefeated = true;
         openPortal(playerX, playerY);
@@ -174,10 +173,18 @@ public class FloorManager {
        DIFFICULTY SCALING
        ============================================================ */
 
+    /**
+     * מחשבת את מספר ההריגות הנדרשות לפתיחת הפורטל בקומה הנוכחית.
+     * @return מספר הריגות נדרשות
+     */
     private int calculateKillsRequired() {
         return 6 + currentFloor / 3;
     }
 
+    /**
+     * מגדירה את הקומה הנוכחית ומאפסת מצב הקומה. משמשת לטעינת משחק שמור.
+     * @param floor מספר הקומה לשחזור
+     */
     // Add this setter so GameActivity can restore floor on load
     public void setCurrentFloor(int floor) {
         this.currentFloor = floor;

@@ -1,7 +1,13 @@
 package com.example.obliviondescent;
 
+/**
+ * מנהלת את מצלמת המשחק שעוקבת אחרי השחקן.
+ * מחשבת offset לתרגום מיקומי עולם למיקומי מסך,
+ * ותומכת באפקט רעידת מצלמה בעת פגיעה.
+ */
 public class GameCamera {
 
+    /** היסט אופקי ואנכי לתרגום עולם → מסך. */
     private float offsetX = 0;
     private float offsetY = 0;
 
@@ -14,11 +20,21 @@ public class GameCamera {
     private long shakeDuration = 0;
     private float shakeMagnitude = 0f;
 
+    /**
+     * יוצר מצלמה חדשה לגודל מסך הנתון.
+     * @param width רוחב המסך בפיקסלים
+     * @param height גובה המסך בפיקסלים
+     */
     public GameCamera(int width, int height) {
         this.screenWidth = width;
         this.screenHeight = height;
     }
 
+    /**
+     * מעדכנת את offset המצלמה כדי למרכז את הנקודה הנתונה במסך.
+     * @param targetX מיקום X היעד (בדרך כלל מיקום השחקן)
+     * @param targetY מיקום Y היעד
+     */
     public void update(float targetX, float targetY) {
         this.offsetX = targetX - (screenWidth / 2f);
         this.offsetY = targetY - (screenHeight / 2f);

@@ -4,10 +4,17 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 
+/**
+ * מייצגת את דמות השחקן במשחק.
+ * מנהלת מיקום, תנועה, ציוד נשק, ואנימציית מוות.
+ * GameActivity מעדכנת את המיקום בכל פריים לוגי.
+ */
 public class Player {
 
+    /** מיקום השחקן בעולם המשחק. */
     public float x = 1000f;
     public float y = 1000f;
+    /** רדיוס גוף השחקן לחישובי התנגשות. */
     public float radius = 50f;
 
     public float speed = 10f;
@@ -38,6 +45,10 @@ public class Player {
         deathPaint.setStyle(Paint.Style.FILL);
     }
 
+    /**
+     * מצייד את השחקן בנשק חדש ומעדכן צבע דיבאג ההתקפה.
+     * @param weapon הנשק לציוד
+     */
     public void equipWeapon(Weapon weapon) {
         this.currentWeapon = weapon;
         attackDebugPaint.setColor(Weapon.getRarityColor(weapon.rarity));
@@ -51,6 +62,11 @@ public class Player {
         return currentWeapon;
     }
 
+    /**
+     * מעדכנת את מיקום השחקן לפי קלט הג'ויסטיק.
+     * @param joyDX כיוון אופקי מנורמל (-1 עד 1)
+     * @param joyDY כיוון אנכי מנורמל (-1 עד 1)
+     */
     public void update(float joyDX, float joyDY) {
         if (joyDX != 0 || joyDY != 0) {
             x += joyDX * speed;
@@ -72,6 +88,11 @@ public class Player {
     public boolean isDying() { return isDying; }
     public long getDeathDuration() { return PLAYER_DEATH_DURATION; }
 
+    /**
+     * מצייר את השחקן על הקנבס, כולל אנימציית מוות אם פעילה.
+     * @param canvas הקנבס לציור
+     * @param camera מצלמת המשחק לחישוב מיקום מסך
+     */
     public void draw(Canvas canvas, GameCamera camera) {
         float drawX = x - camera.getOffsetX();
         float drawY = y - camera.getOffsetY();
@@ -109,6 +130,9 @@ public class Player {
 
     public void setAimAngle(float angle) { this.aimAngle = angle; }
 
+    /**
+     * מאפסת את מצב אנימציית המוות כדי לאפשר הפעלה מחדש.
+     */
     public void resetDeathAnimation() {
         isDying = false;
         deathStartTime = 0;

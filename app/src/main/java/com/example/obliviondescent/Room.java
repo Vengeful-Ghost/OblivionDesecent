@@ -3,6 +3,11 @@ package com.example.obliviondescent;
 import android.graphics.RectF;
 import java.util.Random;
 
+/**
+ * מייצגת חדר יחיד בפריסה הפרוצדורלית של הקומה.
+ * מכיל גיאומטריה, כושר קיבול אויבים, מצב חקירה למיניאמפ,
+ * ומצב חיבורי מסדרונות לכל ארבעת הכיוונים.
+ */
 public class Room {
 
     public enum Type { ENTRY, EXIT, SMALL, MEDIUM, LARGE, HALLWAY, BOSS }
@@ -31,6 +36,15 @@ public class Room {
     public final boolean[] sideUsed = new boolean[4]; // [N, E, S, W]
 
     // ─────────────────────────────────────────────────────────────────────────
+    /**
+     * יוצר חדר חדש עם גיאומטריה וסוג נתונים.
+     * @param id מזהה ייחודי של החדר בפריסה
+     * @param x מיקום X פינה שמאל-עליונה
+     * @param y מיקום Y פינה שמאל-עליונה
+     * @param width רוחב החדר ביחידות עולם
+     * @param height גובה החדר ביחידות עולם
+     * @param type סוג החדר
+     */
     public Room(int id, float x, float y, float width, float height, Type type) {
         this.id     = id;
         this.x      = x;
@@ -56,7 +70,9 @@ public class Room {
 
     // ── Geometry helpers ──────────────────────────────────────────────────────
 
+    /** @return מרכז X של החדר */
     public float centerX() { return x + width  * 0.5f; }
+    /** @return מרכז Y של החדר */
     public float centerY() { return y + height * 0.5f; }
 
     public RectF getBounds() { return new RectF(x, y, x + width, y + height); }

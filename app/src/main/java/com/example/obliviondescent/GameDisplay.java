@@ -8,6 +8,11 @@ import android.util.AttributeSet;
 import android.view.View;
 import java.util.List;
 
+/**
+ * View המציגה את עולם המשחק — השחקן, אויבים, קליעים, מטבעות, ארגזים,
+ * פריסת הקומה, פורטלים, מיניאמפ ואנימציות.
+ * מצוירת על ידי thread ייעודי דרך postInvalidate().
+ */
 public class GameDisplay extends View {
 
     private Player player;
@@ -175,6 +180,16 @@ public class GameDisplay extends View {
         minimapPlayerPaint.setStyle(Paint.Style.FILL);
     }
 
+    /**
+     * מחברת אובייקטי לוגיקה לתצוגה להצגה בכל פריים ציור.
+     * @param player השחקן לציור
+     * @param enemies רשימת האויבים לציור
+     * @param camera מצלמת המשחק
+     * @param projectiles רשימת קליעים פעילים
+     * @param goldCoins רשימת מטבעות זהב
+     * @param treasureChests רשימת ארגזי אוצר
+     * @param shopRoom אובייקט חדר החנות
+     */
     // Connect logic objects to this view
     public void setGameData(Player player, List<Enemy> enemies, GameCamera camera,
                             List<Projectile> projectiles, List<GoldCoin> goldCoins,
@@ -295,6 +310,10 @@ public class GameDisplay extends View {
         }
     }
 
+    /**
+     * מגדירה את פריסת הקומה לציור.
+     * @param layout פריסת הקומה הנוכחית
+     */
     public void setFloorLayout(FloorLayout layout) {
         this.floorLayout = layout;
     }
@@ -464,6 +483,10 @@ public class GameDisplay extends View {
         return null;
     }
 
+    /**
+     * מגדירה את מנהל הקומות לגישה לנתוני פורטל.
+     * @param floorManager מנהל הקומות הנוכחי
+     */
     public void setFloorManager(FloorManager floorManager) {
         this.floorManager = floorManager;
     }

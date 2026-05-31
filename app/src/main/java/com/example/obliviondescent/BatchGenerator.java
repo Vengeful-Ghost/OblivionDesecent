@@ -25,6 +25,12 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
+/**
+ * מייצרת תוכן משחק דינמי באמצעות Gemini AI API.
+ * שולחת בקשה אחת (batch) לטווח קומות (5 קומות) ומקבלת בחזרה:
+ * אויבים ייחודיים, פריטי חנות לפי קומה, ובוס ייחודי.
+ * שומרת תוצאות מקומית לשימוש חוזר ללא גישה לרשת.
+ */
 public class BatchGenerator {
 
     private static final String TAG = "BatchGenerator";
@@ -42,6 +48,13 @@ public class BatchGenerator {
         void onFailure(String error);
     }
 
+    /**
+     * שולחת בקשת batch ל-Gemini API לטווח קומות נתון.
+     * מנסה שוב אוטומטית לאחר 3 שניות בשגיאת 503.
+     * @param rangeStart קומה ראשונה בטווח
+     * @param rangeEnd קומה אחרונה בטווח
+     * @param listener מאזין לתוצאה (onSuccess / onFailure)
+     */
     public void generateBatch(int rangeStart, int rangeEnd, OnBatchGeneratedListener listener) {
         int bossFloor = rangeEnd; // boss is always the last floor of the range
 
@@ -112,6 +125,13 @@ public class BatchGenerator {
         }
     }
 
+    /**
+     * בונה את הפרומפט המלא עבור Gemini API לטווח קומות נתון.
+     * @param rangeStart קומה ראשונה בטווח
+     * @param rangeEnd קומה אחרונה בטווח
+     * @param bossFloor קומת הבוס בטווח (תמיד האחרונה)
+     * @return מחרוזת הפרומפט
+     */
     private String buildPrompt(int rangeStart, int rangeEnd, int bossFloor) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are a dark fantasy game content generator for a roguelike called Oblivion Descent.\n");
@@ -194,6 +214,15 @@ public class BatchGenerator {
     /**
      * Parses a pre-extracted JSON text string into a BatchResult.
      * Package-private so GameActivity can call it when loading from local storage.
+     */
+    /**
+     * מנתחת מחרוזת JSON מעובדת לאובייקט BatchResult.
+     * גישה package-private כדי ש-GameActivity תוכל להפעיל בטעינה מאחסון מקומי.
+     * @param jsonText JSON מנוקה (ללא עטיפת API)
+     * @param rangeStart קומה ראשונה בטווח
+     * @param rangeEnd קומה אחרונה בטווח
+     * @return BatchResult המנותח
+     * @throws Exception אם הניתוח נכשל
      */
     BatchResult parseBatch(String jsonText, int rangeStart, int rangeEnd) throws Exception {
         JSONObject root = new JSONObject(jsonText);

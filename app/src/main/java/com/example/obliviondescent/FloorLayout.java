@@ -9,15 +9,14 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Holds the complete procedural layout for one floor: rooms + corridors.
+ * מחזיקה את הפריסה הפרוצדורלית המלאה של קומה אחת: חדרים + מסדרונות.
  *
- * Generation strategy
- * ───────────────────
- * 1. Place entry room at world origin.
- * 2. Grow a winding chain of inner rooms (count scales with floor number).
- * 3. On boss floors, attach the large boss room at the end of the chain.
- * 4. Attach the exit room last — force-place if all non-overlapping positions fail.
- * 5. Distribute the floor's kill-quota enemies randomly across eligible rooms.
+ * אסטרטגיית יצירה:
+ * 1. ממקמת חדר כניסה במוצא העולם.
+ * 2. מגדלת שרשרת מפותלת של חדרים פנימיים (מספר גדל עם מספר הקומה).
+ * 3. בקומות בוס, מוסיפה חדר בוס גדול בסוף השרשרת.
+ * 4. מוסיפה חדר יציאה אחרון — ממקמת בכוח אם כל הנסיונות נכשלים.
+ * 5. מפזרת אויבים לפי מכסה הקומה בין החדרים הכשירים.
  */
 public class FloorLayout {
 
@@ -288,13 +287,23 @@ public class FloorLayout {
     // QUERY HELPERS  (used by collision, minimap, enemy spawning)
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** Returns the Room the given world point is inside, or null. */
+    /**
+     * מחזירה את החדר שמכיל את נקודת העולם הנתונה, או null אם אין.
+     * @param px מיקום X בעולם המשחק
+     * @param py מיקום Y בעולם המשחק
+     * @return החדר המכיל את הנקודה, או null
+     */
     public Room getRoomAt(float px, float py) {
         for (Room r : rooms) if (r.contains(px, py)) return r;
         return null;
     }
 
-    /** True if the point is on walkable floor (inside any room or corridor). */
+    /**
+     * בודקת אם הנקודה נמצאת על רצפה עבירה (בתוך חדר או מסדרון).
+     * @param px מיקום X בעולם המשחק
+     * @param py מיקום Y בעולם המשחק
+     * @return true אם הנקודה על רצפה עבירה
+     */
     public boolean isFloor(float px, float py) {
         for (Room r     : rooms)     if (r.contains(px, py)) return true;
         for (Corridor c : corridors) if (c.contains(px, py)) return true;
@@ -305,6 +314,16 @@ public class FloorLayout {
      * Block-and-slide wall collision. Checks all 4 cardinal points at `radius`
      * distance from the center so the full body is kept on walkable floor.
      * Falls back to single-axis slides, then stays put if fully blocked.
+     */
+    /**
+     * פותרת התנגשות קירות עם החלקה על צירים.
+     * בודקת 4 נקודות קרדינליות ברדיוס r מהמרכז.
+     * @param oldX מיקום X הקודם
+     * @param oldY מיקום Y הקודם
+     * @param newX מיקום X המבוקש
+     * @param newY מיקום Y המבוקש
+     * @param radius רדיוס הגוף לבדיקה
+     * @return מערך [x, y] של המיקום המותר
      */
     public float[] resolveWallCollision(float oldX, float oldY,
                                         float newX, float newY, float radius) {

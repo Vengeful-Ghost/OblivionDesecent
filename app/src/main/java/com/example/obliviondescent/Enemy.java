@@ -5,6 +5,12 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 
+/**
+ * מייצגת אויב יחיד במשחק.
+ * מכילה מכונת מצבים לבינה מלאכותית, מערכת סקיילינג לפי קומה,
+ * תמיכה בתבניות AI מ-Gemini, ואנימציית מוות.
+ * מתעדכנת בכל פריים לוגי דרך GameActivity.
+ */
 public class Enemy {
 
     /* ============================================================
@@ -92,6 +98,13 @@ public class Enemy {
     /* ============================================================
        CONSTRUCTOR
        ============================================================ */
+    /**
+     * יוצר אויב חדש במיקום נתון עם סוג נתון.
+     * מגדיר סטטיסטיקות, נשק, ורדיוס עירור לפי הסוג.
+     * @param startX מיקום התחלתי X בעולם המשחק
+     * @param startY מיקום התחלתי Y בעולם המשחק
+     * @param type סוג האויב (GRUNT, SPEEDER, TANK, BRUTE, BOSS)
+     */
     public Enemy(float startX, float startY, Type type) {
         this.x = startX;
         this.y = startY;
@@ -184,6 +197,11 @@ public class Enemy {
     /* ============================================================
        UPDATE
        ============================================================ */
+    /**
+     * בודקת אם השחקן נכנס לרדיוס עירור האויב ומעירה אותו.
+     * @param playerX מיקום X של השחקן
+     * @param playerY מיקום Y של השחקן
+     */
     public void tryWake(float playerX, float playerY) {
         if (isAwake || isDead) return;
         float dx = playerX - x;
@@ -193,6 +211,12 @@ public class Enemy {
         }
     }
 
+    /**
+     * מעדכנת את ה-AI של האויב בכל פריים לוגי.
+     * מפעילה מכונת מצבים עם התנהגויות: גישה, תקיפה, נסיגה, פיתוי,돌진 ועיקוף.
+     * @param playerX מיקום X של השחקן
+     * @param playerY מיקום Y של השחקן
+     */
     public void update(float playerX, float playerY) {
         if (isDead || !isAwake) return;
 
@@ -437,6 +461,11 @@ public class Enemy {
     /* ============================================================
        DRAW (with Health Bar + Label)
        ============================================================ */
+    /**
+     * מצייר את האויב, פס הבריאות, ותווית השם על הקנבס.
+     * @param canvas הקנבס לציור
+     * @param camera מצלמת המשחק לחישוב מיקום מסך
+     */
     public void draw(Canvas canvas, GameCamera camera) {
         float drawX = x - camera.getOffsetX();
         float drawY = y - camera.getOffsetY();
@@ -518,6 +547,10 @@ public class Enemy {
     /* ============================================================
        COMBAT
        ============================================================ */
+    /**
+     * מנכה נזק מהבריאות ומפעיל אנימציית מוות אם הבריאות אפסה.
+     * @param dmg כמות הנזק לניכוי
+     */
     public void takeDamage(int dmg) {
         health -= dmg;
         if (health <= 0) {
