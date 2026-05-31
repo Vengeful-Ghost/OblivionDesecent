@@ -1,9 +1,9 @@
 package com.example.obliviondescent;
 
 /**
- * עוקבת אחרי דפוסי התנהגות השחקן במהלך ריצה יחידה.
- * אויבים קוראים ממנה כדי להתאים את תנועתם.
- * מתאפסת אוטומטית במשחק חדש מכיוון שנוצרת מחדש.
+ * Tracks the player's behaviour patterns during a single run.
+ * Enemies query it to adapt their movement accordingly.
+ * Automatically reset on a new game because it is re-instantiated.
  */
 public class PlayerBehaviorTracker {
 
@@ -46,9 +46,9 @@ public class PlayerBehaviorTracker {
        ============================================================ */
 
     /**
-     * מתעדת דאש שביצע השחקן ומסווגת לפי כיוון דומיננטי.
-     * @param dx כיוון אופקי של הדאש
-     * @param dy כיוון אנכי של הדאש
+     * Records a dash performed by the player and classifies it by dominant direction.
+     * @param dx horizontal direction of the dash
+     * @param dy vertical direction of the dash
      */
     public void recordDash(float dx, float dy) {
         totalDashes++;
@@ -65,8 +65,8 @@ public class PlayerBehaviorTracker {
     }
 
     /**
-     * מתעדת מתקפה ומרחקה מהאויב לניתוח סגנון לחימה.
-     * @param distanceToEnemy המרחק מהאויב בעת המתקפה
+     * Records an attack and the distance to the enemy, used to analyse combat style.
+     * @param distanceToEnemy distance to the enemy at the time of the attack
      */
     public void recordAttack(float distanceToEnemy) {
         totalAttackDistance += distanceToEnemy;
@@ -75,8 +75,8 @@ public class PlayerBehaviorTracker {
     }
 
     /**
-     * מתעדת דגימת kiting — האם השחקן נע מהאויב בעת תנועה.
-     * @param movingAway true אם השחקן נע הרחק מהאויב
+     * Records a kiting sample — whether the player was moving away from the enemy while attacking.
+     * @param movingAway true if the player was moving away from the enemy
      */
     public void recordKiteSample(boolean movingAway) {
         kiteSamples++;
@@ -85,7 +85,7 @@ public class PlayerBehaviorTracker {
     }
 
     /**
-     * מעלה את עוצמת ההסתגלות בעת הריגת בוס.
+     * Boosts the adaptation strength when a boss is killed.
      */
     public void onBossKilled() {
         adaptationStrength = Math.min(MAX_STRENGTH,

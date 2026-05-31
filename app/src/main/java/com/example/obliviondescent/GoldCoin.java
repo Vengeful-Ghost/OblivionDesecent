@@ -5,10 +5,10 @@ import android.graphics.Color;
 import android.graphics.Paint;
 
 /**
- * מייצגת מטבע זהב שנאסף בעולם המשחק.
- * מושלך במיקום מות האויב עם פיזור אקראי קטן.
- * השחקן אוסף אותו על ידי הליכה מספיק קרוב.
- * כל מטבע שווה 1 — מושלכים מספר מטבעות לשווי גבוה יותר.
+ * Represents a gold coin collectible in the game world.
+ * Dropped at the enemy's death position with a small random spread.
+ * Collected by the player by walking close enough.
+ * Each coin is worth 1 — multiple coins are dropped for higher values.
  */
 public class GoldCoin {
 
@@ -24,9 +24,9 @@ public class GoldCoin {
     private Paint shinePaint;
 
     /**
-     * יוצר מטבע חדש עם פיזור אקראי סביב נקודת ההשלכה.
-     * @param spawnX מיקום X של נקודת ההשלכה
-     * @param spawnY מיקום Y של נקודת ההשלכה
+     * Creates a new coin with a random offset around the drop point.
+     * @param spawnX X position of the drop point
+     * @param spawnY Y position of the drop point
      */
     public GoldCoin(float spawnX, float spawnY) {
         // Spread coins in a random radius around the drop point
@@ -46,9 +46,9 @@ public class GoldCoin {
     }
 
     /**
-     * מצייר את המטבע על הקנבס אם טרם נאסף.
-     * @param canvas הקנבס לציור
-     * @param camera מצלמת המשחק לחישוב מיקום מסך
+     * Draws the coin on the canvas if it has not yet been collected.
+     * @param canvas the canvas to draw on
+     * @param camera game camera used to translate world position to screen position
      */
     public void draw(Canvas canvas, GameCamera camera) {
         if (collected) return;

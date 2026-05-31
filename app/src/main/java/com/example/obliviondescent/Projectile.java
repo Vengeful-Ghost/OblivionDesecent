@@ -5,9 +5,9 @@ import android.graphics.Color;
 import android.graphics.Paint;
 
 /**
- * מייצגת קליע נע שנורה מהשחקן לכיוון יעד.
- * נע בקו ישר במהירות קבועה, גורם נזק בעת מגע עם אויב,
- * ונעלם לאחר פגיעה או כאשר עבר את טווח הירי המקסימלי.
+ * Represents a moving projectile fired by the player toward a target.
+ * Travels in a straight line at a fixed speed, deals damage on enemy contact,
+ * and disappears after a hit or once it exceeds its maximum range.
  */
 public class Projectile {
 
@@ -38,17 +38,17 @@ public class Projectile {
        CONSTRUCTOR
        ============================================================ */
     /**
-     * יוצר קליע חדש עם פרמטרים מלאים.
-     * @param startX מיקום התחלתי X
-     * @param startY מיקום התחלתי Y
-     * @param targetDX כיוון אופקי (לא מנורמל)
-     * @param targetDY כיוון אנכי (לא מנורמל)
-     * @param speed מהירות הקליע ביחידות לפריים
-     * @param maxRange מרחק מקסימלי עד להיעלמות
-     * @param damage נזק לפגיעה
-     * @param knockback עוצמת דחיפה לאחור
-     * @param radius רדיוס הקליע לחישובי התנגשות
-     * @param color צבע הקליע
+     * Creates a new projectile with all parameters.
+     * @param startX initial X position
+     * @param startY initial Y position
+     * @param targetDX horizontal direction (un-normalised)
+     * @param targetDY vertical direction (un-normalised)
+     * @param speed projectile speed in world units per frame
+     * @param maxRange maximum travel distance before disappearing
+     * @param damage damage dealt on impact
+     * @param knockback knockback force applied to the enemy
+     * @param radius projectile radius used for collision detection
+     * @param color projectile colour
      */
     public Projectile(float startX, float startY, float targetDX, float targetDY,
                       float speed, float maxRange, int damage, float knockback,
@@ -78,7 +78,7 @@ public class Projectile {
        UPDATE — called every logic frame
        ============================================================ */
     /**
-     * מזיז את הקליע בכיוונו בכל פריים לוגי ומסמנת אותו כמת אם עבר הטווח.
+     * Moves the projectile along its direction every logic frame and marks it dead once max range is exceeded.
      */
     public void update() {
         if (isDead) return;
@@ -97,9 +97,9 @@ public class Projectile {
        DRAW
        ============================================================ */
     /**
-     * מצייר את הקליע עם זוהר חיצוני וגרעין מוצק.
-     * @param canvas הקנבס לציור
-     * @param camera מצלמת המשחק לחישוב מיקום מסך
+     * Draws the projectile with an outer glow ring and a solid core.
+     * @param canvas the canvas to draw on
+     * @param camera game camera used to translate world position to screen position
      */
     public void draw(Canvas canvas, GameCamera camera) {
         if (isDead) return;

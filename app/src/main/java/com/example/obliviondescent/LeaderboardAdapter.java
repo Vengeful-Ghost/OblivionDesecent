@@ -12,15 +12,15 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 
 /**
- * Adapter עבור RecyclerView של לוח המובילים.
- * מציגה שורות עם דירוג, שם משתמש, קומה גבוהה ביותר וסטטיסטיקות.
- * שלושת הדירוגים הראשונים מוצגים עם צבעים מיוחדים (זהב/כסף/ארד).
+ * Adapter for the leaderboard RecyclerView.
+ * Displays rows with rank, username, highest floor and statistics.
+ * The top three ranks are highlighted with special colours (gold/silver/bronze).
  */
 public class LeaderboardAdapter
         extends RecyclerView.Adapter<LeaderboardAdapter.ViewHolder> {
 
     /**
-     * ממשק מאזין ללחיצה על פריט בלוח המובילים.
+     * Listener interface for taps on a leaderboard item.
      */
     public interface OnItemClickListener {
         void onItemClick(LeaderboardItem item);
@@ -30,9 +30,9 @@ public class LeaderboardAdapter
     private final OnItemClickListener   listener;
 
     /**
-     * יוצר Adapter חדש לרשימת לוח המובילים.
-     * @param items רשימת פריטי לוח המובילים
-     * @param listener מאזין לחיצה על פריט
+     * Creates a new adapter for the leaderboard list.
+     * @param items list of leaderboard items
+     * @param listener click listener for items
      */
     public LeaderboardAdapter(List<LeaderboardItem> items,
                               OnItemClickListener listener) {

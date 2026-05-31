@@ -22,9 +22,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * מנהלת את מסך הסטטיסטיקות.
- * מציגה נתוני משחק עולמיים (לכל הזמן) ונתוני משחק נוכחי,
- * לוח מובילים גלובלי ורשימת עוקבים עם אפשרות חיפוש.
+ * Statistics screen.
+ * Displays lifetime game data and current-game data,
+ * a global leaderboard, and a following list with a search function.
  */
 public class StatsActivity extends AppCompatActivity {
 
@@ -53,8 +53,8 @@ public class StatsActivity extends AppCompatActivity {
     private List<LeaderboardItem> leaderboardItems = new ArrayList<>();
 
     /**
-     * מאתחל את מסך הסטטיסטיקות, מגדיר טאבים ומטעין נתונים.
-     * @param savedInstanceState מצב שמור מהפעלה קודמת
+     * Initialises the statistics screen, sets up tabs and loads data.
+     * @param savedInstanceState previously saved instance state
      */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,8 +129,8 @@ public class StatsActivity extends AppCompatActivity {
        ============================================================ */
 
     /**
-     * עוברת בין טאב הסטטיסטיקות לכל הזמן וסטטיסטיקות משחק נוכחי.
-     * @param lifetime האם להציג נתוני כל הזמן
+     * Switches between the lifetime stats tab and the current-game stats tab.
+     * @param lifetime true to show lifetime data, false to show current-game data
      */
     private void switchStatTab(boolean lifetime) {
         showingLifetime = lifetime;
@@ -155,7 +155,7 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     /**
-     * טוענת סטטיסטיקות לכל הזמן של השחקן מ-Firestore.
+     * Loads the player's lifetime statistics from Firestore.
      */
     private void loadLifetimeStats() {
         if (userId == null) return;
@@ -168,7 +168,7 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     /**
-     * טוענת סטטיסטיקות המשחק הנוכחי של השחקן מ-Firestore.
+     * Loads the player's current game statistics from Firestore.
      */
     private void loadCurrentGameStats() {
         if (userId == null) return;
@@ -185,9 +185,9 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     /**
-     * ממלאת את מיכל הסטטיסטיקות בשורות נתונים.
-     * @param data מפת הנתונים מ-Firestore
-     * @param isLifetime האם מדובר בנתוני כל הזמן (לעומת משחק נוכחי)
+     * Populates the stats container with data rows.
+     * @param data raw data map from Firestore
+     * @param isLifetime true for lifetime data, false for current-game data
      */
     private void populateStats(Map<String, Object> data, boolean isLifetime) {
         statsContainer.removeAllViews();
@@ -263,8 +263,8 @@ public class StatsActivity extends AppCompatActivity {
        ============================================================ */
 
     /**
-     * עוברת בין טאב הלוח הגלובלי לטאב העוקבים.
-     * @param global האם להציג לוח מובילים גלובלי
+     * Switches between the global leaderboard tab and the following tab.
+     * @param global true to show the global leaderboard, false to show the following list
      */
     private void switchLeaderboardTab(boolean global) {
         showingGlobal = global;
@@ -325,8 +325,8 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     /**
-     * מחפשת משתמשים לפי שם משתמש ומציגה תוצאות בלוח המובילים.
-     * @param query מחרוזת החיפוש
+     * Searches for users by username and displays results in the leaderboard.
+     * @param query the search string
      */
     private void searchUsers(String query) {
         showLeaderboardLoading(true);
@@ -348,16 +348,16 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     /**
-     * מטפלת בלחיצה על פריט בלוח המובילים ופותחת דיאלוג פרטי משתמש.
-     * @param item הפריט שנלחץ
+     * Handles a tap on a leaderboard item and opens a user-detail dialog.
+     * @param item the tapped leaderboard entry
      */
     private void onLeaderboardItemClick(LeaderboardItem item) {
         showUserDetailDialog(item);
     }
 
     /**
-     * מציגה דיאלוג פרטי משתמש עם אפשרות עקוב/הפסק עקוב.
-     * @param item נתוני המשתמש להצגה
+     * Shows a user-detail dialog with follow/unfollow functionality.
+     * @param item the user data to display
      */
     private void showUserDetailDialog(LeaderboardItem item) {
         android.app.Dialog dialog = new android.app.Dialog(

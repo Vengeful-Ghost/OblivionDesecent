@@ -6,10 +6,10 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 
 /**
- * מייצגת אויב יחיד במשחק.
- * מכילה מכונת מצבים לבינה מלאכותית, מערכת סקיילינג לפי קומה,
- * תמיכה בתבניות AI מ-Gemini, ואנימציית מוות.
- * מתעדכנת בכל פריים לוגי דרך GameActivity.
+ * Represents a single enemy in the game.
+ * Contains an AI state machine, per-floor stat scaling,
+ * support for Gemini AI templates and a death animation.
+ * Updated every logic frame by GameActivity.
  */
 public class Enemy {
 
@@ -99,11 +99,11 @@ public class Enemy {
        CONSTRUCTOR
        ============================================================ */
     /**
-     * יוצר אויב חדש במיקום נתון עם סוג נתון.
-     * מגדיר סטטיסטיקות, נשק, ורדיוס עירור לפי הסוג.
-     * @param startX מיקום התחלתי X בעולם המשחק
-     * @param startY מיקום התחלתי Y בעולם המשחק
-     * @param type סוג האויב (GRUNT, SPEEDER, TANK, BRUTE, BOSS)
+     * Creates a new enemy at the given position with the given type.
+     * Sets stats, weapon and wake radius according to the type.
+     * @param startX initial X position in world space
+     * @param startY initial Y position in world space
+     * @param type enemy type (GRUNT, SPEEDER, TANK, BRUTE, BOSS)
      */
     public Enemy(float startX, float startY, Type type) {
         this.x = startX;
@@ -198,9 +198,9 @@ public class Enemy {
        UPDATE
        ============================================================ */
     /**
-     * בודקת אם השחקן נכנס לרדיוס עירור האויב ומעירה אותו.
-     * @param playerX מיקום X של השחקן
-     * @param playerY מיקום Y של השחקן
+     * Checks whether the player has entered the enemy's wake radius and wakes it.
+     * @param playerX player X position in world space
+     * @param playerY player Y position in world space
      */
     public void tryWake(float playerX, float playerY) {
         if (isAwake || isDead) return;
@@ -212,10 +212,10 @@ public class Enemy {
     }
 
     /**
-     * מעדכנת את ה-AI של האויב בכל פריים לוגי.
-     * מפעילה מכונת מצבים עם התנהגויות: גישה, תקיפה, נסיגה, פיתוי,돌진 ועיקוף.
-     * @param playerX מיקום X של השחקן
-     * @param playerY מיקום Y של השחקן
+     * Updates the enemy AI every logic frame.
+     * Runs a state machine with behaviours: approach, attack, retreat, bait, charge and strafe.
+     * @param playerX player X position in world space
+     * @param playerY player Y position in world space
      */
     public void update(float playerX, float playerY) {
         if (isDead || !isAwake) return;
@@ -462,9 +462,9 @@ public class Enemy {
        DRAW (with Health Bar + Label)
        ============================================================ */
     /**
-     * מצייר את האויב, פס הבריאות, ותווית השם על הקנבס.
-     * @param canvas הקנבס לציור
-     * @param camera מצלמת המשחק לחישוב מיקום מסך
+     * Draws the enemy, its health bar and its name label on the canvas.
+     * @param canvas the canvas to draw on
+     * @param camera game camera used to translate world position to screen position
      */
     public void draw(Canvas canvas, GameCamera camera) {
         float drawX = x - camera.getOffsetX();
@@ -548,8 +548,8 @@ public class Enemy {
        COMBAT
        ============================================================ */
     /**
-     * מנכה נזק מהבריאות ומפעיל אנימציית מוות אם הבריאות אפסה.
-     * @param dmg כמות הנזק לניכוי
+     * Deducts damage from health and triggers the death animation when health reaches zero.
+     * @param dmg amount of damage to apply
      */
     public void takeDamage(int dmg) {
         health -= dmg;

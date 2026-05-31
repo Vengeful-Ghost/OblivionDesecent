@@ -7,10 +7,10 @@ import android.media.SoundPool;
 import android.util.Log;
 
 /**
- * מנהלת את כל האפקטים הקוליים ומוזיקת הרקע במשחק.
- * מוזיקת תפריט ומוזיקת משחק מופעלות דרך מנגנון מונה-הפניות
- * כך שניווט בין מסכים לא גורם להפסקות בנגינה.
- * אפקטי קול מנוהלים דרך SoundPool לנגינה מקבילית.
+ * Manages all sound effects and background music in the game.
+ * Menu music and game music are driven by a reference-count mechanism so that
+ * navigating between screens never causes audible gaps.
+ * Sound effects are handled via SoundPool for concurrent playback.
  */
 public class SoundManager {
 
@@ -181,8 +181,8 @@ public class SoundManager {
     private static final long HIT_ENEMY_COOLDOWN_MS = 100;
 
     /**
-     * יוצר מנהל קול חדש וטוען את כל האפקטים ל-SoundPool.
-     * @param context הקשר האפליקציה לטעינת משאבי קול
+     * Creates a new sound manager and loads all sound effects into the SoundPool.
+     * @param context application context used to load sound resources
      */
     public SoundManager(Context context) {
         AudioAttributes attrs = new AudioAttributes.Builder()
@@ -308,7 +308,7 @@ public class SoundManager {
     }
 
     /**
-     * משחררת את משאבי ה-SoundPool. יש לקרוא ב-onDestroy.
+     * Releases all SoundPool resources. Must be called in onDestroy.
      */
     public void release() {
         if (soundPool != null) {

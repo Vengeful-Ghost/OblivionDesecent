@@ -3,8 +3,8 @@ package com.example.obliviondescent;
 import android.graphics.RectF;
 
 /**
- * מייצגת מסדרון מלבני המחבר בין שני חדרים.
- * הרוחב תמיד CORRIDOR_WIDTH (150px); האורך משתנה לפי מרווח החדרים.
+ * Represents a rectangular corridor connecting two rooms.
+ * Width is always CORRIDOR_WIDTH (150 px); length varies with the gap between rooms.
  */
 public class Corridor {
 
@@ -12,13 +12,13 @@ public class Corridor {
     public final int roomIdA, roomIdB; // the two rooms this corridor joins
 
     /**
-     * יוצר מסדרון חדש המחבר בין שני חדרים.
-     * @param x מיקום X פינה שמאל-עליונה
-     * @param y מיקום Y פינה שמאל-עליונה
-     * @param w רוחב המסדרון
-     * @param h גובה המסדרון
-     * @param a מזהה חדר A
-     * @param b מזהה חדר B
+     * Creates a new corridor connecting two rooms.
+     * @param x top-left X position in world space
+     * @param y top-left Y position in world space
+     * @param w corridor width
+     * @param h corridor height
+     * @param a ID of room A
+     * @param b ID of room B
      */
     public Corridor(float x, float y, float w, float h, int a, int b) {
         this.x = x;   this.y = y;

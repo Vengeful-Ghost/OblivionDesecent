@@ -1,8 +1,8 @@
 package com.example.obliviondescent;
 
 /**
- * מודל נתונים עבור שורה בודדת ב-RecyclerView של לוח המובילים.
- * מחזיקה נתוני הצגה ו-userId הנדרש לפעולות עקוב/הפסק עקוב.
+ * Data model for a single row in the leaderboard RecyclerView.
+ * Holds display data and the userId required for follow/unfollow operations.
  */
 public class LeaderboardItem {
     public String userId;
@@ -15,15 +15,15 @@ public class LeaderboardItem {
     public int    rank;
 
     /**
-     * יוצר פריט לוח מובילים חדש.
-     * @param userId מזהה המשתמש ב-Firebase
-     * @param username שם המשתמש להצגה
-     * @param highestFloor הקומה הגבוהה ביותר שהגיע אליה
-     * @param enemiesKilled סך אויבים שנהרגו
-     * @param bossesKilled סך בוסים שנהרגו
-     * @param timesDied מספר פעמי מוות
-     * @param playtimeSeconds סך שניות משחק
-     * @param rank דירוג בלוח המובילים
+     * Creates a new leaderboard item.
+     * @param userId Firebase user ID
+     * @param username display username
+     * @param highestFloor highest floor reached
+     * @param enemiesKilled total enemies killed
+     * @param bossesKilled total bosses killed
+     * @param timesDied number of deaths
+     * @param playtimeSeconds total playtime in seconds
+     * @param rank leaderboard rank
      */
     public LeaderboardItem(String userId, String username, int highestFloor,
                            int enemiesKilled, int bossesKilled,

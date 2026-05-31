@@ -4,9 +4,9 @@ import android.graphics.RectF;
 import java.util.Random;
 
 /**
- * מייצגת חדר יחיד בפריסה הפרוצדורלית של הקומה.
- * מכיל גיאומטריה, כושר קיבול אויבים, מצב חקירה למיניאמפ,
- * ומצב חיבורי מסדרונות לכל ארבעת הכיוונים.
+ * Represents a single room in the procedural floor layout.
+ * Stores geometry, enemy capacity, exploration state for the minimap,
+ * and corridor-connection flags for all four cardinal directions.
  */
 public class Room {
 
@@ -37,13 +37,13 @@ public class Room {
 
     // ─────────────────────────────────────────────────────────────────────────
     /**
-     * יוצר חדר חדש עם גיאומטריה וסוג נתונים.
-     * @param id מזהה ייחודי של החדר בפריסה
-     * @param x מיקום X פינה שמאל-עליונה
-     * @param y מיקום Y פינה שמאל-עליונה
-     * @param width רוחב החדר ביחידות עולם
-     * @param height גובה החדר ביחידות עולם
-     * @param type סוג החדר
+     * Creates a new room with the given geometry and type.
+     * @param id unique room identifier within the layout
+     * @param x top-left X position in world space
+     * @param y top-left Y position in world space
+     * @param width room width in world units
+     * @param height room height in world units
+     * @param type room type
      */
     public Room(int id, float x, float y, float width, float height, Type type) {
         this.id     = id;
@@ -70,9 +70,9 @@ public class Room {
 
     // ── Geometry helpers ──────────────────────────────────────────────────────
 
-    /** @return מרכז X של החדר */
+    /** @return centre X of the room */
     public float centerX() { return x + width  * 0.5f; }
-    /** @return מרכז Y של החדר */
+    /** @return centre Y of the room */
     public float centerY() { return y + height * 0.5f; }
 
     public RectF getBounds() { return new RectF(x, y, x + width, y + height); }

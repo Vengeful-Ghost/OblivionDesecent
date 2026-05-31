@@ -27,14 +27,14 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * פעילות המשחק הראשית — לב ה-engine של Oblivion Descent.
- * מנהלת שני threads: thread לוגיקה (60fps) ו-thread ציור (60fps).
- * אחראית על:
- * - לולאת המשחק (תנועת שחקן, AI אויבים, התנגשויות, לחימה)
- * - מעברי קומות, מערכת חנות, ארגזי אוצר
- * - שמירה/טעינה מ-Firestore
- * - יצירת batch תוכן מ-Gemini AI
- * - ניהול sound, vibration, HUD
+ * Main game activity — the core engine of Oblivion Descent.
+ * Manages two threads: a logic thread (~60 fps) and a render thread (~60 fps).
+ * Responsible for:
+ * - Game loop (player movement, enemy AI, collisions, combat)
+ * - Floor transitions, the shop system, treasure chests
+ * - Save/load via Firestore
+ * - Batch content generation via Gemini AI
+ * - Sound, vibration and HUD management
  */
 public class GameActivity extends AppCompatActivity {
 
@@ -193,9 +193,9 @@ public class GameActivity extends AppCompatActivity {
     private DashCooldownView dashCooldownView;
 
     /**
-     * מאתחל את פעילות המשחק: UI, מצלמה, שחקן, מנהל קומות, batch AI,
-     * טעינת משחק שמור (אם קיים), ומפעיל threads לוגיקה וציור.
-     * @param savedInstanceState מצב שמור מהפעלה קודמת
+     * Initialises the game activity: UI, camera, player, floor manager, AI batch,
+     * loads a saved game if one exists, and starts the logic and render threads.
+     * @param savedInstanceState previously saved instance state
      */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -337,8 +337,8 @@ public class GameActivity extends AppCompatActivity {
        GAME LOOP (LOGIC)
        ============================================================ */
     /**
-     * מפעילה thread לוגיקה שרץ ב-~60fps.
-     * מעדכנת שחקן, אויבים, קליעים, פגיעות, מטבעות, פורטלים ומצלמה.
+     * Starts the logic thread that runs at ~60 fps.
+     * Updates the player, enemies, projectiles, hits, coins, portals and camera.
      */
     private void startLogicThread() {
         new Thread(() -> {
@@ -457,7 +457,7 @@ public class GameActivity extends AppCompatActivity {
        RENDER LOOP (DRAWING)
        ============================================================ */
     /**
-     * מפעילה thread ציור שמרענן את GameDisplay ב-~60fps.
+     * Starts the render thread that refreshes GameDisplay at ~60 fps.
      */
     private void startRenderThread() {
         new Thread(() -> {
@@ -475,9 +475,9 @@ public class GameActivity extends AppCompatActivity {
        ============================================================ */
 
     /**
-     * מושיבה אויבים בפריסת הקומה לפי ספירות המוקצות לכל חדר.
-     * מיישמת תבניות AI אם זמינות, ומחילה סקיילינג לפי קומה.
-     * @param layout פריסת הקומה שבה יש להושיב אויבים
+     * Spawns enemies into the floor layout according to each room's assigned count.
+     * Applies AI templates if available and scales stats by floor number.
+     * @param layout the floor layout to populate with enemies
      */
     private void spawnEnemiesForLayout(FloorLayout layout) {
         int floor = floorManager.getCurrentFloor();
@@ -509,10 +509,10 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * בוחרת סוג אויב אקראי בהתאם לקומה הנוכחית.
-     * קומות מוקדמות מציגות רק GRUNT; קומות מאוחרות מוסיפות TANK ו-BRUTE.
-     * @param floor הקומה הנוכחית
-     * @return סוג האויב שנבחר
+     * Picks a random enemy type appropriate for the current floor.
+     * Early floors only introduce GRUNT; later floors add TANK and BRUTE.
+     * @param floor the current floor number
+     * @return the selected enemy type
      */
     private Enemy.Type pickEnemyType(int floor) {
         double roll = Math.random();
@@ -533,9 +533,9 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * בודקת פגיעות מתקפה מלחמתית בכל אויב בטווח.
-     * כל אויב ניתן לפגיעה פעם אחת בלבד לכל תנופה.
-     * מיישמת knockback ועדכון סטטיסטיקות.
+     * Checks melee attack collisions against all enemies in range.
+     * Each enemy can only be hit once per swing.
+     * Applies knockback and updates statistics.
      */
     private void checkAttackCollisions() {
         Weapon w = player.getWeapon();
@@ -584,8 +584,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * פותרת חפיפות בין שחקן לאויבים ובין אויבים לאויבים.
-     * משתמשת בדחיפה מחצי-מחצה לכל גוף.
+     * Resolves overlaps between the player and enemies, and between enemies.
+     * Uses a half-half push for each body pair.
      */
     private void resolveCollisions() {
         synchronized (enemies) {
@@ -740,9 +740,9 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * בודקת אם אויב פגע בשחקן והחיל נזק עם cooldown.
-     * מפעילה רעידת מצלמה, רטט והפחתת HP/שריון.
-     * @param now זמן נוכחי במילישניות
+     * Checks whether an enemy has hit the player and applies damage with cooldown.
+     * Triggers camera shake, vibration and HP/armour reduction.
+     * @param now current time in milliseconds
      */
     private void checkPlayerHit(long now) {
         synchronized (enemies) {
@@ -779,12 +779,12 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מחשבת מרחק אוקלידי בין שתי נקודות.
-     * @param x1 מיקום X ראשון
-     * @param y1 מיקום Y ראשון
-     * @param x2 מיקום X שני
-     * @param y2 מיקום Y שני
-     * @return המרחק בין הנקודות
+     * Computes the Euclidean distance between two points.
+     * @param x1 first X position
+     * @param y1 first Y position
+     * @param x2 second X position
+     * @param y2 second Y position
+     * @return the distance between the two points
      */
     private float getDistance(float x1, float y1, float x2, float y2) {
         float dx = x1 - x2;
@@ -793,9 +793,9 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מחיל נזק על השחקן תוך ניהול קדימות שריון→חיים.
-     * מפחיתה עמידות שריון, שוברת חלקים שנפגעו, ומפעילה Game Over אם HP=0.
-     * @param dmg כמות הנזק לניכוי
+     * Applies damage to the player following the armour-before-HP priority.
+     * Reduces armour durability, breaks depleted armour pieces and triggers Game Over if HP reaches zero.
+     * @param dmg amount of damage to apply
      */
     private void damagePlayer(int dmg) {
         runOnUiThread(() -> {
@@ -886,8 +886,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מחיה מחדש את השחקן מנקודת הצ'קפוינט האחרונה.
-     * מנקה אויבים, מטבעות וקליעים, ויוצרת פריסת קומה חדשה.
+     * Respawns the player from the last checkpoint.
+     * Clears enemies, coins and projectiles, then generates a fresh floor layout.
      */
     private void respawnPlayer() {
         floorManager.setCurrentFloor(checkpointFloor);
@@ -943,8 +943,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מנקה אויבים מתים מהרשימה, מספרת הריגות, משליכה מטבעות.
-     * מסירה אויבים רק לאחר שאנימציית המוות הושלמה.
+     * Removes dead enemies from the list, counts kills and drops coins.
+     * Only removes enemies once their death animation has completed.
      */
     private void cleanupDeadEnemies() {
         synchronized (enemies) {
@@ -971,9 +971,9 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מאניימת מוט HP ממצב נוכחי לחדש בהדרגה.
-     * @param from ערך HP ישן
-     * @param to ערך HP חדש
+     * Animates the HP bar from its current value to a new value.
+     * @param from old HP value
+     * @param to new HP value
      */
     private void animateHealthBar(int from, int to) {
         ObjectAnimator anim = ObjectAnimator.ofInt(playerHealthBar, "progress", from, to);
@@ -982,9 +982,9 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מאניימת מוט שריון ממצב נוכחי לחדש.
-     * @param from ערך שריון ישן
-     * @param to ערך שריון חדש
+     * Animates the armour bar from its current value to a new value.
+     * @param from old armour value
+     * @param to new armour value
      */
     private void animateArmorBar(int from, int to) {
         ObjectAnimator anim = ObjectAnimator.ofInt(playerArmorBar, "progress", from, to);
@@ -993,8 +993,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מטפלת בלחיצת כפתור התקיפה המלחמתית.
-     * מפעילה תקיפה רק אם עבר cooldown הנשק הנוכחי.
+     * Handles a tap on the melee attack button.
+     * Triggers an attack only if the current weapon's cooldown has expired.
      */
     private void attack() {
         long now = System.currentTimeMillis();
@@ -1007,8 +1007,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מטפלת בלחיצת כפתור הדאש.
-     * מפעילה דאש בכיוון הג'ויסטיק הנוכחי אם עבר ה-cooldown.
+     * Handles a tap on the dash button.
+     * Triggers a dash in the current joystick direction if the cooldown has expired.
      */
     private void dash() {
         long now = System.currentTimeMillis();
@@ -1031,7 +1031,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * בודקת אם השחקן נכנס לפורטל היציאה הסגול ומפעילה מעבר קומה.
+     * Checks whether the player has entered the purple exit portal and triggers a floor transition.
      */
     private void checkPortalCollision() {
         if (!floorManager.isPortalOpen()) return;
@@ -1051,9 +1051,9 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * יורה קליע מהשחקן בכיוון הנתון אם עבר cooldown הנשק.
-     * @param dirX כיוון X (לא מנורמל)
-     * @param dirY כיוון Y (לא מנורמל)
+     * Fires a projectile from the player in the given direction if the weapon cooldown has expired.
+     * @param dirX X direction (un-normalised)
+     * @param dirY Y direction (un-normalised)
      */
     private void fireProjectile(float dirX, float dirY) {
         long now = System.currentTimeMillis();
@@ -1076,7 +1076,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מעדכנת את כל הקליעים הפעילים ומסירה קליעים מתים.
+     * Updates all active projectiles and removes dead ones.
      */
     private void updateProjectiles() {
         synchronized (projectiles) {
@@ -1088,8 +1088,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * בודקת פגיעות קליעים עם אויבים.
-     * קליע נעצר בפגיעה ראשונה ומחיל נזק ו-knockback.
+     * Checks projectile collisions with enemies.
+     * A projectile stops on its first hit and applies damage and knockback.
      */
     private void checkProjectileCollisions() {
         synchronized (projectiles) {
@@ -1125,8 +1125,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מפעילה אנימציית מעבר קומה: fade ל-שחור, הצגת שם הקומה, fade חזרה.
-     * מכינה את הקומה הבאה בזמן שהמסך שחור.
+     * Plays the floor-transition animation: fade to black, display the floor name, fade back.
+     * Prepares the next floor while the screen is black.
      */
     private void triggerFloorTransition() {
         txtFloorTitle.setText("Floor " + (floorManager.getCurrentFloor() + 1));
@@ -1296,12 +1296,12 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * ממלאת את רשת פריטי החנות ב-3 שורות של 2 פריטים.
-     * מציגה פריטים שנרכשו כ"SOLD" ומאפירה פריטים שלא ניתן להרשות.
-     * @param dialog דיאלוג החנות
-     * @param itemsContainer מיכל פריטי החנות
-     * @param goldDisplay תצוגת זהב
-     * @param shopItems רשימת פריטי החנות לתצוגה
+     * Populates the shop item grid with 3 rows of 2 items each.
+     * Displays purchased items as "SOLD" and greys out items the player cannot afford.
+     * @param dialog the shop dialog
+     * @param itemsContainer the container holding the item views
+     * @param goldDisplay the gold amount text view
+     * @param shopItems the list of shop items to display
      */
     private void populateShopGridFromItems(android.app.Dialog dialog,
                                            android.view.View itemsContainer,
@@ -1552,8 +1552,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * הורגת את כל האויבים הפעילים בבת אחת ללא השלכת מטבעות.
-     * נקראת עם פתיחת הפורטל.
+     * Instantly kills all active enemies without dropping coins.
+     * Called when the exit portal opens.
      */
     private void killAllActiveEnemies() {
         synchronized (enemies) {
@@ -1567,8 +1567,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מכינה את הקומה הבאה: מעדכנת FloorManager, מנקה אובייקטים,
-     * יוצרת פריסה פרוצדורלית חדשה, מושיבה אויבים ושומרת ב-Firestore.
+     * Prepares the next floor: advances FloorManager, clears game objects,
+     * generates a new procedural layout, spawns enemies and saves to Firestore.
      */
     private void prepareNextFloor() {
         floorManager.advanceFloor();
@@ -1611,8 +1611,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מוסיפה נשק לתיק השחקן ושומרת ב-Firestore.
-     * @param weapon הנשק להוספה
+     * Adds a weapon to the player's inventory and saves to Firestore.
+     * @param weapon the weapon to add
      */
     public void addWeaponToInventory(Weapon weapon) {
         weapons.add(weapon);
@@ -1620,7 +1620,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מרענן תצוגת HUD של מספר קומה ומצב הריגות.
+     * Refreshes the floor number and kill-progress HUD display.
      */
     private void updateFloorHUD() {
         runOnUiThread(() -> {
@@ -1738,7 +1738,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מרענן את ממשק ההתקפה — מציגה תמיד AimJoystick (לכל סוגי הנשק).
+     * Refreshes the attack UI — always shows AimJoystick for all weapon types.
      */
     private void refreshAttackUI() {
         runOnUiThread(() -> {
@@ -2179,9 +2179,9 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מציידת חלק שריון ומחשבת מחדש את ה-maxArmor וה-HP שריון.
-     * @param armor חלק השריון לציוד
-     * @param inventoryDialog דיאלוג המלאי לעדכון (יכול להיות null)
+     * Equips an armour piece and recalculates maxArmor and current armour HP.
+     * @param armor the armour piece to equip
+     * @param inventoryDialog the inventory dialog to update (may be null)
      */
     private void equipArmorPiece(Armor armor, Dialog inventoryDialog) {
         Armor previous = equippedArmor.get(armor.slot);
@@ -2204,8 +2204,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מחשבת מחדש את maxArmor מסך defense של כל חלקי השריון המצויידים.
-     * מעדכנת את מוט השריון ב-UI.
+     * Recalculates maxArmor from the total defense of all equipped armour pieces
+     * and updates the armour bar in the UI.
      */
     private void recalculateMaxArmor() {
         maxArmor = 0;
@@ -2219,10 +2219,10 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * משתמשת בפריט מתכלה ומחיל את האפקט (ריפוי/שחזור שריון).
-     * מסירה ערמה ריקה מהמלאי.
-     * @param stack ערמת הפריט המתכלה לשימוש
-     * @param inventoryDialog דיאלוג המלאי לעדכון
+     * Uses a consumable item and applies its effect (heal or armour restore).
+     * Removes the stack from the inventory when it becomes empty.
+     * @param stack the consumable stack to use
+     * @param inventoryDialog the inventory dialog to update
      */
     private void useConsumable(ConsumableStack stack, Dialog inventoryDialog) {
         ShopItem item = stack.item;
@@ -2281,7 +2281,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מציגה דיאלוג Game Over עם אפשרויות: חיה מחדש מצ'קפוינט, חזור לתפריט.
+     * Shows the Game Over dialog with options: respawn from checkpoint, or return to menu.
      */
     private void showGameOverDialog() {
         final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
@@ -2322,10 +2322,10 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * שומרת נקודת צ'קפוינט נוכחית (מיקום, קומה, HP, שריון, זהב).
-     * @param x מיקום X
-     * @param y מיקום Y
-     * @param floor קומה נוכחית
+     * Saves the current checkpoint state (position, floor, HP, armour, gold).
+     * @param x X position
+     * @param y Y position
+     * @param floor current floor number
      */
     private void setCheckpoint(float x, float y, int floor) {
         checkpointX      = x;
@@ -2337,7 +2337,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מרענן את תצוגת הזהב ב-HUD לסכום הנוכחי.
+     * Refreshes the gold display in the HUD to the current amount.
      */
     private void updateGoldHUD() {
         runOnUiThread(() -> txtGold.setText("🪙 " + playerGold));
@@ -2386,7 +2386,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מפעיל את מוזיקת המשחק בעת הצגת הפעילות.
+     * Starts the game music when the activity becomes visible.
      */
     @Override
     protected void onStart() {
@@ -2398,7 +2398,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מפסיק את מוזיקת המשחק כאשר הפעילות יוצאת לרקע.
+     * Stops the game music when the activity goes to the background.
      */
     @Override
     protected void onStop() {
@@ -2407,7 +2407,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מחזיר את הפעילות למצב מלא ומיישם שינויי הגדרות קול.
+     * Restores full-screen mode and applies any sound setting changes made in Settings.
      */
     @Override
     protected void onResume() {
@@ -2452,7 +2452,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * עוצר threads, שומר סטטיסטיקות ומשחרר משאבי קול.
+     * Stops game threads, flushes statistics and releases sound resources.
      */
     @Override
     protected void onDestroy() {
@@ -2501,9 +2501,9 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מחזירה את פריטי החנות עבור קומה ספציפית מהמטמון.
-     * @param floor מספר הקומה
-     * @return רשימת פריטי חנות (ריקה אם batch לא זמין)
+     * Returns the shop items for a specific floor from the batch cache.
+     * @param floor the floor number
+     * @return list of shop items (empty if the batch is not yet available)
      */
     private List<ShopItem> getShopItemsForFloor(int floor) {
         int rangeStart = getRangeStart(floor);
@@ -2527,9 +2527,9 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * מחזירה את נתוני ה-batch (כולל בוס) עבור הקומה הנתונה.
-     * @param floor מספר הקומה
-     * @return BatchResult המתאים, או null אם לא זמין
+     * Returns the batch data (including boss) for the given floor.
+     * @param floor the floor number
+     * @return the corresponding BatchResult, or null if not available
      */
     private BatchResult getBossDataForFloor(int floor) {
         int rangeStart = getRangeStart(floor);

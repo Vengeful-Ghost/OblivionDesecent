@@ -3,9 +3,9 @@ package com.example.obliviondescent;
 import android.graphics.Color;
 
 /**
- * מייצגת פריט שריון אחד בעולם המשחק.
- * מערכת שריון מבוססת חריצים (ראש, חזה, רגלים, נעליים).
- * שדות הכיתה ממופים ישירות לסכמת Firestore generated_armors.
+ * Represents a single armour piece in the game world.
+ * Uses a slot-based armour system (head, chest, legs, boots).
+ * Fields map directly to the Firestore generated_armors schema.
  */
 public class Armor {
 
@@ -29,15 +29,15 @@ public class Armor {
     public String description;  // AI flavor text (empty for default)
 
     /**
-     * בנאי מלא לטעינה מ-Firestore או יצירת AI.
-     * @param id מזהה מסמך ב-Firestore (null לשריון ברירת מחדל)
-     * @param name שם פריט השריון
-     * @param defense הפחתת נזק שטוח לכל פגיעה
-     * @param maxDurability עמידות מקסימלית
-     * @param rarity נדירות השריון
-     * @param color צבע הצגה
-     * @param slot חריץ השריון (HEAD/CHEST/LEGS/BOOTS)
-     * @param description טקסט AI (ריק לשריון ברירת מחדל)
+     * Full constructor used when loading from Firestore or AI generation.
+     * @param id Firestore document ID (null for default armour)
+     * @param name armour piece name
+     * @param defense flat damage reduction per hit
+     * @param maxDurability maximum durability
+     * @param rarity armour rarity tier
+     * @param color display colour
+     * @param slot armour slot (HEAD/CHEST/LEGS/BOOTS)
+     * @param description AI flavour text (empty for default armour)
      */
     // Full constructor — used when loading from Firestore or AI generation
     public Armor(String id, String name, int defense, float maxDurability,
@@ -54,13 +54,13 @@ public class Armor {
     }
 
     /**
-     * בנאי נוחות לשריון קשיח/ברירת מחדל ללא מזהה Firestore.
-     * @param name שם פריט השריון
-     * @param defense הפחתת נזק שטוח לכל פגיעה
-     * @param maxDurability עמידות מקסימלית
-     * @param rarity נדירות השריון
-     * @param color צבע הצגה
-     * @param slot חריץ השריון
+     * Convenience constructor for hardcoded or default armour without a Firestore ID.
+     * @param name armour piece name
+     * @param defense flat damage reduction per hit
+     * @param maxDurability maximum durability
+     * @param rarity armour rarity tier
+     * @param color display colour
+     * @param slot armour slot
      */
     // Convenience constructor for default/hardcoded armor
     public Armor(String name, int defense, float maxDurability,
@@ -69,9 +69,9 @@ public class Armor {
     }
 
     /**
-     * מחזירה את הצבע המתאים לרמת נדירות שריון.
-     * @param rarity רמת הנדירות
-     * @return צבע כ-ARGB integer
+     * Returns the display colour corresponding to an armour rarity tier.
+     * @param rarity the rarity tier
+     * @return colour as an ARGB integer
      */
     public static int getRarityColor(Rarity rarity) {
         switch (rarity) {

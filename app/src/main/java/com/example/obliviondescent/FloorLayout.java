@@ -9,14 +9,14 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * מחזיקה את הפריסה הפרוצדורלית המלאה של קומה אחת: חדרים + מסדרונות.
+ * Holds the complete procedural layout for one floor: rooms and corridors.
  *
- * אסטרטגיית יצירה:
- * 1. ממקמת חדר כניסה במוצא העולם.
- * 2. מגדלת שרשרת מפותלת של חדרים פנימיים (מספר גדל עם מספר הקומה).
- * 3. בקומות בוס, מוסיפה חדר בוס גדול בסוף השרשרת.
- * 4. מוסיפה חדר יציאה אחרון — ממקמת בכוח אם כל הנסיונות נכשלים.
- * 5. מפזרת אויבים לפי מכסה הקומה בין החדרים הכשירים.
+ * Generation strategy:
+ * 1. Places an entry room at the world origin.
+ * 2. Grows a winding chain of inner rooms (count scales with floor number).
+ * 3. On boss floors, appends a large boss room at the end of the chain.
+ * 4. Appends a final exit room — force-placed if all normal attempts fail.
+ * 5. Distributes enemies across eligible rooms according to the floor quota.
  */
 public class FloorLayout {
 
@@ -288,10 +288,10 @@ public class FloorLayout {
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * מחזירה את החדר שמכיל את נקודת העולם הנתונה, או null אם אין.
-     * @param px מיקום X בעולם המשחק
-     * @param py מיקום Y בעולם המשחק
-     * @return החדר המכיל את הנקודה, או null
+     * Returns the room that contains the given world-space point, or null if none.
+     * @param px X position in world space
+     * @param py Y position in world space
+     * @return the room containing the point, or null
      */
     public Room getRoomAt(float px, float py) {
         for (Room r : rooms) if (r.contains(px, py)) return r;
@@ -299,10 +299,10 @@ public class FloorLayout {
     }
 
     /**
-     * בודקת אם הנקודה נמצאת על רצפה עבירה (בתוך חדר או מסדרון).
-     * @param px מיקום X בעולם המשחק
-     * @param py מיקום Y בעולם המשחק
-     * @return true אם הנקודה על רצפה עבירה
+     * Returns true if the point lies on walkable floor (inside a room or corridor).
+     * @param px X position in world space
+     * @param py Y position in world space
+     * @return true if the point is on walkable floor
      */
     public boolean isFloor(float px, float py) {
         for (Room r     : rooms)     if (r.contains(px, py)) return true;
@@ -311,19 +311,16 @@ public class FloorLayout {
     }
 
     /**
-     * Block-and-slide wall collision. Checks all 4 cardinal points at `radius`
-     * distance from the center so the full body is kept on walkable floor.
+     * Block-and-slide wall collision. Checks all 4 cardinal points at {@code radius}
+     * distance from the centre so the full body stays on walkable floor.
      * Falls back to single-axis slides, then stays put if fully blocked.
-     */
-    /**
-     * פותרת התנגשות קירות עם החלקה על צירים.
-     * בודקת 4 נקודות קרדינליות ברדיוס r מהמרכז.
-     * @param oldX מיקום X הקודם
-     * @param oldY מיקום Y הקודם
-     * @param newX מיקום X המבוקש
-     * @param newY מיקום Y המבוקש
-     * @param radius רדיוס הגוף לבדיקה
-     * @return מערך [x, y] של המיקום המותר
+     *
+     * @param oldX previous X position
+     * @param oldY previous Y position
+     * @param newX requested X position
+     * @param newY requested Y position
+     * @param radius body radius used for the cardinal-point checks
+     * @return array [x, y] of the allowed position
      */
     public float[] resolveWallCollision(float oldX, float oldY,
                                         float newX, float newY, float radius) {

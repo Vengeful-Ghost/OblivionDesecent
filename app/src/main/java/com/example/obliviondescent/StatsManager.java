@@ -1,13 +1,13 @@
 package com.example.obliviondescent;
 
 /**
- * עוקבת אחרי כל הסטטיסטיקות של הסשן הנוכחי בזיכרון.
- * GameActivity מפעילה את שיטות ה-increment לאורך המשחק.
- * flush() נקרא על מוות השחקן או מעבר קומה כדי לשמור ב-Firestore.
+ * Tracks all current-session statistics in memory.
+ * GameActivity calls the increment methods throughout gameplay.
+ * flush() is called on player death or floor transition to persist data to Firestore.
  *
- * שני היקפים:
- *   - סטטיסטיקות סשן: מתאפסות לאחר כל flush (למניעת כפילויות)
- *   - סטטיסטיקות לכל הזמן: מצטברות ב-Firestore לנצח
+ * Two scopes:
+ *   - Session stats: reset after every flush to prevent double-counting.
+ *   - Lifetime stats: accumulated in Firestore permanently.
  */
 public class StatsManager {
 
@@ -32,10 +32,10 @@ public class StatsManager {
     private final String    gameId;
 
     /**
-     * יוצרת מנהל סטטיסטיקות חדש לסשן.
-     * @param db מנהל מסד הנתונים
-     * @param userId מזהה המשתמש
-     * @param gameId מזהה המשחק הנוכחי
+     * Creates a new stats manager for the current session.
+     * @param db database manager
+     * @param userId the user ID
+     * @param gameId the current game save ID
      */
     public StatsManager(DBManager db, String userId, String gameId) {
         this.db     = db;
@@ -48,8 +48,8 @@ public class StatsManager {
        ============================================================ */
 
     /**
-     * מופעלת בכל מעבר קומה ומעדכנת את הקומה הגבוהה ביותר ב-Firestore.
-     * @param newFloor מספר הקומה החדשה שנגמרה
+     * Called on every floor transition; also updates the highest floor record in Firestore.
+     * @param newFloor the floor number that was just completed
      */
     public void onFloorCleared(int newFloor) {
         floorsCleared++;
@@ -91,8 +91,8 @@ public class StatsManager {
        ============================================================ */
 
     /**
-     * שומרת את כל סטטיסטיקות הסשן ל-Firestore ומאפסת מונים.
-     * יש לקרוא בסיום הסשן (מוות או מעבר קומה).
+     * Persists all session statistics to Firestore and resets the in-memory counters.
+     * Should be called at the end of a session (player death or floor transition).
      */
     public void flush() {
         long playtime = getSessionPlaytimeSeconds();
@@ -127,9 +127,9 @@ public class StatsManager {
        ============================================================ */
 
     /**
-     * ממיר מפת נתונים גולמית מ-Firestore לאובייקט Weapon.
-     * @param map מפת הנתונים מ-Firestore
-     * @return אובייקט Weapon, או null אם הנתונים חסרים
+     * Converts a raw Firestore data map to a Weapon object.
+     * @param map raw data map from Firestore
+     * @return a Weapon object, or null if the data is missing or invalid
      */
     public static Weapon weaponFromMap(java.util.Map<String, Object> map) {
         if (map == null) return null;
@@ -153,10 +153,10 @@ public class StatsManager {
     }
 
     /**
-     * ממיר מפת נתונים גולמית מ-Firestore לאובייקט Armor.
-     * @param armorId מזהה מסמך השריון
-     * @param map מפת הנתונים מ-Firestore
-     * @return אובייקט Armor, או null אם הנתונים חסרים
+     * Converts a raw Firestore data map to an Armor object.
+     * @param armorId the armour document ID
+     * @param map raw data map from Firestore
+     * @return an Armor object, or null if the data is missing or invalid
      */
     public static Armor armorFromMap(String armorId, java.util.Map<String, Object> map) {
         if (map == null) return null;

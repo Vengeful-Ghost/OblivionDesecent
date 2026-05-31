@@ -3,9 +3,9 @@ package com.example.obliviondescent;
 import android.graphics.Color;
 
 /**
- * מייצגת נשק בעולם המשחק.
- * תומכת בנשק מלחמתי ובנשק קשתות (isProjectile).
- * שדות הנשק ממופים ישירות לסכמת Firestore generated_weapons.
+ * Represents a weapon in the game world.
+ * Supports both melee and projectile weapons (isProjectile).
+ * Fields map directly to the Firestore generated_weapons schema.
  */
 public class Weapon {
 
@@ -26,14 +26,14 @@ public class Weapon {
 
     // ─── CONSTRUCTORS ────────────────────────────────────────────────────────────
     /**
-     * יוצר נשק מלחמתי (isProjectile=false).
-     * @param name שם הנשק
-     * @param damage נזק בסיסי לפגיעה
-     * @param range מרחק פגיעה ביחידות עולם
-     * @param cooldown זמן צינון בין מתקפות במילישניות
-     * @param rarity נדירות הנשק
-     * @param color צבע הנשק בהצגה
-     * @param knockback עוצמת דחיפת האויב לאחור
+     * Creates a melee weapon (isProjectile=false).
+     * @param name weapon name
+     * @param damage base damage per hit
+     * @param range attack distance in world units
+     * @param cooldown milliseconds between attacks
+     * @param rarity weapon rarity tier
+     * @param color display colour
+     * @param knockback knockback force applied to the enemy
      */
     public Weapon(String name, int damage, float range, long cooldown, Rarity rarity, int color, float knockback) {
         this.name        = name;
@@ -47,15 +47,15 @@ public class Weapon {
     }
 
     /**
-     * יוצר נשק עם שליטה מלאה בסוג התקיפה.
-     * @param name שם הנשק
-     * @param damage נזק בסיסי לפגיעה
-     * @param range מרחק פגיעה ביחידות עולם
-     * @param cooldown זמן צינון בין מתקפות במילישניות
-     * @param rarity נדירות הנשק
-     * @param color צבע הנשק בהצגה
-     * @param knockback עוצמת דחיפת האויב לאחור
-     * @param isProjectile האם הנשק יורה קליעים
+     * Creates a weapon with full control over the attack type.
+     * @param name weapon name
+     * @param damage base damage per hit
+     * @param range attack distance in world units
+     * @param cooldown milliseconds between attacks
+     * @param rarity weapon rarity tier
+     * @param color display colour
+     * @param knockback knockback force applied to the enemy
+     * @param isProjectile true if the weapon fires projectiles
      */
     public Weapon(String name, int damage, float range, long cooldown,
                   Rarity rarity, int color, float knockback, boolean isProjectile) {
@@ -71,9 +71,9 @@ public class Weapon {
 
     // ─── HELPERS ─────────────────────────────────────────────────────────────────
     /**
-     * מחזירה את הצבע המתאים לרמת נדירות נשק.
-     * @param rarity רמת הנדירות
-     * @return צבע כ-ARGB integer
+     * Returns the display colour corresponding to a weapon rarity tier.
+     * @param rarity the rarity tier
+     * @return colour as an ARGB integer
      */
     public static int getRarityColor(Rarity rarity) {
         switch (rarity) {

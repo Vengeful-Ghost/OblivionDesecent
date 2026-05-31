@@ -28,9 +28,9 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * מנהלת את מסך הרשמת המשתמש החדש.
- * מאמתת פרטי הרשמה, בודקת ייחודיות שם המשתמש ב-Firestore,
- * יוצרת חשבון Firebase Auth ומאתחלת מסמך שחקן חדש.
+ * New-user registration screen.
+ * Validates registration fields, checks username uniqueness in Firestore,
+ * creates a Firebase Auth account and initialises a new player document.
  */
 public class SignUpActivity extends AppCompatActivity
 {
@@ -56,8 +56,8 @@ public class SignUpActivity extends AppCompatActivity
        ========================= */
 
     /**
-     * מאתחל את מסך ההרשמה, מגדיר אימות שדות ומאזיני לחצנים.
-     * @param savedInstanceState מצב שמור מהפעלה קודמת
+     * Initialises the sign-up screen, sets up field validation and button listeners.
+     * @param savedInstanceState previously saved instance state
      */
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -154,9 +154,9 @@ public class SignUpActivity extends AppCompatActivity
        ========================= */
 
     /**
-     * יוצרת חשבון Firebase Auth חדש ושומרת את פרטי המשתמש ב-Firestore.
-     * @param username שם המשתמש הנבחר
-     * @param password הסיסמה הנבחרת
+     * Creates a new Firebase Auth account and saves the user data to Firestore.
+     * @param username the chosen username
+     * @param password the chosen password
      */
     private void createFirebaseUser(String username, String password)
     {
@@ -212,8 +212,8 @@ public class SignUpActivity extends AppCompatActivity
        ========================= */
 
     /**
-     * מציגה דיאלוג טעינה עם הודעה מותאמת אישית.
-     * @param message הטקסט שיוצג בדיאלוג
+     * Shows a loading dialog with a custom message.
+     * @param message text to display in the dialog
      */
     private void showLoading(String message) {
         if (loadingDialog != null && loadingDialog.isShowing()) return;
@@ -226,8 +226,8 @@ public class SignUpActivity extends AppCompatActivity
     }
 
     /**
-     * מעדכנת את הטקסט בדיאלוג הטעינה הפתוח.
-     * @param message הודעה חדשה להצגה
+     * Updates the text shown in the currently open loading dialog.
+     * @param message new message to display
      */
     private void updateLoadingMessage(String message) {
         if (loadingDialog != null && loadingDialog.isShowing()) {
@@ -237,7 +237,7 @@ public class SignUpActivity extends AppCompatActivity
     }
 
     /**
-     * מסתירה את דיאלוג הטעינה אם הוא מוצג.
+     * Hides the loading dialog if it is currently showing.
      */
     private void hideLoading() {
         if (loadingDialog != null && loadingDialog.isShowing()) loadingDialog.dismiss();
@@ -245,10 +245,10 @@ public class SignUpActivity extends AppCompatActivity
     }
 
     /**
-     * מחילה אפקט זוהר על שדה קלט בעת קבלת פוקוס.
-     * @param layout שדה הקלט
-     * @param defaultBg רקע ברירת מחדל
-     * @param focusedBg רקע במצב פוקוס
+     * Applies a glow effect to an input field when it gains focus.
+     * @param layout the input layout to style
+     * @param defaultBg background drawable resource for the unfocused state
+     * @param focusedBg background drawable resource for the focused state
      */
     private void applyFocusGlow(final TextInputLayout layout,
                                 final int defaultBg,
@@ -273,8 +273,8 @@ public class SignUpActivity extends AppCompatActivity
        ========================= */
 
     /**
-     * מפעילה אנימציית קפיצה בודדת עבור חלקיק יחיד.
-     * @param particle תמונת החלקיק לאנימציה
+     * Starts the bounce animation for a single background particle.
+     * @param particle the ImageView particle to animate
      */
     private void startSingleBouncingParticle(ImageView particle)
     {
@@ -317,7 +317,7 @@ public class SignUpActivity extends AppCompatActivity
     }
 
     /**
-     * מפעילה אנימציית חלקיקים קופצים על כל חלקיקי הרקע.
+     * Starts the bouncing-particle background animation for all particle views.
      */
     private void startBouncingParticles()
     {

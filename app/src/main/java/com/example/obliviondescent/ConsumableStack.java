@@ -1,31 +1,31 @@
 package com.example.obliviondescent;
 
 /**
- * מייצגת ערמת פריטים מתכלים בתיק השחקן.
- * שומרת על פריט אחד ומספר העותקים שלו.
+ * Represents a stack of consumable items in the player's inventory.
+ * Holds one item type and a quantity count.
  */
 public class ConsumableStack {
-    /** הפריט המתכלה בערמה זו. */
+    /** The consumable item in this stack. */
     public ShopItem item;
-    /** כמות העותקים הנוכחית. */
+    /** Current quantity of copies. */
     public int quantity;
 
     /**
-     * יוצר ערמת פריטים מתכלים חדשה.
-     * @param item הפריט המתכלה
-     * @param quantity כמות התחלתית
+     * Creates a new consumable stack.
+     * @param item the consumable item
+     * @param quantity initial quantity
      */
     public ConsumableStack(ShopItem item, int quantity) {
         this.item = item;
         this.quantity = quantity;
     }
 
-    /** מגדילה את הכמות ב-1. */
+    /** Increments the quantity by 1. */
     public void increment() { quantity++; }
 
     /**
-     * מפחיתה את הכמות ב-1.
-     * @return true אם הערמה ריקה (כמות אפס או פחות)
+     * Decrements the quantity by 1.
+     * @return true if the stack is now empty (quantity zero or below)
      */
     public boolean decrement() {
         quantity--;
