@@ -2,6 +2,11 @@ package com.example.obliviondescent;
 
 import android.graphics.Color;
 
+/**
+ * מייצגת נשק בעולם המשחק.
+ * תומכת בנשק מלחמתי ובנשק קשתות (isProjectile).
+ * שדות הנשק ממופים ישירות לסכמת Firestore generated_weapons.
+ */
 public class Weapon {
 
     // ─── ENUM ───────────────────────────────────────────────────────────────────
@@ -20,6 +25,16 @@ public class Weapon {
     public boolean isProjectile;
 
     // ─── CONSTRUCTORS ────────────────────────────────────────────────────────────
+    /**
+     * יוצר נשק מלחמתי (isProjectile=false).
+     * @param name שם הנשק
+     * @param damage נזק בסיסי לפגיעה
+     * @param range מרחק פגיעה ביחידות עולם
+     * @param cooldown זמן צינון בין מתקפות במילישניות
+     * @param rarity נדירות הנשק
+     * @param color צבע הנשק בהצגה
+     * @param knockback עוצמת דחיפת האויב לאחור
+     */
     public Weapon(String name, int damage, float range, long cooldown, Rarity rarity, int color, float knockback) {
         this.name        = name;
         this.damage      = damage;
@@ -31,6 +46,17 @@ public class Weapon {
         this.isProjectile = false;
     }
 
+    /**
+     * יוצר נשק עם שליטה מלאה בסוג התקיפה.
+     * @param name שם הנשק
+     * @param damage נזק בסיסי לפגיעה
+     * @param range מרחק פגיעה ביחידות עולם
+     * @param cooldown זמן צינון בין מתקפות במילישניות
+     * @param rarity נדירות הנשק
+     * @param color צבע הנשק בהצגה
+     * @param knockback עוצמת דחיפת האויב לאחור
+     * @param isProjectile האם הנשק יורה קליעים
+     */
     public Weapon(String name, int damage, float range, long cooldown,
                   Rarity rarity, int color, float knockback, boolean isProjectile) {
         this.name        = name;
@@ -44,6 +70,11 @@ public class Weapon {
     }
 
     // ─── HELPERS ─────────────────────────────────────────────────────────────────
+    /**
+     * מחזירה את הצבע המתאים לרמת נדירות נשק.
+     * @param rarity רמת הנדירות
+     * @return צבע כ-ARGB integer
+     */
     public static int getRarityColor(Rarity rarity) {
         switch (rarity) {
             case COMMON: return Color.WHITE;

@@ -9,15 +9,9 @@ import android.view.MotionEvent;
 import android.view.View;
 
 /**
- * AimJoystickView
- *
- * Replaces the attack button when a projectile weapon is equipped.
- * The player drags to aim — a direction line shows where the shot
- * will go. Releasing the finger fires the projectile.
- *
- * Unlike the movement joystick which fires continuously while held,
- * this fires ONCE on finger release (ACTION_UP), which feels natural
- * for ranged weapons — pull back, release, shoot.
+ * ג'ויסטיק כוון ירייה שמחליף את כפתור ההתקפה כאשר נשק קשתות מצויד.
+ * השחקן גורר לכיוון — קו כיוון מראה לאן הירייה תלך.
+ * שחרור האצבע יורה את הקליע (ACTION_UP בלבד), מה שמרגיש טבעי לנשק מרחוק.
  */
 public class AimJoystickView extends View {
 
@@ -30,6 +24,10 @@ public class AimJoystickView extends View {
 
     private OnFireListener fireListener;
 
+    /**
+     * מגדירה מאזין שיוזעק בעת שחרור האצבע לירייה.
+     * @param listener מאזין הירייה
+     */
     public void setOnFireListener(OnFireListener listener) {
         this.fireListener = listener;
     }

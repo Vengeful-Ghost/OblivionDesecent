@@ -1,15 +1,13 @@
 package com.example.obliviondescent;
 
 /**
- * StatsManager
+ * עוקבת אחרי כל הסטטיסטיקות של הסשן הנוכחי בזיכרון.
+ * GameActivity מפעילה את שיטות ה-increment לאורך המשחק.
+ * flush() נקרא על מוות השחקן או מעבר קומה כדי לשמור ב-Firestore.
  *
- * Tracks all stats for the current play session in memory.
- * GameActivity calls the increment methods throughout gameplay.
- * Call flush() on game over or floor transition to persist to Firestore.
- *
- * Two scopes:
- *   - Session stats: reset after every flush (avoid double-counting)
- *   - Lifetime stats: accumulated in Firestore forever
+ * שני היקפים:
+ *   - סטטיסטיקות סשן: מתאפסות לאחר כל flush (למניעת כפילויות)
+ *   - סטטיסטיקות לכל הזמן: מצטברות ב-Firestore לנצח
  */
 public class StatsManager {
 
@@ -33,6 +31,12 @@ public class StatsManager {
     private final String    userId;
     private final String    gameId;
 
+    /**
+     * יוצרת מנהל סטטיסטיקות חדש לסשן.
+     * @param db מנהל מסד הנתונים
+     * @param userId מזהה המשתמש
+     * @param gameId מזהה המשחק הנוכחי
+     */
     public StatsManager(DBManager db, String userId, String gameId) {
         this.db     = db;
         this.userId = userId;
@@ -43,6 +47,10 @@ public class StatsManager {
        INCREMENT — called by GameActivity during gameplay
        ============================================================ */
 
+    /**
+     * מופעלת בכל מעבר קומה ומעדכנת את הקומה הגבוהה ביותר ב-Firestore.
+     * @param newFloor מספר הקומה החדשה שנגמרה
+     */
     public void onFloorCleared(int newFloor) {
         floorsCleared++;
         db.updateHighestFloor(userId, newFloor);
@@ -82,6 +90,10 @@ public class StatsManager {
        FLUSH — push session stats to Firestore
        ============================================================ */
 
+    /**
+     * שומרת את כל סטטיסטיקות הסשן ל-Firestore ומאפסת מונים.
+     * יש לקרוא בסיום הסשן (מוות או מעבר קומה).
+     */
     public void flush() {
         long playtime = getSessionPlaytimeSeconds();
 
@@ -114,6 +126,11 @@ public class StatsManager {
        STATIC CONVERTERS — used by StatsActivity and leaderboard
        ============================================================ */
 
+    /**
+     * ממיר מפת נתונים גולמית מ-Firestore לאובייקט Weapon.
+     * @param map מפת הנתונים מ-Firestore
+     * @return אובייקט Weapon, או null אם הנתונים חסרים
+     */
     public static Weapon weaponFromMap(java.util.Map<String, Object> map) {
         if (map == null) return null;
         try {
@@ -135,6 +152,12 @@ public class StatsManager {
         }
     }
 
+    /**
+     * ממיר מפת נתונים גולמית מ-Firestore לאובייקט Armor.
+     * @param armorId מזהה מסמך השריון
+     * @param map מפת הנתונים מ-Firestore
+     * @return אובייקט Armor, או null אם הנתונים חסרים
+     */
     public static Armor armorFromMap(String armorId, java.util.Map<String, Object> map) {
         if (map == null) return null;
         try {

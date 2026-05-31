@@ -1,9 +1,9 @@
 package com.example.obliviondescent;
 
 /**
- * Tracks player behavior patterns during a single run.
- * Enemies read from this to adapt their movement.
- * Resets on new game automatically since it's instantiated fresh.
+ * עוקבת אחרי דפוסי התנהגות השחקן במהלך ריצה יחידה.
+ * אויבים קוראים ממנה כדי להתאים את תנועתם.
+ * מתאפסת אוטומטית במשחק חדש מכיוון שנוצרת מחדש.
  */
 public class PlayerBehaviorTracker {
 
@@ -45,6 +45,11 @@ public class PlayerBehaviorTracker {
        RECORD METHODS — called by GameActivity
        ============================================================ */
 
+    /**
+     * מתעדת דאש שביצע השחקן ומסווגת לפי כיוון דומיננטי.
+     * @param dx כיוון אופקי של הדאש
+     * @param dy כיוון אנכי של הדאש
+     */
     public void recordDash(float dx, float dy) {
         totalDashes++;
         float absDX = Math.abs(dx);
@@ -59,18 +64,29 @@ public class PlayerBehaviorTracker {
         growStrength();
     }
 
+    /**
+     * מתעדת מתקפה ומרחקה מהאויב לניתוח סגנון לחימה.
+     * @param distanceToEnemy המרחק מהאויב בעת המתקפה
+     */
     public void recordAttack(float distanceToEnemy) {
         totalAttackDistance += distanceToEnemy;
         attackSamples++;
         growStrength();
     }
 
+    /**
+     * מתעדת דגימת kiting — האם השחקן נע מהאויב בעת תנועה.
+     * @param movingAway true אם השחקן נע הרחק מהאויב
+     */
     public void recordKiteSample(boolean movingAway) {
         kiteSamples++;
         if (movingAway) kitePositive++;
         growStrength();
     }
 
+    /**
+     * מעלה את עוצמת ההסתגלות בעת הריגת בוס.
+     */
     public void onBossKilled() {
         adaptationStrength = Math.min(MAX_STRENGTH,
                 adaptationStrength + BOSS_JUMP);

@@ -8,10 +8,16 @@ import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.View;
 
+/**
+ * View המציגה את מצב cooldown הדאש כקשת עגולה.
+ * progress=0 מציין cooldown מלא, progress=1 מציין מוכנות מלאה.
+ * כאשר progress=1 (מוכן), לא מצייר כלל.
+ */
 public class DashCooldownView extends View {
 
     private Paint arcPaint;
     private RectF arcRect;
+    /** 0 = cooldown מלא, 1 = מוכן לדאש. */
     private float progress = 0f; // 0 = full cooldown, 1 = ready
 
     public DashCooldownView(Context context, AttributeSet attrs) {
@@ -29,6 +35,10 @@ public class DashCooldownView extends View {
         arcRect = new RectF(inset, inset, w - inset, h - inset);
     }
 
+    /**
+     * מעדכנת את התקדמות ה-cooldown ומציירת מחדש.
+     * @param progress ערך בין 0 (cooldown מלא) ל-1 (מוכן)
+     */
     public void setProgress(float progress) {
         this.progress = Math.max(0f, Math.min(1f, progress));
         invalidate();

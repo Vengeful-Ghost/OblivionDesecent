@@ -6,19 +6,15 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 
 /**
- * ShopRoom
+ * מייצגת את חדר החנות — חדר מרובע קבוע בעולם המשחק, רחוק מאזור המשחק הראשי.
+ * מנהלת גבולות קירות, דלפק החנות, ופורטל יציאה.
  *
- * A fixed square room in world space, far from the main game area.
- * Manages wall boundaries, shop counter position, and exit portal.
+ * פריסת החדר (מלמעלה):
+ *   פינה שמאל-עליונה = פורטל יציאה (סגול)
+ *   פינה ימין-עליונה = דלפק חנות
+ *   פינה שמאל-תחתונה = נקודת הופעת שחקן
  *
- * Layout (top-down):
- *   TL = Exit portal (purple)
- *   TR = Shop counter
- *   BL = Player spawn
- *   BR = empty
- *
- * Wall collision is handled by GameActivity clamping the player
- * position to the inner bounds of the room every frame.
+ * התנגשות קירות מטופלת על ידי GameActivity בכל פריים.
  */
 public class ShopRoom {
 
@@ -137,6 +133,11 @@ public class ShopRoom {
     /* ============================================================
        DRAW
        ============================================================ */
+    /**
+     * מצייר את כל רכיבי חדר החנות: רצפה, קירות, דלפק ופורטל יציאה.
+     * @param canvas הקנבס לציור
+     * @param camera מצלמת המשחק לחישוב מיקום מסך
+     */
     public void draw(Canvas canvas, GameCamera camera) {
         if (!isActive) return;
 
@@ -241,6 +242,11 @@ public class ShopRoom {
        Clamps player position to the inner bounds of the room.
        Called by GameActivity every logic frame when in shop room.
        ============================================================ */
+    /**
+     * מכריחה את השחקן להישאר בתוך גבולות חדר החנות.
+     * נקראת בכל פריים לוגי כשהשחקן נמצא בחדר החנות.
+     * @param player השחקן לבדיקת ועדכון מיקום
+     */
     public void enforceWallCollision(Player player) {
         float inner = WALL_THICKNESS + player.radius;
 

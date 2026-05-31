@@ -3,10 +3,9 @@ package com.example.obliviondescent;
 import android.graphics.Color;
 
 /**
- * Armor
- * Slot-based armor system. Each slot is independent.
- * Designed to match generated_armors Firestore schema
- * so AI-generated armor maps directly to this class.
+ * מייצגת פריט שריון אחד בעולם המשחק.
+ * מערכת שריון מבוססת חריצים (ראש, חזה, רגלים, נעליים).
+ * שדות הכיתה ממופים ישירות לסכמת Firestore generated_armors.
  */
 public class Armor {
 
@@ -29,6 +28,17 @@ public class Armor {
     public Slot slot;
     public String description;  // AI flavor text (empty for default)
 
+    /**
+     * בנאי מלא לטעינה מ-Firestore או יצירת AI.
+     * @param id מזהה מסמך ב-Firestore (null לשריון ברירת מחדל)
+     * @param name שם פריט השריון
+     * @param defense הפחתת נזק שטוח לכל פגיעה
+     * @param maxDurability עמידות מקסימלית
+     * @param rarity נדירות השריון
+     * @param color צבע הצגה
+     * @param slot חריץ השריון (HEAD/CHEST/LEGS/BOOTS)
+     * @param description טקסט AI (ריק לשריון ברירת מחדל)
+     */
     // Full constructor — used when loading from Firestore or AI generation
     public Armor(String id, String name, int defense, float maxDurability,
                  Rarity rarity, int color, Slot slot, String description) {
@@ -43,12 +53,26 @@ public class Armor {
         this.description  = description;
     }
 
+    /**
+     * בנאי נוחות לשריון קשיח/ברירת מחדל ללא מזהה Firestore.
+     * @param name שם פריט השריון
+     * @param defense הפחתת נזק שטוח לכל פגיעה
+     * @param maxDurability עמידות מקסימלית
+     * @param rarity נדירות השריון
+     * @param color צבע הצגה
+     * @param slot חריץ השריון
+     */
     // Convenience constructor for default/hardcoded armor
     public Armor(String name, int defense, float maxDurability,
                  Rarity rarity, int color, Slot slot) {
         this(null, name, defense, maxDurability, rarity, color, slot, "");
     }
 
+    /**
+     * מחזירה את הצבע המתאים לרמת נדירות שריון.
+     * @param rarity רמת הנדירות
+     * @return צבע כ-ARGB integer
+     */
     public static int getRarityColor(Rarity rarity) {
         switch (rarity) {
             case COMMON:    return Color.rgb(150, 150, 150);

@@ -21,6 +21,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * מנהלת את מסך הסטטיסטיקות.
+ * מציגה נתוני משחק עולמיים (לכל הזמן) ונתוני משחק נוכחי,
+ * לוח מובילים גלובלי ורשימת עוקבים עם אפשרות חיפוש.
+ */
 public class StatsActivity extends AppCompatActivity {
 
     private DBManager dbManager;
@@ -47,6 +52,10 @@ public class StatsActivity extends AppCompatActivity {
     private LeaderboardAdapter leaderboardAdapter;
     private List<LeaderboardItem> leaderboardItems = new ArrayList<>();
 
+    /**
+     * מאתחל את מסך הסטטיסטיקות, מגדיר טאבים ומטעין נתונים.
+     * @param savedInstanceState מצב שמור מהפעלה קודמת
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -119,6 +128,10 @@ public class StatsActivity extends AppCompatActivity {
        PERSONAL STATS
        ============================================================ */
 
+    /**
+     * עוברת בין טאב הסטטיסטיקות לכל הזמן וסטטיסטיקות משחק נוכחי.
+     * @param lifetime האם להציג נתוני כל הזמן
+     */
     private void switchStatTab(boolean lifetime) {
         showingLifetime = lifetime;
 
@@ -141,6 +154,9 @@ public class StatsActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * טוענת סטטיסטיקות לכל הזמן של השחקן מ-Firestore.
+     */
     private void loadLifetimeStats() {
         if (userId == null) return;
         dbManager.loadPlayerStats(userId, data -> {
@@ -151,6 +167,9 @@ public class StatsActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * טוענת סטטיסטיקות המשחק הנוכחי של השחקן מ-Firestore.
+     */
     private void loadCurrentGameStats() {
         if (userId == null) return;
         dbManager.loadPlayerGames(userId, slots -> {
@@ -165,6 +184,11 @@ public class StatsActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * ממלאת את מיכל הסטטיסטיקות בשורות נתונים.
+     * @param data מפת הנתונים מ-Firestore
+     * @param isLifetime האם מדובר בנתוני כל הזמן (לעומת משחק נוכחי)
+     */
     private void populateStats(Map<String, Object> data, boolean isLifetime) {
         statsContainer.removeAllViews();
         if (data == null) { showEmptyStats(); return; }
@@ -238,6 +262,10 @@ public class StatsActivity extends AppCompatActivity {
        LEADERBOARD
        ============================================================ */
 
+    /**
+     * עוברת בין טאב הלוח הגלובלי לטאב העוקבים.
+     * @param global האם להציג לוח מובילים גלובלי
+     */
     private void switchLeaderboardTab(boolean global) {
         showingGlobal = global;
 
@@ -296,6 +324,10 @@ public class StatsActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * מחפשת משתמשים לפי שם משתמש ומציגה תוצאות בלוח המובילים.
+     * @param query מחרוזת החיפוש
+     */
     private void searchUsers(String query) {
         showLeaderboardLoading(true);
         dbManager.searchUsers(query, userId, items -> {
@@ -315,10 +347,18 @@ public class StatsActivity extends AppCompatActivity {
         leaderboardRecycler.setVisibility(show ? View.GONE : View.VISIBLE);
     }
 
+    /**
+     * מטפלת בלחיצה על פריט בלוח המובילים ופותחת דיאלוג פרטי משתמש.
+     * @param item הפריט שנלחץ
+     */
     private void onLeaderboardItemClick(LeaderboardItem item) {
         showUserDetailDialog(item);
     }
 
+    /**
+     * מציגה דיאלוג פרטי משתמש עם אפשרות עקוב/הפסק עקוב.
+     * @param item נתוני המשתמש להצגה
+     */
     private void showUserDetailDialog(LeaderboardItem item) {
         android.app.Dialog dialog = new android.app.Dialog(
                 this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);

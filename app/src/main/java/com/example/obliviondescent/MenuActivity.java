@@ -12,6 +12,11 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
 
+/**
+ * מנהלת את מסך התפריט הראשי של המשחק.
+ * מציגה אפשרויות של משחק חדש, טעינת משחק קיים, סטטיסטיקות והגדרות.
+ * בודקת אם קיים שמירה קיימת ומפעילה מוזיקת תפריט.
+ */
 public class MenuActivity extends AppCompatActivity {
 
     private DBManager dbManager;
@@ -25,6 +30,10 @@ public class MenuActivity extends AppCompatActivity {
     private MaterialButton btnStats;
     private MaterialButton btnSettings;
 
+    /**
+     * מאתחל את התפריט הראשי, טוען פרטי משתמש ובודק שמירה קיימת.
+     * @param savedInstanceState מצב שמור מהפעלה קודמת
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -67,18 +76,27 @@ public class MenuActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * מפעיל את מוזיקת התפריט בעת הצגת המסך.
+     */
     @Override
     protected void onStart() {
         super.onStart();
         SoundManager.registerMenuMusic(this);
     }
 
+    /**
+     * מפסיק את מוזיקת התפריט כאשר המסך יוצא לרקע.
+     */
     @Override
     protected void onStop() {
         super.onStop();
         SoundManager.unregisterMenuMusic();
     }
 
+    /**
+     * מחזיר את המסך למצב מלא ומרענן בדיקת שמירה קיימת.
+     */
     @Override
     protected void onResume() {
         super.onResume();
@@ -110,6 +128,10 @@ public class MenuActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * מגדירה את מצב הכפתור "טעינת משחק" (מופעל/מושבת).
+     * @param enabled האם הכפתור מופעל
+     */
     private void setLoadGameEnabled(boolean enabled) {
         btnLoadGame.setEnabled(enabled);
         btnLoadGame.setAlpha(enabled ? 1f : 0.4f);
@@ -145,6 +167,9 @@ public class MenuActivity extends AppCompatActivity {
                 .setTextColor(Color.parseColor("#AAAAAA"));
     }
 
+    /**
+     * מוחקת את השמירה הקיימת ואז יוצרת משחק חדש.
+     */
     private void deleteSaveAndCreateNew() {
         if (existingGameId == null) {
             createNewGame();
@@ -158,6 +183,9 @@ public class MenuActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * יוצרת שמירה חדשה ב-Firestore ומפעילה את GameActivity.
+     */
     private void createNewGame() {
         if (userId == null) return;
         if (loadingDialog == null || !loadingDialog.isShowing()) showLoading("Creating new game...");
@@ -176,6 +204,10 @@ public class MenuActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * מפעילה את GameActivity עם מזהה המשחק הנתון.
+     * @param gameId מזהה השמירה ב-Firestore
+     */
     private void launchGame(String gameId) {
         SoundManager.stopMenuMusic(); // silence music before entering the game
         Intent intent = new Intent(this, GameActivity.class);

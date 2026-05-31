@@ -5,12 +5,9 @@ import android.graphics.Color;
 import android.graphics.Paint;
 
 /**
- * Projectile
- *
- * A moving object fired from the player toward a target direction.
- * It travels in a straight line at a fixed speed, deals damage on
- * contact with an enemy, and disappears either on hit or when it
- * has traveled its maximum range.
+ * מייצגת קליע נע שנורה מהשחקן לכיוון יעד.
+ * נע בקו ישר במהירות קבועה, גורם נזק בעת מגע עם אויב,
+ * ונעלם לאחר פגיעה או כאשר עבר את טווח הירי המקסימלי.
  */
 public class Projectile {
 
@@ -40,6 +37,19 @@ public class Projectile {
     /* ============================================================
        CONSTRUCTOR
        ============================================================ */
+    /**
+     * יוצר קליע חדש עם פרמטרים מלאים.
+     * @param startX מיקום התחלתי X
+     * @param startY מיקום התחלתי Y
+     * @param targetDX כיוון אופקי (לא מנורמל)
+     * @param targetDY כיוון אנכי (לא מנורמל)
+     * @param speed מהירות הקליע ביחידות לפריים
+     * @param maxRange מרחק מקסימלי עד להיעלמות
+     * @param damage נזק לפגיעה
+     * @param knockback עוצמת דחיפה לאחור
+     * @param radius רדיוס הקליע לחישובי התנגשות
+     * @param color צבע הקליע
+     */
     public Projectile(float startX, float startY, float targetDX, float targetDY,
                       float speed, float maxRange, int damage, float knockback,
                       float radius, int color) {
@@ -67,6 +77,9 @@ public class Projectile {
     /* ============================================================
        UPDATE — called every logic frame
        ============================================================ */
+    /**
+     * מזיז את הקליע בכיוונו בכל פריים לוגי ומסמנת אותו כמת אם עבר הטווח.
+     */
     public void update() {
         if (isDead) return;
 
@@ -83,6 +96,11 @@ public class Projectile {
     /* ============================================================
        DRAW
        ============================================================ */
+    /**
+     * מצייר את הקליע עם זוהר חיצוני וגרעין מוצק.
+     * @param canvas הקנבס לציור
+     * @param camera מצלמת המשחק לחישוב מיקום מסך
+     */
     public void draw(Canvas canvas, GameCamera camera) {
         if (isDead) return;
 

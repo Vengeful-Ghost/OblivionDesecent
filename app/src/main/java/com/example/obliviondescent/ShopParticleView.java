@@ -8,6 +8,10 @@ import android.util.AttributeSet;
 import android.view.View;
 import java.util.Random;
 
+/**
+ * View המציגה אנימציית חלקיקים עפים ברקע דיאלוג החנות.
+ * מאניימת 30 חלקיקים בצבעים שונים הקופצים בין גבולות המסך.
+ */
 public class ShopParticleView extends View {
 
     private static final int COUNT = 30;
@@ -73,5 +77,8 @@ public class ShopParticleView extends View {
         postInvalidateDelayed(16);
     }
 
+    /**
+     * עוצרת את לולאת האנימציה. יש לקרוא לפני סגירת הדיאלוג.
+     */
     public void stopAnimation() { running = false; }
 }
