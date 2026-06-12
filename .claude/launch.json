@@ -1,0 +1,27 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "siteforyou",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "C:\\Users\\Cyber_User\\Documents\\WebSites\\SiteForYou(MyWebsite)\\siteforyou"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "buckshish",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "C:\\Users\\Cyber_User\\Documents\\WebSites\\בקשיש\\bakshishmusicband"
+      ],
+      "port": 3000
+    }
+  ]
+}

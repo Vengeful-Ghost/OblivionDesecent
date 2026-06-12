@@ -28,7 +28,16 @@
       "Bash(grep -v \"void \\\\|@\\\\|//\")",
       "Bash(git merge worktree-agent-a53aa4da27f53077f --no-ff -m ' *)",
       "Bash(git stash *)",
-      "Bash(git merge worktree-agent-a22584bc96813ada6 --no-ff -m ' *)"
+      "Bash(git merge worktree-agent-a22584bc96813ada6 --no-ff -m ' *)",
+      "Bash(ls \"C:\\\\Users\\\\Cyber_User\\\\Documents\\\\WebSites\\\\SiteForYou\\(MyWebsite\\)\" 2>/dev/null; ls \"C:\\\\Users\\\\Cyber_User\\\\Documents\\\\WebSites\" 2>/dev/null)",
+      "PowerShell(npm run build)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\Cyber_User\\\\Documents\\\\WebSites\\\\SiteForYou\\(MyWebsite\\)\\\\siteforyou\"; git checkout --theirs .gitignore; git add .gitignore; $env:GIT_EDITOR='true'; git rebase --continue; git status --short; git log --oneline -5)",
+      "PowerShell($pub = \"C:\\\\Users\\\\Cyber_User\\\\Documents\\\\WebSites\\\\בקשיש\\\\bakshishmusicband\\\\public\"; New-Item -ItemType Directory -Force \"$pub\\\\video\" | Out-Null; Copy-Item \"C:\\\\Users\\\\Cyber_User\\\\Documents\\\\WebSites\\\\בקשיש\\\\תמונות\\\\The Buckshish Experience בקשיש - החוויה - Buckshish Music \\(1080p\\).mp4\" \"$pub\\\\video\\\\buckshish-hero.mp4\"; Remove-Item \"$pub\\\\audio\" -Recurse -Force -Confirm:$false; Get-ChildItem \"$pub\\\\video\")",
+      "PowerShell(Copy-Item \"C:\\\\Users\\\\Cyber_User\\\\Documents\\\\WebSites\\\\בקשיש\\\\תמונות\\\\logo.jpg\" \"C:\\\\Users\\\\Cyber_User\\\\Documents\\\\WebSites\\\\בקשיש\\\\bakshishmusicband\\\\public\\\\images\\\\logo.jpg\"; Add-Type -AssemblyName System.Drawing; $img = [System.Drawing.Image]::FromFile\\(\"C:\\\\Users\\\\Cyber_User\\\\Documents\\\\WebSites\\\\בקשיש\\\\bakshishmusicband\\\\public\\\\images\\\\logo.jpg\"\\); \"logo.jpg: $\\($img.Width\\)x$\\($img.Height\\)\"; $img.Dispose\\(\\))",
+      "Bash(npx next *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{url_effective}\\\\n\" -L https://siteforyou.org/sitemap.xml)",
+      "Bash(curl -sL https://siteforyou.org/sitemap.xml)",
+      "Bash(curl -sL https://siteforyou.org/robots.txt)"
     ]
   }
 }
