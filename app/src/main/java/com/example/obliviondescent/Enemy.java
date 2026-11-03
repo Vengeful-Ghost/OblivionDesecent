@@ -59,6 +59,7 @@ public class Enemy {
     public int templateIndex = -1; // AI template in the batch pool, -1 = none
     private float remoteX, remoteY;
     private boolean remotePlaced = false;
+    private long predictedUntil = 0;
 
     private int maxHealth;
     private int health;
@@ -955,7 +956,9 @@ public class Enemy {
         sb.append(id).append(',').append(type.ordinal()).append(',').append(templateIndex).append(',')
                 .append((int) x).append(',').append((int) y).append(',')
                 .append(isDead ? (noGoldDrop ? -1 : 0) : health).append(',').append(maxHealth).append(',')
-                .append(behaviorState.ordinal()).append(',').append(now - stateStartTime).append(',')
+                .append(behaviorState.ordinal()).append(',')
+                // Only a wind-up needs its timing; zero elsewhere keeps idle snapshots identical
+                .append(behaviorState == BehaviorState.WINDUP ? now - stateStartTime : 0).append(',')
                 .append(stateDuration).append(',')
                 .append((int) Math.toDegrees(Math.atan2(aimY, aimX))).append(',')
                 .append(bossMove.ordinal()).append(',').append(enraged ? 1 : 0);
@@ -979,7 +982,7 @@ public class Enemy {
             }
             return;
         }
-        health = hp;
+        health = now < predictedUntil ? Math.min(health, hp) : hp;
         behaviorState  = BehaviorState.values()[Integer.parseInt(f[7])];
         stateStartTime = now - Long.parseLong(f[8]);
         stateDuration  = Long.parseLong(f[9]);
@@ -990,6 +993,13 @@ public class Enemy {
         boolean nowEnraged = "1".equals(f[12]);
         if (nowEnraged && !enraged) justEnraged = true;
         enraged = nowEnraged;
+    }
+
+    /** Guest: shows a hit right away (never lethal); the host's snapshots catch up within a moment. */
+    public void predictHit(int damage) {
+        health = Math.max(1, health - damage);
+        hitFlashUntil = System.currentTimeMillis() + 90;
+        predictedUntil = System.currentTimeMillis() + 500;
     }
 
     /** Guest: glides toward the host's latest position instead of running the AI. */

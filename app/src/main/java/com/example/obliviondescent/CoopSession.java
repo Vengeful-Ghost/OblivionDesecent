@@ -69,11 +69,13 @@ public class CoopSession {
     /** Another player in the run, drawn from their latest published state. */
     public static class RemotePlayer {
         public final Player body = new Player();
-        public String name = "";
-        public int color, hp, maxHp = 100, floor, swing, shownSwing, weaponColor;
-        public float angle;
-        public boolean dead, portal, ranged;
-        private float targetX, targetY;
+        // Written by Firebase callbacks on the UI thread, read by the game loop
+        public volatile String name = "";
+        public volatile int color, hp, maxHp = 100, floor, swing, weaponColor;
+        public volatile float angle;
+        public volatile boolean dead, portal, ranged;
+        public int shownSwing;
+        private volatile float targetX, targetY;
         private boolean placed;
         private int weaponKind = -1;
 
@@ -143,6 +145,16 @@ public class CoopSession {
     private boolean metaSeen = false;
     private boolean ended = false;
     private volatile boolean left = false;
+    private volatile boolean joined; // guests can't write until they are a member
+
+    // Connection health, shown on screen so sync problems are visible
+    private volatile String lastError;
+    private volatile String hostUid;
+    private volatile long lastHostUpdate = 0;
+
+    // Last values written, so unchanged state isn't sent again (game loop thread only)
+    private String lastSelf, lastEnemies;
+    private long lastSelfAt;
 
     public CoopSession(String code, String uid, boolean host, long seed, int slot) {
         this.code = code;
@@ -150,6 +162,7 @@ public class CoopSession {
         this.host = host;
         this.seed = seed;
         this.slot = slot;
+        this.joined = host; // the lobby already made the host a member
         this.run  = FirebaseDatabase.getInstance().getReference("runs").child(code);
     }
 
@@ -190,6 +203,7 @@ public class CoopSession {
                 return;
             }
             run.child("players").child(uid).onDisconnect().removeValue();
+            joined = true;
             attach();
         });
     }
@@ -204,6 +218,7 @@ public class CoopSession {
                     return;
                 }
                 metaSeen = true;
+                hostUid = snap.child("host").getValue(String.class);
                 Long floor = snap.child("floor").getValue(Long.class);
                 if (floor != null) hostFloor = floor.intValue();
                 if ("over".equals(snap.child("state").getValue(String.class)))
@@ -222,6 +237,7 @@ public class CoopSession {
                 String key = snap.getKey();
                 String value = snap.getValue(String.class);
                 if (key == null || value == null || key.equals(uid)) return;
+                if (key.equals(hostUid)) lastHostUpdate = System.currentTimeMillis();
                 RemotePlayer player = others.get(key);
                 if (player == null) {
                     player = new RemotePlayer();
@@ -252,10 +268,12 @@ public class CoopSession {
             @Override
             public void onDataChange(@NonNull DataSnapshot snap) {
                 enemySnapshot = snap.getValue(String.class);
+                lastHostUpdate = System.currentTimeMillis();
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
+                lastError = error.getMessage();
                 Log.e(TAG, "enemies listener cancelled: " + error.getMessage());
             }
         });
@@ -265,6 +283,7 @@ public class CoopSession {
             void onChild(DataSnapshot snap) {
                 String value = snap.getValue(String.class);
                 if (value != null) events.add(new Received(value));
+                lastHostUpdate = System.currentTimeMillis();
             }
         });
 
@@ -287,9 +306,15 @@ public class CoopSession {
     /** This phone's player: "x,y,angle,hp,maxHp,flags,swing,floor,slot,weaponColor,name". */
     public void publishSelf(float x, float y, float angle, int hp, int maxHp, int flags,
                             int swing, int floor, int weaponColor, String name) {
-        write(run.child("players").child(uid), (int) x + "," + (int) y + "," + (int) angle + ","
+        String value = (int) x + "," + (int) y + "," + (int) angle + ","
                 + hp + "," + maxHp + "," + flags + "," + swing + "," + floor + ","
-                + slot + "," + weaponColor + "," + name);
+                + slot + "," + weaponColor + "," + name;
+        long now = System.currentTimeMillis();
+        // Unchanged state is resent once a second as a heartbeat
+        if (value.equals(lastSelf) && now - lastSelfAt < 1000) return;
+        lastSelf = value;
+        lastSelfAt = now;
+        write(run.child("players").child(uid), value);
     }
 
     /** Guests: damage dealt to an enemy, applied by the host. */
@@ -298,7 +323,11 @@ public class CoopSession {
     }
 
     // Host only
-    public void publishEnemies(String snapshot)      { write(run.child("enemies"), snapshot); }
+    public void publishEnemies(String snapshot) {
+        if (snapshot.equals(lastEnemies)) return;
+        lastEnemies = snapshot;
+        write(run.child("enemies"), snapshot);
+    }
     public void publishEvent(String event)           { write(run.child("events").push(), event); }
     public void clearEvents()                        { write(run.child("events"), null); }
     public void publishFloor(int floor)              { write(run.child("meta").child("floor"), floor); }
@@ -309,7 +338,27 @@ public class CoopSession {
 
     /** Writes nothing once this phone has left, so a late game tick can't recreate deleted data. */
     private void write(DatabaseReference ref, Object value) {
-        if (!left) ref.setValue(value);
+        if (left || !joined) return;
+        ref.setValue(value).addOnFailureListener(e -> lastError = e.getMessage());
+    }
+
+    /* ============================================================
+       STATUS — drawn under the minimap
+       ============================================================ */
+
+    /** False after a database error, or when a guest hasn't heard from the host for 2 seconds. */
+    public boolean isSyncHealthy(long now) {
+        if (lastError != null) return false;
+        return host || (lastHostUpdate > 0 && now - lastHostUpdate <= 2000);
+    }
+
+    /** One short line about the connection. */
+    public String statusLine(long now) {
+        if (lastError != null) return "Sync error: " + lastError;
+        if (!host && lastHostUpdate == 0) return "Connecting to the host...";
+        if (!host && now - lastHostUpdate > 2000)
+            return "No updates from the host for " + (now - lastHostUpdate) / 1000 + "s";
+        return "Co-op • " + (others.size() + 1) + " players";
     }
 
     /* ============================================================
@@ -368,7 +417,7 @@ public class CoopSession {
     }
 
     /** Child listener that treats added and changed children the same way. */
-    private abstract static class Children implements ChildEventListener {
+    private abstract class Children implements ChildEventListener {
         abstract void onChild(DataSnapshot snap);
 
         @Override public void onChildAdded(@NonNull DataSnapshot snap, String previous)   { onChild(snap); }
@@ -376,6 +425,7 @@ public class CoopSession {
         @Override public void onChildRemoved(@NonNull DataSnapshot snap) { }
         @Override public void onChildMoved(@NonNull DataSnapshot snap, String previous) { }
         @Override public void onCancelled(@NonNull DatabaseError error) {
+            lastError = error.getMessage();
             Log.e(TAG, "listener cancelled: " + error.getMessage());
         }
     }

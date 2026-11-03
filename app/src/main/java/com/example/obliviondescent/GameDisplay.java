@@ -65,8 +65,9 @@ public class GameDisplay extends View {
     // Camera-cutout insets, so the minimap stays visible
     private int safeTop = 0, safeRight = 0;
 
-    // Co-op teammates (null in solo)
-    private java.util.Collection<CoopSession.RemotePlayer> remotePlayers;
+    // Co-op session (null in solo): teammates and connection status
+    private CoopSession coop;
+    private final Paint coopStatusPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint allyNamePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint allyBarBgPaint = new Paint();
     private final Paint allyBarPaint = new Paint();
@@ -222,11 +223,14 @@ public class GameDisplay extends View {
         allyNamePaint.setShadowLayer(3f, 0f, 1f, Color.BLACK);
         allyBarBgPaint.setColor(Color.argb(180, 0, 0, 0));
         allyBarPaint.setColor(Color.rgb(90, 220, 110));
+        coopStatusPaint.setTextSize(22f);
+        coopStatusPaint.setTextAlign(Paint.Align.RIGHT);
+        coopStatusPaint.setShadowLayer(3f, 0f, 1f, Color.BLACK);
     }
 
-    /** Co-op: the other players to draw, live from the session. */
-    public void setRemotePlayers(java.util.Collection<CoopSession.RemotePlayer> players) {
-        this.remotePlayers = players;
+    /** Co-op: teammates to draw and connection status, live from the session. */
+    public void setCoop(CoopSession coop) {
+        this.coop = coop;
     }
 
     /**
@@ -365,6 +369,16 @@ public class GameDisplay extends View {
         if (!inShopRoom) {
             drawMinimap(canvas);
         }
+        drawCoopStatus(canvas);
+    }
+
+    /** One line under the minimap: party size, or what is wrong with the connection. */
+    private void drawCoopStatus(Canvas canvas) {
+        if (coop == null) return;
+        long now = System.currentTimeMillis();
+        coopStatusPaint.setColor(coop.isSyncHealthy(now) ? Color.rgb(170, 220, 170) : Color.rgb(255, 120, 90));
+        canvas.drawText(coop.statusLine(now), getWidth() - MINIMAP_PADDING - safeRight,
+                MINIMAP_PADDING + safeTop + MINIMAP_SIZE + 30f, coopStatusPaint);
     }
 
     // Helper to visualize the "Infinite" world
@@ -589,8 +603,8 @@ public class GameDisplay extends View {
         canvas.drawCircle(px, py, 4f, minimapPlayerPaint);
 
         // Teammates on this floor
-        if (remotePlayers == null || floorManager == null) return;
-        for (CoopSession.RemotePlayer r : remotePlayers) {
+        if (coop == null || floorManager == null) return;
+        for (CoopSession.RemotePlayer r : coop.others.values()) {
             if (r.dead || r.floor != floorManager.getCurrentFloor()) continue;
             float ax = ox + (r.body.x - minX) * scale;
             float ay = oy + (r.body.y - minY) * scale;
@@ -602,8 +616,8 @@ public class GameDisplay extends View {
 
     /** Teammates on this floor, each with a name tag and a small health bar. */
     private void drawRemotePlayers(Canvas canvas) {
-        if (remotePlayers == null || floorManager == null) return;
-        for (CoopSession.RemotePlayer r : remotePlayers) {
+        if (coop == null || floorManager == null) return;
+        for (CoopSession.RemotePlayer r : coop.others.values()) {
             if (r.dead || r.floor != floorManager.getCurrentFloor()) continue;
             r.body.draw(canvas, camera);
             float sx = r.body.x - camera.getOffsetX();

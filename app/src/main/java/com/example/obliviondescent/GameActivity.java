@@ -229,6 +229,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private final float[] target = new float[2];
     private Dialog shopDialog;
 
+    // Last HUD values sent to the UI thread; posting every tick floods it and delays Firebase callbacks
+    private int dashStepShown = -1, spinStepShown = -1;
+    private volatile String floorHudShown = "";
+
     /**
      * Initialises the game activity: UI, camera, player, floor manager, AI batch,
      * loads a saved game if one exists, and starts the logic and render threads.
@@ -374,7 +378,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         updatePotionButton();
 
         if (coop != null) {
-            gameDisplay.setRemotePlayers(coop.others.values());
+            gameDisplay.setCoop(coop);
             coop.start(this);
         }
 
@@ -685,15 +689,21 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
         player.setInvulnerable(now < invulnerableUntil);
 
-        // Update dash and spin cooldown arcs
+        // Update dash and spin cooldown arcs, only when they visibly change
         float dashProgress = Math.min(1f, (float) (now - lastDashTime) / DASH_COOLDOWN);
         float spinProgress = Math.min(1f, (float) (now - lastSpinTime) / SPIN_COOLDOWN);
-        runOnUiThread(() -> {
-            if (dashCooldownView != null)
-                dashCooldownView.setProgress(dashProgress);
-            if (spinCooldownView != null)
-                spinCooldownView.setProgress(spinProgress);
-        });
+        int dashStep = (int) (dashProgress * 50);
+        int spinStep = (int) (spinProgress * 50);
+        if (dashStep != dashStepShown || spinStep != spinStepShown) {
+            dashStepShown = dashStep;
+            spinStepShown = spinStep;
+            runOnUiThread(() -> {
+                if (dashCooldownView != null)
+                    dashCooldownView.setProgress(dashProgress);
+                if (spinCooldownView != null)
+                    spinCooldownView.setProgress(spinProgress);
+            });
+        }
 
         // Record kite behavior — is player moving away from nearest enemy?
         if (joystick.getDX() != 0 || joystick.getDY() != 0) {
@@ -1230,7 +1240,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         statsManager.onDamageGiven(damage);
         showEnemyHit(e, damage, crit);
         if (isGuest()) {
-            e.hitFlashUntil = System.currentTimeMillis() + 90;
+            e.predictHit(damage);
             coop.sendHit(e.id + "," + damage + "," + pushX + "," + pushY + "," + (stagger ? 1 : 0));
             return;
         }
@@ -1437,7 +1447,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             killAllActiveEnemies();
         }
 
-        runOnUiThread(this::updateFloorHUD);
+        updateFloorHUD();
     }
 
     /**
@@ -2221,6 +2231,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * Refreshes the floor number and kill-progress HUD display.
      */
     private void updateFloorHUD() {
+        String shown = floorManager.getCurrentFloor() + ":" + floorManager.getKillsThisFloor()
+                + ":" + floorManager.getKillsRequired();
+        if (shown.equals(floorHudShown)) return;
+        floorHudShown = shown;
         runOnUiThread(() -> {
             txtFloorNumber.setText("Floor " + floorManager.getCurrentFloor());
             txtKillProgress.setText(
