@@ -34,6 +34,14 @@ android {
             "\"${localProps.getProperty("CLAUDE_API_KEY") ?: ""}\"")
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // CI places the shared key here; local builds keep the default debug key
+            val ciKeystore = rootProject.file("ci-debug.keystore")
+            if (ciKeystore.exists()) storeFile = ciKeystore
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

@@ -29,9 +29,15 @@ jobs:
         run: echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> local.properties
 
       # Same signing key on every run, so the phone installs new builds as updates
-      - name: Restore signing key
-        if: env.DEBUG_KEYSTORE != ''
-        run: mkdir -p ~/.android && echo "$DEBUG_KEYSTORE" | base64 -d > ~/.android/debug.keystore
+      - name: Prepare signing key
+        run: |
+          if [ -n "$DEBUG_KEYSTORE" ]; then
+            echo "$DEBUG_KEYSTORE" | base64 -d > ci-debug.keystore
+          else
+            keytool -genkeypair -keystore ci-debug.keystore -storepass android -keypass android \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
 
       - name: Build debug APK
         run: chmod +x gradlew && ./gradlew assembleDebug
@@ -41,12 +47,12 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           archive: false
 
-      # Until the DEBUG_KEYSTORE secret exists, hand over the key Gradle just generated
+      # Until the DEBUG_KEYSTORE secret exists, hand over the key generated above
       - name: Upload new signing key
         if: env.DEBUG_KEYSTORE == ''
         uses: actions/upload-artifact@v7
         with:
-          path: ~/.android/debug.keystore
+          path: ci-debug.keystore
           archive: false
           retention-days: 1
           if-no-files-found: error
