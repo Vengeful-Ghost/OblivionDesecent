@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # create releases
 
 jobs:
   build:
@@ -56,3 +56,14 @@ jobs:
           archive: false
           retention-days: 1
           if-no-files-found: error
+
+      # Obtainium on the phone watches these releases; the tag matches the app's versionName
+      - name: Publish release
+        if: github.ref == 'refs/heads/main' && env.DEBUG_KEYSTORE != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk OblivionDescent.apk
+          gh release create "v1.0.${{ github.run_number }}" OblivionDescent.apk \
+            --target "${{ github.sha }}" --title "Build ${{ github.run_number }}" --notes "$NOTES"
