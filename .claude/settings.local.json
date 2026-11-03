@@ -37,7 +37,16 @@
       "Bash(npx next *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code} %{url_effective}\\\\n\" -L https://siteforyou.org/sitemap.xml)",
       "Bash(curl -sL https://siteforyou.org/sitemap.xml)",
-      "Bash(curl -sL https://siteforyou.org/robots.txt)"
+      "Bash(curl -sL https://siteforyou.org/robots.txt)",
+      "PowerShell(git remote add origin https://github.com/siteforyou/Buckshish.git)",
+      "Bash(git push *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(cd /c/Users/Cyber_User/Documents/WebSites/ImagePrompts/Image_Prompts && find . -type f -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.next/*' | head -100)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(echo \"TSC_EXIT: $?\")",
+      "Bash(curl -s -m 3 -o /dev/null -w \"SD reachable: HTTP %{http_code}\\\\n\" http://127.0.0.1:7860/sdapi/v1/sd-models)",
+      "Bash(npm run *)"
     ]
   }
 }

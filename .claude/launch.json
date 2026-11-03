@@ -22,6 +22,90 @@
         "C:\\Users\\Cyber_User\\Documents\\WebSites\\בקשיש\\bakshishmusicband"
       ],
       "port": 3000
+    },
+    {
+      "name": "shira-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "C:\\Users\\Cyber_User\\Documents\\WebSites\\ShiraTeachingWebsite\\shira_teaches",
+        "--",
+        "-p",
+        "3001"
+      ],
+      "port": 3001
+    },
+    {
+      "name": "yap_studio",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "C:\\Users\\Cyber_User\\Documents\\WebSites\\YAP_Studio\\yap_studio",
+        "--",
+        "-p",
+        "3002"
+      ],
+      "port": 3002
+    },
+    {
+      "name": "artist-website",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "C:\\Users\\Cyber_User\\Documents\\WebSites\\ArtistWebsite\\artist_website",
+        "--",
+        "-p",
+        "3003"
+      ],
+      "port": 3003
+    },
+    {
+      "name": "miris-gallery",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "C:\\Users\\Cyber_User\\Documents\\WebSites\\Miri'sGallery\\miris_gallery",
+        "--",
+        "-p",
+        "3004"
+      ],
+      "port": 3004
+    },
+    {
+      "name": "miris-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "C:\\Users\\Cyber_User\\Documents\\WebSites\\Miri'sGallery\\admin\\admin_page",
+        "--",
+        "-p",
+        "3005"
+      ],
+      "port": 3005
+    },
+    {
+      "name": "shmilo",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "C:\\Users\\Cyber_User\\Documents\\WebSites\\ShmiloClockInOut\\shmilo",
+        "--",
+        "-p",
+        "3007"
+      ],
+      "port": 3007
     }
   ]
 }
