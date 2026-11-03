@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/game_background"
+    android:padding="12dp"
+    tools:ignore="HardcodedText">
+
+    <!-- LEFT: host / join, then party code and actions -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_dialog_bg"
+        android:padding="16dp"
+        android:layout_marginEnd="8dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Co-op"
+            android:textAllCaps="true"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:textColor="@color/gold_bright"
+            android:gravity="center"
+            android:letterSpacing="0.1"
+            android:shadowColor="@color/gold_glow"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="10"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- Not in a party yet -->
+        <LinearLayout
+            android:id="@+id/join_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Join a party with its code"
+                android:textColor="@color/bone_dim"
+                android:textSize="13sp"
+                android:fontFamily="serif"
+                android:layout_marginBottom="6dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/dialog_bg"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="4dp">
+
+                <EditText
+                    android:id="@+id/input_code"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:hint="CODE"
+                    android:textColor="@color/gold_glow"
+                    android:textColorHint="@color/bone_muted"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:letterSpacing="0.3"
+                    android:background="@null"
+                    android:singleLine="true"
+                    android:maxLength="6"
+                    android:imeOptions="actionGo"
+                    android:inputType="textCapCharacters|textNoSuggestions"/>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_join"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="Join"
+                    android:textAllCaps="false"
+                    android:textColor="@color/gold_glow"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="serif"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingStart="18dp"
+                    android:paddingEnd="18dp"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/btn_gothic_secondary"/>
+
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="— or —"
+                android:textColor="@color/bone_muted"
+                android:textSize="12sp"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:layout_marginVertical="10dp"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_host"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Host a Party"
+                android:textAllCaps="false"
+                android:textColor="@color/gold_glow"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.08"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:backgroundTint="@null"
+                android:background="@drawable/btn_login"/>
+
+        </LinearLayout>
+
+        <!-- In a party -->
+        <LinearLayout
+            android:id="@+id/party_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Party code (tap to copy)"
+                android:textColor="@color/bone_dim"
+                android:textSize="13sp"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:layout_marginBottom="6dp"/>
+
+            <TextView
+                android:id="@+id/txt_code"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="------"
+                android:textColor="@color/gold_bright"
+                android:textSize="34sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.3"
+                android:gravity="center"
+                android:paddingVertical="6dp"
+                android:background="@drawable/dialog_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:shadowColor="@color/gold_glow"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="10"
+                android:layout_marginBottom="12dp"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_invite"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:text="Invite Friends"
+                android:textAllCaps="false"
+                android:textColor="@color/gold_glow"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.08"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:backgroundTint="@null"
+                android:background="@drawable/btn_login"
+                android:layout_marginBottom="8dp"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_leave"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:text="Leave Party"
+                android:textAllCaps="false"
+                android:textColor="@color/bone_white"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:backgroundTint="@null"
+                android:background="@drawable/btn_gothic_danger"/>
+
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_back_lobby"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:text="← Back"
+            android:textAllCaps="false"
+            android:textColor="@color/gold_glow"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:letterSpacing="0.08"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@null"
+            android:background="@drawable/btn_gothic_secondary"/>
+
+    </LinearLayout>
+
+    <!-- RIGHT: party members and start -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_dialog_bg"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/txt_party_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Party"
+            android:textAllCaps="true"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:textColor="@color/gold_bright"
+            android:gravity="center"
+            android:letterSpacing="0.1"
+            android:shadowColor="@color/gold_glow"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="10"
+            android:layout_marginBottom="12dp"/>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@drawable/divider_gold"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout
+            android:id="@+id/players_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"/>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:id="@+id/txt_lobby_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Host a party or join one to begin"
+            android:textColor="@color/bone_dim"
+            android:textSize="13sp"
+            android:textStyle="italic"
+            android:fontFamily="serif"
+            android:gravity="center"
+            android:layout_marginBottom="10dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_start"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Start Run"
+            android:textAllCaps="false"
+            android:textColor="@color/gold_glow"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:letterSpacing="0.08"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@null"
+            android:background="@drawable/btn_login"
+            android:visibility="gone"/>
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_overlay"
+    android:clickable="true"
+    android:focusable="true"
+    tools:ignore="HardcodedText">
+
+    <LinearLayout
+        android:layout_width="380dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:background="@drawable/rounded_dialog_bg"
+        android:padding="22dp"
+        android:animation="@anim/dialog_open">
+
+        <!-- Header -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:id="@+id/btn_close_invite"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_gravity="start|center_vertical"
+                android:text="✕"
+                android:textColor="@color/bone_dim"
+                android:textSize="18sp"
+                android:fontFamily="serif"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:gravity="center"
+                android:paddingHorizontal="36dp"
+                android:text="Invite Friends"
+                android:textColor="@color/gold_bright"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:fontFamily="serif"
+                android:letterSpacing="0.06"
+                android:shadowColor="@color/gold_glow"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="10"/>
+
+        </FrameLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@drawable/divider_gold"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView
+            android:id="@+id/invite_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Loading friends..."
+            android:textColor="@color/bone_muted"
+            android:textSize="13sp"
+            android:fontFamily="serif"
+            android:gravity="center"
+            android:paddingVertical="24dp"/>
+
+        <!-- Friend rows (people you follow) -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/invite_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"/>
+
+        </ScrollView>
+
+    </LinearLayout>
+
+</FrameLayout>

@@ -11,6 +11,7 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.firebase.firestore.ListenerRegistration;
 
 /**
  * Main menu screen of the game.
@@ -29,6 +30,7 @@ public class MenuActivity extends AppCompatActivity {
     private MaterialButton btnLoadGame;
     private MaterialButton btnStats;
     private MaterialButton btnSettings;
+    private ListenerRegistration inviteListener;
 
     /**
      * Initialises the main menu, loads user data and checks for an existing save.
@@ -74,24 +76,48 @@ public class MenuActivity extends AppCompatActivity {
             Intent intent = new Intent(this, SettingsActivity.class);
             startActivity(intent);
         });
+
+        findViewById(R.id.btn_coop).setOnClickListener(v ->
+                startActivity(new Intent(this, LobbyActivity.class)));
     }
 
     /**
-     * Starts the menu music when the screen becomes visible.
+     * Starts the menu music and listens for party invites while the menu is visible.
      */
     @Override
     protected void onStart() {
         super.onStart();
         SoundManager.registerMenuMusic(this);
+        if (userId != null) inviteListener = dbManager.listenToInvites(userId, this::showInvitePopup);
     }
 
     /**
-     * Stops the menu music when the screen goes to the background.
+     * Stops the menu music and the invite listener when the screen goes to the background.
      */
     @Override
     protected void onStop() {
         super.onStop();
         SoundManager.unregisterMenuMusic();
+        if (inviteListener != null) {
+            inviteListener.remove();
+            inviteListener = null;
+        }
+    }
+
+    /** Asks whether to join a friend's party; either answer removes the invite. */
+    private void showInvitePopup(String inviteId, String fromName, String code) {
+        new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
+                .setTitle("Party invite")
+                .setMessage((fromName != null ? fromName : "A friend") + " invited you to a co-op run.")
+                .setCancelable(false)
+                .setPositiveButton("Join", (dialog, which) -> {
+                    dbManager.deleteInvite(inviteId);
+                    Intent intent = new Intent(this, LobbyActivity.class);
+                    intent.putExtra(LobbyActivity.EXTRA_JOIN_CODE, code);
+                    startActivity(intent);
+                })
+                .setNegativeButton("Decline", (dialog, which) -> dbManager.deleteInvite(inviteId))
+                .show();
     }
 
     /**

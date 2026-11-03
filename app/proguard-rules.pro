@@ -19,3 +19,6 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Shrink only: keep real class/method names so crash logs stay readable
+-dontobfuscate

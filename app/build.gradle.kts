@@ -44,11 +44,15 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Strip unused code and resources so each update download is much smaller
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Same key as earlier builds, so the installed game accepts this as an update
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

@@ -39,12 +39,12 @@ jobs:
               -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-      - name: Build debug APK
-        run: chmod +x gradlew && ./gradlew assembleDebug
+      - name: Build release APK
+        run: chmod +x gradlew && ./gradlew assembleRelease
 
       - uses: actions/upload-artifact@v7
         with:
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/release/app-release.apk
           archive: false
 
       # Until the DEBUG_KEYSTORE secret exists, hand over the key generated above
@@ -64,6 +64,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ github.event.head_commit.message }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk OblivionDescent.apk
+          cp app/build/outputs/apk/release/app-release.apk OblivionDescent.apk
           gh release create "v1.0.${{ github.run_number }}" OblivionDescent.apk \
             --target "${{ github.sha }}" --title "Build ${{ github.run_number }}" --notes "$NOTES"
