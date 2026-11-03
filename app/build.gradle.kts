@@ -1,6 +1,7 @@
 import java.util.Properties
 
 plugins {
+    id("com.android.application")
     alias(libs.plugins.android.application)
     id("com.google.gms.google-services")
 }
@@ -57,7 +58,7 @@ dependencies {
     implementation(libs.activity)
     implementation(libs.constraintlayout)
     implementation("com.google.android.material:material:1.13.0")
-    implementation(platform("com.google.firebase:firebase-bom:34.5.0"))
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-analytics")
