@@ -26,6 +26,7 @@ public class Projectile {
     public int damage;
     public float knockback;
     public boolean isDead = false;
+    public boolean hostile = false; // fired by an enemy: hits the player instead of enemies
     private float radius;
     private int color;
 

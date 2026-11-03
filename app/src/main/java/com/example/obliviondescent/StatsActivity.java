@@ -218,8 +218,10 @@ public class StatsActivity extends AppCompatActivity {
             // Current game — read from game save fields
             addStatRow("🏔  Current Floor",
                     safeInt(data, "currentFloor") + "");
+            int level = Math.max(1, safeInt(data, "level"));
+            addStatRow("⭐  Level", level + "");
             addStatRow("❤  Health",
-                    safeInt(data, "health") + " / 100");
+                    safeInt(data, "health") + " / " + (100 + (level - 1) * 10));
             addStatRow("🛡  Armor",
                     safeInt(data, "armorValue") + "");
             addStatRow("🪙  Gold",

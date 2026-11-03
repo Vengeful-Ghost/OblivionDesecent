@@ -26,6 +26,10 @@ public class Player {
     private Paint attackDebugPaint;
     private boolean debugAttack = false;
 
+    public long flashUntil = 0;           // red flash after taking a hit
+    private boolean invulnerable = false; // drawn see-through while dashing or just hit
+    private Paint outlinePaint, weaponPaint, orbPaint, eyePaint, pupilPaint, flashPaint;
+
     // Death animation
     private boolean isDying = false;
     private long deathStartTime = 0;
@@ -33,9 +37,31 @@ public class Player {
     private Paint deathPaint;
 
     public Player() {
-        paint = new Paint();
-        paint.setColor(Color.BLUE);
+        paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.rgb(70, 120, 235));
         paint.setStyle(Paint.Style.FILL);
+
+        outlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        outlinePaint.setColor(Color.argb(160, 10, 20, 60));
+        outlinePaint.setStyle(Paint.Style.STROKE);
+        outlinePaint.setStrokeWidth(4f);
+
+        weaponPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        weaponPaint.setStyle(Paint.Style.STROKE);
+        weaponPaint.setStrokeWidth(7f);
+        weaponPaint.setStrokeCap(Paint.Cap.ROUND);
+
+        orbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        orbPaint.setStyle(Paint.Style.FILL);
+
+        eyePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        eyePaint.setColor(Color.WHITE);
+
+        pupilPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        pupilPaint.setColor(Color.rgb(15, 15, 30));
+
+        flashPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        flashPaint.setColor(Color.argb(170, 255, 40, 40));
 
         attackDebugPaint = new Paint();
         attackDebugPaint.setColor(Color.argb(100, 255, 0, 0));
@@ -110,10 +136,46 @@ public class Player {
             return; // Skip normal draw
         }
 
+        Weapon weapon = getWeapon();
+        float ax = (float) Math.cos(Math.toRadians(aimAngle));
+        float ay = (float) Math.sin(Math.toRadians(aimAngle));
+        int alpha = invulnerable ? 130 : 255;
+
+        // Weapon held toward the aim direction
+        weaponPaint.setColor(weapon.color);
+        weaponPaint.setAlpha(alpha);
+        orbPaint.setColor(weapon.color);
+        orbPaint.setAlpha(alpha);
+        float handX = drawX + ax * radius * 0.8f;
+        float handY = drawY + ay * radius * 0.8f;
+        if (weapon.isProjectile) {
+            float tipX = drawX + ax * (radius + 34f);
+            float tipY = drawY + ay * (radius + 34f);
+            canvas.drawLine(handX, handY, tipX, tipY, weaponPaint);
+            canvas.drawCircle(tipX, tipY, 9f, orbPaint);
+        } else if (weapon.range < 40f) {
+            canvas.drawCircle(drawX + ax * (radius + 6f), drawY + ay * (radius + 6f), 12f, orbPaint);
+        } else {
+            float length = Math.min(weapon.range, 90f);
+            canvas.drawLine(handX, handY, handX + ax * length, handY + ay * length, weaponPaint);
+        }
+
+        paint.setAlpha(alpha);
         canvas.drawCircle(drawX, drawY, radius, paint);
+        canvas.drawCircle(drawX, drawY, radius, outlinePaint);
+        if (System.currentTimeMillis() < flashUntil) canvas.drawCircle(drawX, drawY, radius, flashPaint);
+
+        // Eyes look where the player aims
+        float sideX = -ay, sideY = ax;
+        for (int s = -1; s <= 1; s += 2) {
+            float ex = drawX + ax * radius * 0.4f + sideX * radius * 0.3f * s;
+            float ey = drawY + ay * radius * 0.4f + sideY * radius * 0.3f * s;
+            canvas.drawCircle(ex, ey, 8f, eyePaint);
+            canvas.drawCircle(ex + ax * 3f, ey + ay * 3f, 4.5f, pupilPaint);
+        }
 
         if (debugAttack) {
-            float range = radius + currentWeapon.range;
+            float range = radius + weapon.range;
             canvas.drawArc(
                     drawX - range, drawY - range,
                     drawX + range, drawY + range,
@@ -123,6 +185,7 @@ public class Player {
     }
 
     public void setDebugAttack(boolean isAttacking) { this.debugAttack = isAttacking; }
+    public void setInvulnerable(boolean invulnerable) { this.invulnerable = invulnerable; }
     public float getX() { return x; }
     public float getY() { return y; }
 

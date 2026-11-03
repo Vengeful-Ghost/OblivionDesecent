@@ -3,7 +3,9 @@ package com.example.obliviondescent;
 import android.graphics.RectF;
 import android.util.Log;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
@@ -37,6 +39,9 @@ public class FloorLayout {
     public Room entryRoom; // player spawns at its centre
     public Room exitRoom;  // portal(s) spawn here
     public Room bossRoom;  // null on non-boss floors
+
+    // Navigation graph: rooms are nodes 0..R-1, corridors are nodes R..R+C-1
+    private List<List<Integer>> neighbours;
 
     // ─────────────────────────────────────────────────────────────────────────
     // FACTORY
@@ -97,6 +102,8 @@ public class FloorLayout {
         if (exit == null) exit = tryGrowFromAny(layout, rng, xs, xs, Room.Type.EXIT);
         if (exit == null) exit = forceGrow(layout, current, xs, xs, Room.Type.EXIT);
         layout.exitRoom = exit;
+
+        layout.buildNavigation();
 
         // ── 5. Enemy distribution ─────────────────────────────────────────────
         distributeEnemies(layout, killCount, rng);
@@ -336,6 +343,107 @@ public class FloorLayout {
             && isFloor(cx - r, cy    )
             && isFloor(cx,     cy + r)
             && isFloor(cx,     cy - r);
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // NAVIGATION  (used by enemies to reach the player through doors)
+    // ───────────────────────────────────────────────────────────────────────
+
+    private void buildNavigation() {
+        int roomCount = rooms.size();
+        neighbours = new ArrayList<>();
+        for (int i = 0; i < roomCount + corridors.size(); i++) neighbours.add(new ArrayList<>());
+        // Room ids equal their index in rooms (assigned as rooms.size() on creation)
+        for (int j = 0; j < corridors.size(); j++) {
+            Corridor c = corridors.get(j);
+            int node = roomCount + j;
+            neighbours.get(node).add(c.roomIdA);
+            neighbours.get(node).add(c.roomIdB);
+            neighbours.get(c.roomIdA).add(node);
+            neighbours.get(c.roomIdB).add(node);
+        }
+    }
+
+    /**
+     * Returns where a body should walk next to reach the target through doors and corridors,
+     * or null when it shares a room or corridor with the target and can walk straight there.
+     * @param fromX current X position
+     * @param fromY current Y position
+     * @param toX target X position
+     * @param toY target Y position
+     * @param radius body radius, so wide bodies line up with the door before entering
+     * @return the next waypoint [x, y], or null for a straight path
+     */
+    public float[] nextWaypoint(float fromX, float fromY, float toX, float toY, float radius) {
+        if (neighbours == null) return null;
+        int from = nodeAt(fromX, fromY);
+        int to   = nodeAt(toX, toY);
+        if (from < 0 || to < 0 || from == to) return null;
+        int next = firstStep(from, to);
+        if (next < 0) return null;
+
+        int roomCount = rooms.size();
+        if (from >= roomCount) {
+            // In a corridor: walk into the next room
+            return doorPoint(rooms.get(next), corridors.get(from - roomCount), radius);
+        }
+
+        // In a room: line up with the door first so the body fits, then walk through to the far room
+        Room room = rooms.get(from);
+        Corridor corridor = corridors.get(next - roomCount);
+        float[] door = doorPoint(room, corridor, radius);
+        float tolerance = Math.max(2f, CORRIDOR_WIDTH * 0.5f - radius - 5f);
+        boolean horizontal = corridor.width >= corridor.height;
+        float offset = horizontal ? Math.abs(fromY - door[1]) : Math.abs(fromX - door[0]);
+        if (offset > tolerance) return door;
+        int otherId = corridor.roomIdA == room.id ? corridor.roomIdB : corridor.roomIdA;
+        return doorPoint(rooms.get(otherId), corridor, radius);
+    }
+
+    private int nodeAt(float px, float py) {
+        for (int i = 0; i < rooms.size(); i++) {
+            if (rooms.get(i).contains(px, py)) return i;
+        }
+        for (int j = 0; j < corridors.size(); j++) {
+            if (corridors.get(j).contains(px, py)) return rooms.size() + j;
+        }
+        return -1;
+    }
+
+    /** Breadth-first search; returns the node right after {@code from} on the shortest path to {@code to}. */
+    private int firstStep(int from, int to) {
+        int[] previous = new int[neighbours.size()];
+        Arrays.fill(previous, -1);
+        previous[from] = from;
+        ArrayDeque<Integer> queue = new ArrayDeque<>();
+        queue.add(from);
+        while (!queue.isEmpty()) {
+            int node = queue.poll();
+            if (node == to) break;
+            for (int next : neighbours.get(node)) {
+                if (previous[next] == -1) {
+                    previous[next] = node;
+                    queue.add(next);
+                }
+            }
+        }
+        if (previous[to] == -1) return -1;
+        int step = to;
+        while (previous[step] != from) step = previous[step];
+        return step;
+    }
+
+    /** Point just inside the room, centred on its door into the corridor. */
+    private static float[] doorPoint(Room room, Corridor corridor, float radius) {
+        float inset = radius + 20f;
+        if (corridor.width >= corridor.height) {
+            float doorY = corridor.y + corridor.height * 0.5f;
+            boolean roomIsWest = room.x + room.width <= corridor.x + 1f;
+            return new float[]{roomIsWest ? room.x + room.width - inset : room.x + inset, doorY};
+        }
+        float doorX = corridor.x + corridor.width * 0.5f;
+        boolean roomIsNorth = room.y + room.height <= corridor.y + 1f;
+        return new float[]{doorX, roomIsNorth ? room.y + room.height - inset : room.y + inset};
     }
 
     // ─────────────────────────────────────────────────────────────────────────

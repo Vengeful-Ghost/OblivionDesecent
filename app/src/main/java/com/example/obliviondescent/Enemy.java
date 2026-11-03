@@ -3,7 +3,11 @@ package com.example.obliviondescent;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Represents a single enemy in the game.
@@ -21,7 +25,23 @@ public class Enemy {
         SPEEDER,  // Fast, fragile, low damage
         TANK,     // Slow, tanky, hits hard
         BRUTE,     // Medium speed, high HP, medium damage
+        ARCHER,    // Keeps its distance and shoots
         BOSS
+    }
+
+    /** A projectile fired this tick; GameActivity turns it into a hostile Projectile. */
+    public static class Shot {
+        public final float dirX, dirY, speed, range, radius;
+        public final int damage;
+
+        Shot(float dirX, float dirY, float speed, float range, float radius, int damage) {
+            this.dirX = dirX;
+            this.dirY = dirY;
+            this.speed = speed;
+            this.range = range;
+            this.radius = radius;
+            this.damage = damage;
+        }
     }
 
     /* ============================================================
@@ -69,15 +89,48 @@ public class Enemy {
     // Per-enemy hit cooldown — prevents the same enemy from being hit multiple times
     // per swing. GameActivity sets this to System.currentTimeMillis() on each hit.
     public long lastHitTime = 0;
+    public long hitFlashUntil = 0;
+
+    // Attacks only land when the wind-up ends, so the player can see them coming and dodge
+    private long windupDuration;
+    private long lastAttackTime = System.currentTimeMillis();
+    private float aimX = 1f, aimY = 0f;   // locked direction for shots and boss charges
+    private float faceX = 1f, faceY = 0f; // where the eyes look
+
+    // Results GameActivity resolves (and resets) right after update()
+    public int   strikeDamage = 0;
+    public float strikeReach  = 0f;
+    public final List<Shot> pendingShots = new ArrayList<>();
+    public boolean justEnraged = false;
+
+    // Boss move set
+    private enum BossMove { SLAM, CHARGE, BURST }
+    private static final float BOSS_SLAM_RADIUS = 260f;
+    private BossMove bossMove = BossMove.SLAM;
+    private boolean enraged = false;
+    private boolean rushHit = false;
+
+    private FloorLayout layout;
+    private final Path shapePath = new Path();
+
+    private static final Paint EYE_PAINT      = solid(Color.WHITE);
+    private static final Paint PUPIL_PAINT    = solid(Color.rgb(20, 10, 10));
+    private static final Paint FLASH_PAINT    = solid(Color.argb(190, 255, 255, 255));
+    private static final Paint OUTLINE_PAINT  = stroke(Color.argb(140, 0, 0, 0), 3f);
+    private static final Paint TELEGRAPH_FILL = solid(Color.argb(70, 255, 40, 40));
+    private static final Paint TELEGRAPH_RING = stroke(Color.argb(170, 255, 60, 60), 4f);
+    private static final Paint AIM_PAINT      = stroke(Color.argb(150, 255, 90, 60), 4f);
+    private static final Paint BOW_PAINT      = stroke(Color.rgb(200, 240, 230), 4f);
 
     // Behavior state machine
     private enum BehaviorState {
         APPROACH,   // Moving toward player
-        ATTACK,     // In attack range, striking
+        WINDUP,     // Telegraphing an attack; it lands when the wind-up ends
         RETREAT,    // Post-attack pullback (melee only)
         BAIT,       // Deliberately backing off to bait a dash
         CHARGE,     // Full sprint ignoring normal logic
-        STRAFE      // Circling to cut off dodge direction
+        STRAFE,     // Circling to cut off dodge direction
+        RUSH        // Boss charge attack
     }
 
     private BehaviorState behaviorState = BehaviorState.APPROACH;
@@ -95,6 +148,11 @@ public class Enemy {
         this.behaviorTracker = tracker;
     }
 
+    /** Lets the enemy path through doors and corridors instead of walking into walls. */
+    public void setLayout(FloorLayout layout) {
+        this.layout = layout;
+    }
+
     /* ============================================================
        CONSTRUCTOR
        ============================================================ */
@@ -103,7 +161,7 @@ public class Enemy {
      * Sets stats, weapon and wake radius according to the type.
      * @param startX initial X position in world space
      * @param startY initial Y position in world space
-     * @param type enemy type (GRUNT, SPEEDER, TANK, BRUTE, BOSS)
+     * @param type enemy type (GRUNT, SPEEDER, TANK, BRUTE, ARCHER, BOSS)
      */
     public Enemy(float startX, float startY, Type type) {
         this.x = startX;
@@ -140,6 +198,14 @@ public class Enemy {
                 goldDrop = 3 + (int)(Math.random() * 6);
                 triggerRadius = 400f + (float)(Math.random() * 100f);
                 break;
+            case ARCHER:
+                maxHealth = 20;  speed = 3.5f; radius = 34f;
+                bodyPaint = makePaint(Color.rgb(40, 170, 160));
+                weapon = new Weapon("Bow", 6, 600f, 1800, Weapon.Rarity.COMMON,
+                        Color.rgb(255, 110, 70), 0.05f, true);
+                goldDrop = 2 + (int)(Math.random() * 4);
+                triggerRadius = 550f + (float)(Math.random() * 100f);
+                break;
             case BOSS:
                 maxHealth = 180; speed = 3f; radius = 100f;
                 bodyPaint = makePaint(Color.rgb(180, 0, 0));
@@ -156,6 +222,7 @@ public class Enemy {
                 triggerRadius = 350f;
         }
         health = maxHealth;
+        windupDuration = windupFor(type);
 
         // --- Health bar paints ---
         healthBarBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -212,12 +279,14 @@ public class Enemy {
     }
 
     /**
-     * Updates the enemy AI every logic frame.
-     * Runs a state machine with behaviours: approach, attack, retreat, bait, charge and strafe.
+     * Updates the enemy AI every logic tick.
+     * Runs a state machine with behaviours: approach, wind-up, retreat, bait, charge and strafe.
+     * Bosses use their own move set (see updateBoss).
      * @param playerX player X position in world space
      * @param playerY player Y position in world space
+     * @param playerRadius player body radius, used for reach checks
      */
-    public void update(float playerX, float playerY) {
+    public void update(float playerX, float playerY, float playerRadius) {
         if (isDead || !isAwake) return;
 
         // Apply and decay knockback velocity each frame for smooth motion
@@ -234,14 +303,26 @@ public class Enemy {
         float dx = playerX - x;
         float dy = playerY - y;
         float dist = (float) Math.sqrt(dx * dx + dy * dy);
-        float attackRange = radius + weapon.range + 10f;
+        if (dist > 0.01f) { faceX = dx / dist; faceY = dy / dist; }
+
+        // Next door or corridor point on the way to the player; null when the path is straight
+        float[] waypoint = layout != null ? layout.nextWaypoint(x, y, playerX, playerY, radius) : null;
+        boolean direct = waypoint == null;
+
+        if (type == Type.BOSS) {
+            updateBoss(now, dx, dy, dist, playerRadius, waypoint);
+            return;
+        }
+
+        boolean ranged = weapon.isProjectile;
+        float reach = getStrikeReach();
+        // Melee starts swinging slightly inside its reach so a target that stands still gets hit
+        float attackRange = ranged ? playerRadius + weapon.range : playerRadius + reach - 10f;
+        boolean canAttack = now - lastAttackTime >= weapon.cooldown && dist > 0.01f;
 
         // Determine if tracker has useful data
         float adaptStrength = (behaviorTracker != null && behaviorTracker.isReady())
                 ? behaviorTracker.getAdaptationStrength() : 0f;
-
-        // Boss adapts 3x faster
-        if (type == Type.BOSS) adaptStrength = Math.min(1f, adaptStrength * 3f);
 
         // ============================================================
         // STATE MACHINE
@@ -249,6 +330,22 @@ public class Enemy {
         switch (behaviorState) {
 
             case APPROACH: {
+                // Archers need a clear line (same room or corridor); melee only needs reach
+                if (canAttack && dist <= attackRange && (direct || !ranged)) {
+                    aimX = dx / dist;
+                    aimY = dy / dist;
+                    enterState(BehaviorState.WINDUP, windupDuration);
+                    break;
+                }
+                if (!direct) {
+                    moveToward(waypoint[0], waypoint[1], speed);
+                    break;
+                }
+                if (ranged) {
+                    keepDistance(dx, dy, dist);
+                    break;
+                }
+
                 // Move toward player
                 if (dist > 10f) {
                     float adaptedDX = dx / dist;
@@ -296,38 +393,35 @@ public class Enemy {
                     x += adaptedDX * speed;
                     y += adaptedDY * speed;
                 }
-
-                // Reached attack range
-                if (dist <= attackRange) {
-                    enterState(BehaviorState.ATTACK, getMeleeAttackDuration());
-                }
                 break;
             }
 
-            case ATTACK: {
-                // Melee: stay close and hit
-                // Projectile: already handled by GameActivity — just hold position
-                if (weapon.isProjectile) {
-                    // Projectile enemies maintain preferred distance based on weapon range
-                    float preferredDist = Math.max(100f, weapon.range * 0.8f);
-                    if (dist < preferredDist - 30f) {
-                        // Too close — back away slowly
-                        if (dist > 10f) {
-                            x -= (dx / dist) * speed * 0.5f;
-                            y -= (dy / dist) * speed * 0.5f;
-                        }
+            case WINDUP: {
+                if (ranged) {
+                    // Track the target until just before release, then the aim locks
+                    if (now - stateStartTime < stateDuration - 150 && dist > 0.01f) {
+                        aimX = dx / dist;
+                        aimY = dy / dist;
                     }
+                } else if (dist > 10f) {
+                    // Creep forward so standing still gets punished
+                    x += (dx / dist) * speed * 0.25f;
+                    y += (dy / dist) * speed * 0.25f;
                 }
 
                 if (now - stateStartTime >= stateDuration) {
-                    if (!weapon.isProjectile) {
+                    lastAttackTime = now;
+                    if (ranged) {
+                        pendingShots.add(new Shot(aimX, aimY, 11f, weapon.range + 150f, 10f, getDamage()));
+                        enterState(BehaviorState.APPROACH, 0);
+                    } else {
+                        strikeDamage = getDamage();
+                        strikeReach = reach;
                         // Melee — retreat after attacking
                         float retreatDist = radius * 3f;
-                        retreatTargetX = x - (dx / dist) * retreatDist;
-                        retreatTargetY = y - (dy / dist) * retreatDist;
+                        retreatTargetX = x - aimX * retreatDist;
+                        retreatTargetY = y - aimY * retreatDist;
                         enterState(BehaviorState.RETREAT, 350);
-                    } else {
-                        enterState(BehaviorState.APPROACH, 0);
                     }
                 }
                 break;
@@ -366,15 +460,19 @@ public class Enemy {
             }
 
             case CHARGE: {
-                // Full sprint directly at player — ignores normal caution
+                // Full sprint at the player — ignores normal caution, follows doors if needed
                 float chargeSpeed = speed * (1.3f + adaptStrength * 0.5f);
-                if (dist > 10f) {
+                if (!direct) {
+                    moveToward(waypoint[0], waypoint[1], chargeSpeed);
+                } else if (dist > 10f) {
                     x += (dx / dist) * chargeSpeed;
                     y += (dy / dist) * chargeSpeed;
                 }
 
-                if (dist <= attackRange) {
-                    enterState(BehaviorState.ATTACK, getMeleeAttackDuration());
+                if (canAttack && dist <= attackRange) {
+                    aimX = dx / dist;
+                    aimY = dy / dist;
+                    enterState(BehaviorState.WINDUP, windupDuration);
                 } else if (now - stateStartTime >= stateDuration) {
                     enterState(BehaviorState.APPROACH, 0);
                 }
@@ -418,6 +516,7 @@ public class Enemy {
 
         // Periodically decide to strafe when adaptation is high enough
         if (adaptStrength > 0.5f
+                && direct && !ranged
                 && behaviorState == BehaviorState.APPROACH
                 && dist < 400f
                 && Math.random() < 0.002 * adaptStrength) {
@@ -432,8 +531,121 @@ public class Enemy {
         stateDuration  = duration;
     }
 
-    private long getMeleeAttackDuration() {
-        return weapon.cooldown + 100L;
+    private static long windupFor(Type type) {
+        switch (type) {
+            case SPEEDER: return 300;
+            case BRUTE:   return 550;
+            case TANK:    return 700;
+            case ARCHER:  return 650;
+            case BOSS:    return 900;
+            default:      return 450;
+        }
+    }
+
+    /** Distance from the enemy's centre that its melee strike reaches. */
+    private float getStrikeReach() {
+        return radius + weapon.range + 25f;
+    }
+
+    private void moveToward(float targetX, float targetY, float maxStep) {
+        float mx = targetX - x;
+        float my = targetY - y;
+        float d = (float) Math.sqrt(mx * mx + my * my);
+        if (d < 0.5f) return;
+        // Never overshoot, so wide enemies can line up exactly with narrow doors
+        float step = Math.min(maxStep, d);
+        x += mx / d * step;
+        y += my / d * step;
+    }
+
+    /** Archers hover at a comfortable distance instead of walking into melee. */
+    private void keepDistance(float dx, float dy, float dist) {
+        if (dist < 0.01f) return;
+        float preferred = Math.max(220f, weapon.range * 0.6f);
+        if (dist > preferred + 40f) {
+            x += (dx / dist) * speed;
+            y += (dy / dist) * speed;
+        } else if (dist < preferred - 40f) {
+            x -= (dx / dist) * speed * 0.7f;
+            y -= (dy / dist) * speed * 0.7f;
+        }
+    }
+
+    /**
+     * Boss move set: walk toward the player, then pick a telegraphed move.
+     * Close: SLAM (area hit) or BURST (ring of projectiles). Far: CHARGE (rush along a line) or BURST.
+     * Below half health it becomes enraged: shorter wind-ups and denser bursts.
+     */
+    private void updateBoss(long now, float dx, float dy, float dist, float playerRadius, float[] waypoint) {
+        if (!enraged && health <= maxHealth / 2) {
+            enraged = true;
+            justEnraged = true;
+        }
+        float pace = enraged ? 0.7f : 1f;
+
+        switch (behaviorState) {
+            case WINDUP: {
+                // Charges and bursts keep tracking until just before release
+                if (bossMove != BossMove.SLAM && now - stateStartTime < stateDuration - 200 && dist > 0.01f) {
+                    aimX = dx / dist;
+                    aimY = dy / dist;
+                }
+                if (now - stateStartTime < stateDuration) break;
+
+                lastAttackTime = now;
+                if (bossMove == BossMove.SLAM) {
+                    strikeDamage = (int) (getDamage() * 1.3f);
+                    strikeReach = BOSS_SLAM_RADIUS;
+                    enterState(BehaviorState.APPROACH, 0);
+                } else if (bossMove == BossMove.BURST) {
+                    int count = enraged ? 16 : 10;
+                    int damage = Math.max(1, (int) (getDamage() * 0.6f));
+                    double start = Math.atan2(aimY, aimX);
+                    for (int i = 0; i < count; i++) {
+                        double angle = start + i * Math.PI * 2 / count;
+                        pendingShots.add(new Shot((float) Math.cos(angle), (float) Math.sin(angle),
+                                8f, 1100f, 16f, damage));
+                    }
+                    enterState(BehaviorState.APPROACH, 0);
+                } else {
+                    rushHit = false;
+                    enterState(BehaviorState.RUSH, 900);
+                }
+                break;
+            }
+
+            case RUSH: {
+                x += aimX * 17f;
+                y += aimY * 17f;
+                if (!rushHit && dist <= playerRadius + radius + 10f) {
+                    rushHit = true;
+                    strikeDamage = getDamage();
+                    strikeReach = radius + 10f;
+                }
+                if (now - stateStartTime >= stateDuration) enterState(BehaviorState.APPROACH, 0);
+                break;
+            }
+
+            default: {
+                if (waypoint != null) {
+                    moveToward(waypoint[0], waypoint[1], speed);
+                    break;
+                }
+                if (dist > playerRadius + radius) {
+                    x += (dx / dist) * speed;
+                    y += (dy / dist) * speed;
+                }
+                if (now - lastAttackTime >= (long) (1800 * pace) && dist > 0.01f) {
+                    boolean close = dist < BOSS_SLAM_RADIUS + 60f;
+                    if (close) bossMove = Math.random() < 0.6 ? BossMove.SLAM : BossMove.BURST;
+                    else       bossMove = Math.random() < 0.6 ? BossMove.CHARGE : BossMove.BURST;
+                    aimX = dx / dist;
+                    aimY = dy / dist;
+                    long windup = bossMove == BossMove.SLAM ? windupDuration : 700;
+                    enterState(BehaviorState.WINDUP, (long) (windup * pace));
+                }
+            }
+        }
     }
 
     /**
@@ -454,7 +666,8 @@ public class Enemy {
                 weapon.cooldown,
                 weapon.rarity,
                 weapon.color,
-                weapon.knockback
+                weapon.knockback,
+                weapon.isProjectile
         );
     }
 
@@ -469,10 +682,11 @@ public class Enemy {
     public void draw(Canvas canvas, GameCamera camera) {
         float drawX = x - camera.getOffsetX();
         float drawY = y - camera.getOffsetY();
+        long now = System.currentTimeMillis();
 
         if (isDead) {
             // --- DEATH ANIMATION ---
-            long elapsed = System.currentTimeMillis() - deathStartTime;
+            long elapsed = now - deathStartTime;
 
             if (elapsed >= DEATH_DURATION) {
                 // Animation finished — flag for removal
@@ -483,41 +697,47 @@ public class Enemy {
             // Progress goes from 0.0 (just died) to 1.0 (fully faded)
             float progress = (float) elapsed / DEATH_DURATION;
 
-            // Alpha fades from 255 → 0
-            int alpha = (int)(255 * (1f - progress));
-
-            // Enemy slowly shrinks as it fades
-            float currentRadius = radius * (1f - progress * 0.5f);
-
-            bodyPaint.setAlpha(alpha);
-            canvas.drawCircle(drawX, drawY, currentRadius, bodyPaint);
+            // Shrink and fade
+            bodyPaint.setAlpha((int)(255 * (1f - progress)));
+            drawShape(canvas, drawX, drawY, radius * (1f - progress * 0.5f), bodyPaint);
             return; // Skip health bar during death
         }
 
+        drawTelegraph(canvas, drawX, drawY, now);
+
         // --- NORMAL DRAW ---
         bodyPaint.setAlpha(255); // Reset alpha in case it was changed
-        canvas.drawCircle(drawX, drawY, radius, bodyPaint);
+        drawShape(canvas, drawX, drawY, radius, bodyPaint);
+        drawShape(canvas, drawX, drawY, radius, OUTLINE_PAINT);
+        if (now < hitFlashUntil) drawShape(canvas, drawX, drawY, radius, FLASH_PAINT);
+        drawEyes(canvas, drawX, drawY);
 
-        // Boss gets a pulsing outer ring
+        if (type == Type.ARCHER) {
+            float r = radius * 1.15f;
+            float face = (float) Math.toDegrees(Math.atan2(faceY, faceX));
+            canvas.drawArc(drawX - r, drawY - r, drawX + r, drawY + r, face - 50f, 100f, false, BOW_PAINT);
+        }
+
+        // Boss gets a pulsing outer ring; faster and orange once enraged
         if (type == Type.BOSS) {
-            float pulse = (float)(Math.sin(System.currentTimeMillis() / 300.0) * 0.15 + 0.85);
+            float pulse = (float)(Math.sin(now / (enraged ? 120.0 : 300.0)) * 0.15 + 0.85);
             Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            ringPaint.setColor(Color.rgb(255, 50, 50));
+            ringPaint.setColor(enraged ? Color.rgb(255, 140, 0) : Color.rgb(255, 50, 50));
             ringPaint.setStyle(Paint.Style.STROKE);
             ringPaint.setStrokeWidth(6f);
             ringPaint.setAlpha((int)(200 * pulse));
-            canvas.drawCircle(drawX, drawY, radius * 1.3f * pulse, ringPaint);
+            canvas.drawCircle(drawX, drawY, radius * 1.4f * pulse, ringPaint);
 
             // "BOSS" label is larger and red
             labelPaint.setColor(Color.rgb(255, 80, 80));
             labelPaint.setTextSize(32f);
         }
 
-        // Health bar background
+        // Health bar background (above the tallest shape)
         float barWidth = radius * 2.6f;
         float barHeight = 13f;
         float barLeft = drawX - barWidth / 2f;
-        float barTop = drawY - radius - 30f;
+        float barTop = drawY - radius * 1.3f - 24f;
         float barBottom = barTop + barHeight;
 
         canvas.drawRoundRect(
@@ -544,6 +764,90 @@ public class Enemy {
         labelPaint.setTextSize(22f);
     }
 
+    /** Shows where an attack in wind-up will land, filling up as the strike gets closer. */
+    private void drawTelegraph(Canvas canvas, float drawX, float drawY, long now) {
+        if (behaviorState != BehaviorState.WINDUP) return;
+        float progress = stateDuration > 0
+                ? Math.min(1f, (float) (now - stateStartTime) / stateDuration) : 1f;
+
+        if (type == Type.BOSS && bossMove == BossMove.CHARGE) {
+            // The lane the boss is about to rush down (rush speed × ticks in 900 ms)
+            float length = 17f * 54f;
+            AIM_PAINT.setStrokeWidth(radius * 2f);
+            AIM_PAINT.setAlpha((int) (40 + 60 * progress));
+            canvas.drawLine(drawX, drawY, drawX + aimX * length, drawY + aimY * length, AIM_PAINT);
+            AIM_PAINT.setStrokeWidth(4f);
+            return;
+        }
+        if (type == Type.BOSS && bossMove == BossMove.BURST) {
+            TELEGRAPH_RING.setAlpha((int) (80 + 150 * progress));
+            canvas.drawCircle(drawX, drawY, radius * (1.1f + 0.5f * progress), TELEGRAPH_RING);
+            return;
+        }
+        if (weapon.isProjectile) {
+            AIM_PAINT.setAlpha((int) (60 + 160 * progress));
+            canvas.drawLine(drawX, drawY, drawX + aimX * weapon.range, drawY + aimY * weapon.range, AIM_PAINT);
+            return;
+        }
+        float reach = type == Type.BOSS ? BOSS_SLAM_RADIUS : getStrikeReach();
+        TELEGRAPH_RING.setAlpha(170);
+        canvas.drawCircle(drawX, drawY, reach, TELEGRAPH_RING);
+        TELEGRAPH_FILL.setAlpha((int) (50 + 70 * progress));
+        canvas.drawCircle(drawX, drawY, radius + (reach - radius) * progress, TELEGRAPH_FILL);
+    }
+
+    private void drawShape(Canvas canvas, float cx, float cy, float r, Paint paint) {
+        float face = (float) Math.atan2(faceY, faceX);
+        switch (type) {
+            case SPEEDER: drawPolygon(canvas, cx, cy, r * 1.3f, 3, face, paint); break;
+            case TANK:    drawPolygon(canvas, cx, cy, r * 1.25f, 4, (float) (Math.PI / 4), paint); break;
+            case BRUTE:   drawPolygon(canvas, cx, cy, r * 1.12f, 6, 0f, paint); break;
+            case ARCHER:  drawPolygon(canvas, cx, cy, r * 1.2f, 4, 0f, paint); break;
+            case BOSS:    drawStar(canvas, cx, cy, r * 1.25f, r, 10, System.currentTimeMillis() / 2000f, paint); break;
+            default:      canvas.drawCircle(cx, cy, r, paint);
+        }
+    }
+
+    private void drawPolygon(Canvas canvas, float cx, float cy, float r, int sides, float rotation, Paint paint) {
+        shapePath.reset();
+        for (int i = 0; i < sides; i++) {
+            double angle = rotation + i * Math.PI * 2 / sides;
+            float px = cx + (float) Math.cos(angle) * r;
+            float py = cy + (float) Math.sin(angle) * r;
+            if (i == 0) shapePath.moveTo(px, py);
+            else        shapePath.lineTo(px, py);
+        }
+        shapePath.close();
+        canvas.drawPath(shapePath, paint);
+    }
+
+    /** Spiked outline alternating between two radii, used for the boss. */
+    private void drawStar(Canvas canvas, float cx, float cy, float outer, float inner,
+                          int points, float rotation, Paint paint) {
+        shapePath.reset();
+        for (int i = 0; i < points * 2; i++) {
+            double angle = rotation + i * Math.PI / points;
+            float r = (i % 2 == 0) ? outer : inner;
+            float px = cx + (float) Math.cos(angle) * r;
+            float py = cy + (float) Math.sin(angle) * r;
+            if (i == 0) shapePath.moveTo(px, py);
+            else        shapePath.lineTo(px, py);
+        }
+        shapePath.close();
+        canvas.drawPath(shapePath, paint);
+    }
+
+    private void drawEyes(Canvas canvas, float cx, float cy) {
+        float sideX = -faceY, sideY = faceX;
+        float eye = Math.max(3f, radius * 0.16f);
+        for (int s = -1; s <= 1; s += 2) {
+            float ex = cx + faceX * radius * 0.35f + sideX * radius * 0.32f * s;
+            float ey = cy + faceY * radius * 0.35f + sideY * radius * 0.32f * s;
+            canvas.drawCircle(ex, ey, eye, EYE_PAINT);
+            canvas.drawCircle(ex + faceX * eye * 0.4f, ey + faceY * eye * 0.4f, eye * 0.55f, PUPIL_PAINT);
+        }
+    }
+
     /* ============================================================
        COMBAT
        ============================================================ */
@@ -553,6 +857,7 @@ public class Enemy {
      */
     public void takeDamage(int dmg) {
         health -= dmg;
+        hitFlashUntil = System.currentTimeMillis() + 90;
         if (health <= 0) {
             health = 0;
             isDead = true;
@@ -561,10 +866,22 @@ public class Enemy {
     }
 
     public int getDamage() { return Math.max(1, (int)(weapon.damage * dmgMultiplier * 0.65f));}
-    public float getAttackRange() { return radius + weapon.range; }
-    public long getAttackCooldown() { return weapon.cooldown; }
     public Weapon getWeapon()   { return weapon; }
     public int getGoldDrop() { return goldDrop; }
+
+    /** Body colour at full opacity, used for death particles. */
+    public int getColor() { return bodyPaint.getColor() | 0xFF000000; }
+
+    /** XP the player earns for this kill. */
+    public int getXpReward() {
+        switch (type) {
+            case TANK:   return 10;
+            case BRUTE:  return 6;
+            case ARCHER: return 4;
+            case BOSS:   return 40;
+            default:     return 3;
+        }
+    }
 
     /* ============================================================
        HELPER
@@ -573,6 +890,19 @@ public class Enemy {
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setColor(color);
         p.setStyle(Paint.Style.FILL);
+        return p;
+    }
+
+    private static Paint solid(int color) {
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(color);
+        return p;
+    }
+
+    private static Paint stroke(int color, float width) {
+        Paint p = solid(color);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(width);
         return p;
     }
 }

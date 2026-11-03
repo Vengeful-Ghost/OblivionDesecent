@@ -54,6 +54,10 @@ public class GameDisplay extends View {
     private Paint bossFloorPaint;
     private Paint corridorFloorPaint;
     private Paint wallPaint;
+    private Paint tilePaint;
+    private Paint wallShadowPaint;
+
+    private GameEffects effects;
 
     // Minimap
     private Paint minimapBgPaint;
@@ -146,6 +150,15 @@ public class GameDisplay extends View {
         wallPaint.setStrokeWidth(10f);
         wallPaint.setStrokeCap(Paint.Cap.SQUARE);
 
+        tilePaint = new Paint();
+        tilePaint.setColor(Color.argb(18, 255, 255, 255));
+        tilePaint.setStrokeWidth(2f);
+
+        wallShadowPaint = new Paint();
+        wallShadowPaint.setColor(Color.argb(90, 0, 0, 0));
+        wallShadowPaint.setStyle(Paint.Style.STROKE);
+        wallShadowPaint.setStrokeWidth(24f);
+
         minimapBgPaint = new Paint();
         minimapBgPaint.setColor(Color.argb(170, 0, 0, 0));
         minimapBgPaint.setStyle(Paint.Style.FILL);
@@ -205,6 +218,10 @@ public class GameDisplay extends View {
 
     public void setInShopRoom(boolean inShopRoom) {
         this.inShopRoom = inShopRoom;
+    }
+
+    public void setEffects(GameEffects effects) {
+        this.effects = effects;
     }
 
     @Override
@@ -286,6 +303,8 @@ public class GameDisplay extends View {
         // 3. Draw Player
         player.draw(canvas, camera);
 
+        if (effects != null) effects.draw(canvas, camera);
+
         // 4. Minimap HUD overlay (always on top, hidden in shop)
         if (!inShopRoom) {
             drawMinimap(canvas);
@@ -324,15 +343,22 @@ public class GameDisplay extends View {
 
         // Corridors drawn first so room floors paint over any seam
         for (Corridor c : floorLayout.corridors) {
-            canvas.drawRect(c.x - offX, c.y - offY,
-                    c.x + c.width - offX, c.y + c.height - offY,
-                    corridorFloorPaint);
+            float left = c.x - offX;
+            float top  = c.y - offY;
+            canvas.drawRect(left, top, left + c.width, top + c.height, corridorFloorPaint);
+            drawTiles(canvas, left, top, left + c.width, top + c.height);
         }
 
         for (Room r : floorLayout.rooms) {
-            canvas.drawRect(r.x - offX, r.y - offY,
-                    r.x + r.width - offX, r.y + r.height - offY,
-                    roomPaintFor(r));
+            float left   = r.x - offX;
+            float top    = r.y - offY;
+            float right  = left + r.width;
+            float bottom = top + r.height;
+            if (right < 0 || bottom < 0 || left > getWidth() || top > getHeight()) continue;
+            canvas.drawRect(left, top, right, bottom, roomPaintFor(r));
+            drawTiles(canvas, left, top, right, bottom);
+            // Darker band along the walls gives the room some depth
+            canvas.drawRect(left + 12f, top + 12f, right - 12f, bottom - 12f, wallShadowPaint);
             drawRoomWalls(canvas, r, offX, offY);
         }
 
@@ -350,6 +376,25 @@ public class GameDisplay extends View {
                 canvas.drawLine(left,  top, left,  bottom, wallPaint);
                 canvas.drawLine(right, top, right, bottom, wallPaint);
             }
+        }
+    }
+
+    /** Faint stone-tile grid, drawn only over the visible part of the area. */
+    private void drawTiles(Canvas canvas, float left, float top, float right, float bottom) {
+        float visibleLeft   = Math.max(left, 0f);
+        float visibleRight  = Math.min(right, getWidth());
+        float visibleTop    = Math.max(top, 0f);
+        float visibleBottom = Math.min(bottom, getHeight());
+        if (visibleLeft >= visibleRight || visibleTop >= visibleBottom) return;
+
+        float tile = Room.TILE / 2f;
+        for (float lx = left + tile; lx < right; lx += tile) {
+            if (lx > visibleLeft && lx < visibleRight)
+                canvas.drawLine(lx, visibleTop, lx, visibleBottom, tilePaint);
+        }
+        for (float ly = top + tile; ly < bottom; ly += tile) {
+            if (ly > visibleTop && ly < visibleBottom)
+                canvas.drawLine(visibleLeft, ly, visibleRight, ly, tilePaint);
         }
     }
 

@@ -53,6 +53,9 @@ public class GameActivity extends AppCompatActivity {
     private MaterialButton menuBtn;
     private MaterialButton btnDash;
     private AimJoystickView aimJoystick;
+    private MaterialButton btnPotion;
+    private TextView txtPotionCount;
+    private TextView txtLevel;
 
     /* ============================================================
        GAME ENGINE OBJECTS
@@ -63,6 +66,8 @@ public class GameActivity extends AppCompatActivity {
 
     private List<Weapon> weapons = new ArrayList<>();
     private List<Projectile> projectiles = Collections.synchronizedList(new ArrayList<>());
+    private final GameEffects effects = new GameEffects();
+    private static final int HOSTILE_SHOT_COLOR = Color.rgb(255, 110, 70);
 
     /* ============================================================
        GAME STATE
@@ -70,13 +75,16 @@ public class GameActivity extends AppCompatActivity {
     private boolean layoutReady = false;
     private int screenWidth = 0;
     private int screenHeight = 0;
-    private boolean isGamePaused = false;
-    private boolean threadsRunning = true;
+    private volatile boolean isGamePaused = false;
+    private volatile boolean threadsRunning = true;
 
     private boolean showMenuOnResume = false; // re-open menu after returning from Settings
 
     // Player Stats
     private int playerHealth = 100;
+    private int maxHealth = 100;
+    private int playerLevel = 1;
+    private int playerXp = 0;
     private int playerArmor = 100;
     private int oldHealth = 0;
     private int oldArmor = 0;
@@ -87,7 +95,9 @@ public class GameActivity extends AppCompatActivity {
     private long lastAttackTime = 0;
     private final long ATTACK_DURATION = 150;
     private final long ATTACK_COOLDOWN = 400;
-    private long lastPlayerHitTime = 0;
+    // No damage is taken until this time: set by dashing and briefly after every hit
+    private long invulnerableUntil = 0;
+    private static final long HIT_INVULNERABILITY = 300;
 
     private float checkpointX = 0f;
     private float checkpointY = 0f;
@@ -226,6 +236,10 @@ public class GameActivity extends AppCompatActivity {
         btnDash = findViewById(R.id.btn_dash);
         txtGold = findViewById(R.id.txt_gold);
         dashCooldownView = findViewById(R.id.dash_cooldown_view);
+        btnPotion = findViewById(R.id.btn_potion);
+        txtPotionCount = findViewById(R.id.txt_potion_count);
+        txtLevel = findViewById(R.id.txt_level);
+        gameDisplay.setEffects(effects);
 
         player = new Player();
         player.equipWeapon(weapons.get(0));
@@ -297,6 +311,7 @@ public class GameActivity extends AppCompatActivity {
 
         btnAttack.setOnClickListener(v -> attack());
         btnDash.setOnClickListener(v -> dash());
+        btnPotion.setOnClickListener(v -> quickHeal());
         menuBtn.setOnClickListener(v -> showMenuDialog());
         btnInventory.setOnClickListener(v -> showInventoryDialog());
 
@@ -324,6 +339,8 @@ public class GameActivity extends AppCompatActivity {
         playerArmorBar.setProgress(0);
 
         refreshAttackUI();
+        updateLevelHUD();
+        updatePotionButton();
 
         startLogicThread();
         startRenderThread();
@@ -333,120 +350,141 @@ public class GameActivity extends AppCompatActivity {
        GAME LOOP (LOGIC)
        ============================================================ */
     /**
-     * Starts the logic thread that runs at ~60 fps.
-     * Updates the player, enemies, projectiles, hits, coins, portals and camera.
+     * Starts the logic thread. It runs a fixed 60 ticks per second on every phone: when a frame
+     * runs late it catches up with extra ticks instead of slowing the whole game down.
      */
     private void startLogicThread() {
         new Thread(() -> {
+            final long tickNanos = 16_666_667L;
+            long previous = System.nanoTime();
+            long backlog = 0;
             while (threadsRunning) {
-                long now = System.currentTimeMillis();
+                long current = System.nanoTime();
+                backlog += current - previous;
+                previous = current;
 
                 // Boss death detection runs even while paused to avoid missing kills
                 if (layoutReady) checkBossDeathDetection();
 
-                if (!isGamePaused && layoutReady) {
-
-                    // --- 1. Update Player ---
-                    float prevPlayerX = player.x, prevPlayerY = player.y;
-                    if (isDashing) {
-                        player.update(dashDX * (DASH_POWER / player.speed), dashDY * (DASH_POWER / player.speed));
-                        if (now - dashStartTime > DASH_DURATION) {
-                            isDashing = false;
-                        }
-                    } else {
-                        player.update(joystick.getDX(), joystick.getDY());
-                    }
-                    if (currentLayout != null && !inShopRoom) {
-                        float[] resolved = currentLayout.resolveWallCollision(
-                                prevPlayerX, prevPlayerY, player.x, player.y, player.radius);
-                        player.x = resolved[0];
-                        player.y = resolved[1];
-                    }
-
-                    // Update dash cooldown arc
-                    long timeSinceDash = now - lastDashTime;
-                    float dashProgress = Math.min(1f, (float) timeSinceDash / DASH_COOLDOWN);
-                    runOnUiThread(() -> {
-                        if (dashCooldownView != null)
-                            dashCooldownView.setProgress(dashProgress);
-                    });
-
-                    // Record kite behavior — is player moving away from nearest enemy?
-                    if (joystick.getDX() != 0 || joystick.getDY() != 0) {
-                        Enemy nearest = null;
-                        float nearestDist = Float.MAX_VALUE;
-                        synchronized (enemies) {
-                            for (Enemy e : enemies) {
-                                if (e.isDead) continue;
-                                float d = getDistance(player.x, player.y, e.x, e.y);
-                                if (d < nearestDist) { nearestDist = d; nearest = e; }
-                            }
-                        }
-                        if (nearest != null && nearestDist < 500f) {
-                            float toDX = nearest.x - player.x;
-                            float toDY = nearest.y - player.y;
-                            float joyDot = joystick.getDX() * toDX + joystick.getDY() * toDY;
-                            behaviorTracker.recordKiteSample(joyDot < 0); // negative = moving away
-                        }
-                    }
-                    
-                    player.setDebugAttack(isAttacking);
-                    player.setAimAngle((float) Math.toDegrees(Math.atan2(aimDY, aimDX)));
-
-                    // Mark current room as explored for minimap
-                    if (currentLayout != null && !inShopRoom) {
-                        Room currentRoom = currentLayout.getRoomAt(player.x, player.y);
-                        if (currentRoom != null) currentRoom.explored = true;
-                    }
-
-                    // --- 2. Update Camera ---
-                    camera.update(player.getX(), player.getY());
-
-                    // --- 3. Update Enemies ---
-                    synchronized (enemies) {
-                        for (Enemy e : enemies) {
-                            if (!e.isAwake) {
-                                e.tryWake(player.getX(), player.getY());
-                                continue;
-                            }
-                            float prevEX = e.x, prevEY = e.y;
-                            e.update(player.getX(), player.getY());
-                            if (currentLayout != null && !inShopRoom) {
-                                float[] resolved = currentLayout.resolveWallCollision(
-                                        prevEX, prevEY, e.x, e.y, e.radius);
-                                e.x = resolved[0];
-                                e.y = resolved[1];
-                            }
-                        }
-                    }
-
-                    resolveCollisions();
-
-                    // --- 5. Collision: Attack ---
-                    if (isAttacking) {
-                        checkAttackCollisions();
-                        if (now - attackStartTime > ATTACK_DURATION) isAttacking = false;
-                    }
-
-                    updateProjectiles();
-                    checkProjectileCollisions();
-
-                    // --- 6. Collision: Player Hit ---
-                    checkPlayerHit(now);
-
-                    checkGoldCollection();
-                    checkChestInteraction();
-
-                    cleanupDeadEnemies();
-                    checkPortalCollision();
-                    checkShopPortalCollision();
-                    checkShopRoomInteractions();
-                    checkBossStatus();
+                if (isGamePaused || !layoutReady) backlog = 0;
+                for (int i = 0; i < 5 && backlog >= tickNanos && !isGamePaused; i++) {
+                    tick(System.currentTimeMillis());
+                    backlog -= tickNanos;
                 }
+                // After a long stall (e.g. a dialog or the app in the background) skip ahead instead of fast-forwarding
+                if (backlog >= tickNanos) backlog = 0;
 
-                try { Thread.sleep(16); } catch (InterruptedException ignored) {}
+                long sleepMs = Math.max(1L, (tickNanos - backlog) / 1_000_000L);
+                try { Thread.sleep(sleepMs); } catch (InterruptedException ignored) {}
             }
         }).start();
+    }
+
+    /**
+     * One logic step: updates the player, enemies, projectiles, hits, coins, portals and camera.
+     * @param now current time in milliseconds
+     */
+    private void tick(long now) {
+        // --- 1. Update Player ---
+        float prevPlayerX = player.x, prevPlayerY = player.y;
+        if (isDashing) {
+            player.update(dashDX * (DASH_POWER / player.speed), dashDY * (DASH_POWER / player.speed));
+            effects.trail(player.x, player.y, Color.argb(160, 90, 140, 255));
+            if (now - dashStartTime > DASH_DURATION) {
+                isDashing = false;
+            }
+        } else {
+            player.update(joystick.getDX(), joystick.getDY());
+        }
+        if (currentLayout != null && !inShopRoom) {
+            float[] resolved = currentLayout.resolveWallCollision(
+                    prevPlayerX, prevPlayerY, player.x, player.y, player.radius);
+            player.x = resolved[0];
+            player.y = resolved[1];
+        }
+        player.setInvulnerable(now < invulnerableUntil);
+
+        // Update dash cooldown arc
+        long timeSinceDash = now - lastDashTime;
+        float dashProgress = Math.min(1f, (float) timeSinceDash / DASH_COOLDOWN);
+        runOnUiThread(() -> {
+            if (dashCooldownView != null)
+                dashCooldownView.setProgress(dashProgress);
+        });
+
+        // Record kite behavior — is player moving away from nearest enemy?
+        if (joystick.getDX() != 0 || joystick.getDY() != 0) {
+            Enemy nearest = null;
+            float nearestDist = Float.MAX_VALUE;
+            synchronized (enemies) {
+                for (Enemy e : enemies) {
+                    if (e.isDead) continue;
+                    float d = getDistance(player.x, player.y, e.x, e.y);
+                    if (d < nearestDist) { nearestDist = d; nearest = e; }
+                }
+            }
+            if (nearest != null && nearestDist < 500f) {
+                float toDX = nearest.x - player.x;
+                float toDY = nearest.y - player.y;
+                float joyDot = joystick.getDX() * toDX + joystick.getDY() * toDY;
+                behaviorTracker.recordKiteSample(joyDot < 0); // negative = moving away
+            }
+        }
+
+        player.setDebugAttack(isAttacking);
+        player.setAimAngle((float) Math.toDegrees(Math.atan2(aimDY, aimDX)));
+
+        // Mark current room as explored for minimap
+        if (currentLayout != null && !inShopRoom) {
+            Room currentRoom = currentLayout.getRoomAt(player.x, player.y);
+            if (currentRoom != null) currentRoom.explored = true;
+        }
+
+        // --- 2. Update Camera ---
+        camera.update(player.getX(), player.getY());
+
+        // --- 3. Update Enemies ---
+        synchronized (enemies) {
+            for (Enemy e : enemies) {
+                if (!e.isAwake) {
+                    e.tryWake(player.getX(), player.getY());
+                    continue;
+                }
+                float prevEX = e.x, prevEY = e.y;
+                e.update(player.getX(), player.getY(), player.radius);
+                if (currentLayout != null && !inShopRoom) {
+                    float[] resolved = currentLayout.resolveWallCollision(
+                            prevEX, prevEY, e.x, e.y, e.radius);
+                    e.x = resolved[0];
+                    e.y = resolved[1];
+                }
+            }
+        }
+
+        resolveCollisions();
+
+        // --- 4. Enemy strikes and shots that finished their wind-up ---
+        resolveEnemyAttacks(now);
+
+        // --- 5. Collision: Attack ---
+        if (isAttacking) {
+            checkAttackCollisions();
+            if (now - attackStartTime > ATTACK_DURATION) isAttacking = false;
+        }
+
+        updateProjectiles();
+        checkProjectileCollisions();
+
+        checkGoldCollection();
+        checkChestInteraction();
+
+        cleanupDeadEnemies();
+        checkPortalCollision();
+        checkShopPortalCollision();
+        checkShopRoomInteractions();
+        checkBossStatus();
+
+        effects.update();
     }
 
     /* ============================================================
@@ -496,6 +534,7 @@ public class GameActivity extends AppCompatActivity {
                         enemy.applyTemplate(template);
                     }
                     enemy.setBehaviorTracker(behaviorTracker);
+                    enemy.setLayout(layout);
                     // isAwake = false — enemy waits for player to enter trigger radius
                     enemies.add(enemy);
                 }
@@ -506,13 +545,14 @@ public class GameActivity extends AppCompatActivity {
 
     /**
      * Picks a random enemy type appropriate for the current floor.
-     * Early floors only introduce GRUNT; later floors add TANK and BRUTE.
+     * Early floors only introduce GRUNT; archers join from floor 3, later floors add TANK and BRUTE.
      * @param floor the current floor number
      * @return the selected enemy type
      */
     private Enemy.Type pickEnemyType(int floor) {
         double roll = Math.random();
         if (floor <= 2) return Enemy.Type.GRUNT;
+        if (Math.random() < 0.15) return Enemy.Type.ARCHER;
         if (floor <= 5) return (roll < 0.65) ? Enemy.Type.GRUNT : Enemy.Type.SPEEDER;
         if (floor <= 9) {
             if (roll < 0.40) return Enemy.Type.GRUNT;
@@ -565,11 +605,13 @@ public class GameActivity extends AppCompatActivity {
                 if (angleDiff > 45f) continue;
                 behaviorTracker.recordAttack(dist);
 
-                e.takeDamage(w.damage);
+                int damage = Math.round(w.damage * damageMultiplier());
+                e.takeDamage(damage);
                 e.lastHitTime = now;
                 hitThisSwing.add(e);
                 soundManager.playHitEnemy();
-                statsManager.onDamageGiven(w.damage);
+                statsManager.onDamageGiven(damage);
+                showEnemyHit(e, damage);
                 float d = (float) Math.sqrt(dx * dx + dy * dy);
                 if (d > 0) {
                     e.knockbackVX = (dx / d) * w.knockback * 25f;
@@ -740,42 +782,74 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * Checks whether an enemy has hit the player and applies damage with cooldown.
-     * Triggers camera shake, vibration and HP/armour reduction.
+     * Resolves enemy attacks whose wind-up just finished: melee strikes and boss slams that reach
+     * the player, and shots, which become hostile projectiles.
      * @param now current time in milliseconds
      */
-    private void checkPlayerHit(long now) {
+    private void resolveEnemyAttacks(long now) {
         synchronized (enemies) {
             for (Enemy e : enemies) {
-                if (e.isDead) continue;
+                if (e.justEnraged) {
+                    e.justEnraged = false;
+                    effects.banner(e.x, e.y - e.radius - 60f, "ENRAGED", Color.rgb(255, 90, 40));
+                }
 
-                if (getDistance(player.x, player.y, e.x, e.y) < player.radius + e.getAttackRange()) {
-                    if (now - lastPlayerHitTime > e.getAttackCooldown()) {
-                        lastPlayerHitTime = now;
-                        damagePlayer(e.getDamage());
-                        if (camera != null) camera.startShake(250, 14f);
+                for (Enemy.Shot shot : e.pendingShots) {
+                    Projectile p = new Projectile(
+                            e.x + shot.dirX * e.radius, e.y + shot.dirY * e.radius,
+                            shot.dirX, shot.dirY, shot.speed, shot.range,
+                            shot.damage, 0.15f, shot.radius, HOSTILE_SHOT_COLOR);
+                    p.hostile = true;
+                    projectiles.add(p);
+                }
+                e.pendingShots.clear();
 
-                        runOnUiThread(this::vibrateOnHit);
-
-                        float dx = player.x - e.x;
-                        float dy = player.y - e.y;
-                        float dist = (float) Math.sqrt(dx * dx + dy * dy);
-                        if (dist > 0) {
-                            float oldPX = player.x;
-                            float oldPY = player.y;
-                            player.x += (dx / dist) * e.getWeapon().knockback * 80f;
-                            player.y += (dy / dist) * e.getWeapon().knockback * 80f;
-                            if (currentLayout != null && !inShopRoom) {
-                                float[] resolved = currentLayout.resolveWallCollision(
-                                        oldPX, oldPY, player.x, player.y, player.radius);
-                                player.x = resolved[0];
-                                player.y = resolved[1];
-                            }
-                        }
-                    }
+                if (e.strikeDamage > 0) {
+                    int damage = e.strikeDamage;
+                    e.strikeDamage = 0;
+                    if (e.type == Enemy.Type.BOSS && e.strikeReach > e.radius * 2f)
+                        effects.burst(e.x, e.y, Color.rgb(255, 120, 40), 40, 16f); // slam shockwave
+                    if (getDistance(player.x, player.y, e.x, e.y) <= player.radius + e.strikeReach)
+                        hitPlayer(damage, e.x, e.y, e.getWeapon().knockback, now);
                 }
             }
         }
+    }
+
+    /**
+     * Applies an enemy hit unless the player is invulnerable (dashing or just hit).
+     * Adds a damage number, screen shake, vibration and knockback away from the source.
+     */
+    private void hitPlayer(int damage, float fromX, float fromY, float knockback, long now) {
+        if (now < invulnerableUntil || playerHealth <= 0) return;
+        invulnerableUntil = now + HIT_INVULNERABILITY;
+        player.flashUntil = now + 150;
+        damagePlayer(damage);
+        effects.number(player.x, player.y - player.radius, "-" + damage, Color.rgb(255, 80, 80));
+        if (camera != null) camera.startShake(250, 14f);
+        runOnUiThread(this::vibrateOnHit);
+
+        float dx = player.x - fromX;
+        float dy = player.y - fromY;
+        float dist = (float) Math.sqrt(dx * dx + dy * dy);
+        if (dist > 0) {
+            float oldPX = player.x;
+            float oldPY = player.y;
+            player.x += (dx / dist) * knockback * 80f;
+            player.y += (dy / dist) * knockback * 80f;
+            if (currentLayout != null && !inShopRoom) {
+                float[] resolved = currentLayout.resolveWallCollision(
+                        oldPX, oldPY, player.x, player.y, player.radius);
+                player.x = resolved[0];
+                player.y = resolved[1];
+            }
+        }
+    }
+
+    /** Damage number and sparks when the player hits an enemy. */
+    private void showEnemyHit(Enemy e, int damage) {
+        effects.number(e.x, e.y - e.radius, String.valueOf(damage), Color.WHITE);
+        effects.burst(e.x, e.y, Color.rgb(255, 230, 150), 6, 6f);
     }
 
     /**
@@ -929,12 +1003,14 @@ public class GameActivity extends AppCompatActivity {
         playerArmor = Math.min(checkpointArmor, maxArmor);
 
         spawnEnemiesForLayout(currentLayout);
+        effects.clear();
+        invulnerableUntil = 0;
 
         runOnUiThread(() -> {
             playerHealthBar.setProgress(playerHealth);
             playerArmorBar.setMax(Math.max(1, maxArmor));
             playerArmorBar.setProgress(playerArmor);
-            if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / 100");
+            if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
             if (txtArmorValue  != null) txtArmorValue.setText(playerArmor + " / " + maxArmor);
             updateGoldHUD();
             updateFloorHUD();
@@ -954,9 +1030,12 @@ public class GameActivity extends AppCompatActivity {
                     e.counted = true;
                     floorManager.onEnemyKilled(player.x, player.y);
                     statsManager.onEnemyKilled();
+                    effects.burst(e.x, e.y, e.getColor(), e.type == Enemy.Type.BOSS ? 60 : 16, 9f);
                     if (!e.noGoldDrop)
                     {
                         spawnGoldCoins(e.x, e.y, e.getGoldDrop());
+                        int xp = e.getXpReward();
+                        runOnUiThread(() -> gainXp(xp));
                     }
                 }
             }
@@ -979,7 +1058,7 @@ public class GameActivity extends AppCompatActivity {
     private void animateHealthBar(int from, int to) {
         ObjectAnimator anim = ObjectAnimator.ofInt(playerHealthBar, "progress", from, to);
         anim.setDuration(100).start();
-        if (txtHealthValue != null) txtHealthValue.setText(to + " / 100");
+        if (txtHealthValue != null) txtHealthValue.setText(to + " / " + maxHealth);
     }
 
     /**
@@ -1027,6 +1106,8 @@ public class GameActivity extends AppCompatActivity {
         isDashing = true;
         dashStartTime = now;
         lastDashTime = now;
+        // A short invulnerable window lets the dash pass through attacks and shots
+        invulnerableUntil = Math.max(invulnerableUntil, now + DASH_DURATION + 80);
         soundManager.playDash();
         behaviorTracker.recordDash(dashDX, dashDY);
     }
@@ -1067,7 +1148,7 @@ public class GameActivity extends AppCompatActivity {
                 dirX, dirY,
                 18f,
                 w.range,
-                w.damage,
+                Math.round(w.damage * damageMultiplier()),
                 w.knockback,
                 w.name.equals("Staff") ? 18f : 12f,
                 w.color
@@ -1077,25 +1158,37 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * Updates all active projectiles and removes dead ones.
+     * Updates all active projectiles and removes dead ones. Walls stop shots from both sides.
      */
     private void updateProjectiles() {
         synchronized (projectiles) {
             for (Projectile p : projectiles) {
                 p.update();
+                if (currentLayout != null && !inShopRoom && !currentLayout.isFloor(p.x, p.y)) p.isDead = true;
             }
             projectiles.removeIf(p -> p.isDead);
         }
     }
 
     /**
-     * Checks projectile collisions with enemies.
+     * Checks projectile collisions: player shots against enemies, enemy shots against the player.
      * A projectile stops on its first hit and applies damage and knockback.
+     * Enemy shots pass through a dashing (invulnerable) player.
      */
     private void checkProjectileCollisions() {
+        long now = System.currentTimeMillis();
         synchronized (projectiles) {
             for (Projectile p : projectiles) {
                 if (p.isDead) continue;
+
+                if (p.hostile) {
+                    if (now >= invulnerableUntil
+                            && getDistance(p.x, p.y, player.x, player.y) < p.getRadius() + player.radius) {
+                        p.isDead = true;
+                        hitPlayer(p.damage, p.x, p.y, p.knockback, now);
+                    }
+                    continue;
+                }
 
                 synchronized (enemies) {
                     for (Enemy e : enemies) {
@@ -1107,6 +1200,7 @@ public class GameActivity extends AppCompatActivity {
                             soundManager.playHitEnemy();
                             behaviorTracker.recordAttack(getDistance(player.x, player.y, e.x, e.y));
                             statsManager.onDamageGiven(p.damage);
+                            showEnemyHit(e, p.damage);
 
                             float dx = e.x - p.x;
                             float dy = e.y - p.y;
@@ -1294,6 +1388,7 @@ public class GameActivity extends AppCompatActivity {
                     }
                 }
                 if (!found) consumableInventory.add(new ConsumableStack(item, 1));
+                updatePotionButton();
                 saveGameToFirestore();
                 break;
         }
@@ -1586,6 +1681,8 @@ public class GameActivity extends AppCompatActivity {
         synchronized (enemies)       { enemies.clear(); }
         synchronized (goldCoins)     { goldCoins.clear(); }
         synchronized (treasureChests){ treasureChests.clear(); }
+        synchronized (projectiles)   { projectiles.clear(); }
+        effects.clear();
 
         enemiesKilledOnPortalOpen = false;
         enteringShop = false;
@@ -1696,6 +1793,7 @@ public class GameActivity extends AppCompatActivity {
         activeBoss.isAwake = true; // Boss is always immediately active
         activeBoss.applyFloorScaling(floorManager.getCurrentFloor());
         activeBoss.setBehaviorTracker(behaviorTracker);
+        activeBoss.setLayout(currentLayout);
 
         // Apply boss AI name
         if (currentBossName != null) {
@@ -2152,6 +2250,7 @@ public class GameActivity extends AppCompatActivity {
         MaterialButton btnRemoveConsumable = detail.findViewById(R.id.btn_remove);
         btnRemoveConsumable.setOnClickListener(v -> {
             consumableInventory.remove(stack);
+            updatePotionButton();
             populateInventoryList(parentDialog);
             saveGameToFirestore();
             detail.dismiss();
@@ -2232,7 +2331,9 @@ public class GameActivity extends AppCompatActivity {
     private void useConsumable(ConsumableStack stack, Dialog inventoryDialog) {
         ShopItem item = stack.item;
         if ("heal".equals(item.effect)) {
-            int newHp = Math.min(100, playerHealth + item.effectValue);
+            int newHp = Math.min(maxHealth, playerHealth + item.effectValue);
+            effects.number(player.x, player.y - player.radius, "+" + (newHp - playerHealth),
+                    Color.rgb(90, 230, 110));
             runOnUiThread(() -> {
                 animateHealthBar(playerHealth, newHp);
                 playerHealth = newHp;
@@ -2249,6 +2350,7 @@ public class GameActivity extends AppCompatActivity {
         if (empty) consumableInventory.remove(stack);
 
         runOnUiThread(() -> {
+            updatePotionButton();
             if (inventoryDialog != null && inventoryDialog.isShowing()) {
                 populateInventoryList(inventoryDialog);
             }
@@ -2348,6 +2450,84 @@ public class GameActivity extends AppCompatActivity {
         runOnUiThread(() -> txtGold.setText("🪙 " + playerGold));
     }
 
+    /* ============================================================
+       PROGRESSION — XP and levels
+       ============================================================ */
+
+    /** XP needed to go from the current level to the next. */
+    private int xpForNextLevel() {
+        return 20 + (playerLevel - 1) * 15;
+    }
+
+    /** Player damage multiplier: +5% per level above 1. */
+    private float damageMultiplier() {
+        return 1f + (playerLevel - 1) * 0.05f;
+    }
+
+    /** Max HP for a level: 100 at level 1, +10 per level. */
+    private static int maxHealthForLevel(int level) {
+        return 100 + (level - 1) * 10;
+    }
+
+    /**
+     * Adds XP and handles level-ups (+10 max HP, +20 HP, +5% damage per level).
+     * Must run on the UI thread, like every other change to playerHealth.
+     */
+    private void gainXp(int amount) {
+        playerXp += amount;
+        boolean leveledUp = false;
+        while (playerXp >= xpForNextLevel()) {
+            playerXp -= xpForNextLevel();
+            playerLevel++;
+            leveledUp = true;
+        }
+        if (leveledUp) {
+            maxHealth = maxHealthForLevel(playerLevel);
+            playerHealth = Math.min(maxHealth, playerHealth + 20);
+            playerHealthBar.setMax(maxHealth);
+            animateHealthBar(playerHealthBar.getProgress(), playerHealth);
+            effects.banner(player.x, player.y - player.radius - 50f, "LEVEL " + playerLevel,
+                    Color.rgb(255, 215, 0));
+            effects.burst(player.x, player.y, Color.rgb(255, 215, 0), 30, 10f);
+        }
+        updateLevelHUD();
+    }
+
+    private void updateLevelHUD() {
+        if (txtLevel != null)
+            txtLevel.setText("Lv " + playerLevel + "  •  " + playerXp + "/" + xpForNextLevel() + " XP");
+    }
+
+    /* ============================================================
+       QUICK POTION
+       ============================================================ */
+
+    /** Drinks the healing potion that best fits the missing HP, without opening the inventory. */
+    private void quickHeal() {
+        if (isGamePaused || playerHealth <= 0 || playerHealth >= maxHealth) return;
+        int missing = maxHealth - playerHealth;
+        ConsumableStack best = null;
+        for (ConsumableStack stack : consumableInventory) {
+            if (!"heal".equals(stack.item.effect)) continue;
+            if (best == null) { best = stack; continue; }
+            // Prefer the smallest potion that still fills the gap, so big potions aren't wasted
+            boolean fits = stack.item.effectValue >= missing;
+            boolean bestFits = best.item.effectValue >= missing;
+            if (fits && (!bestFits || stack.item.effectValue < best.item.effectValue)) best = stack;
+            else if (!fits && !bestFits && stack.item.effectValue > best.item.effectValue) best = stack;
+        }
+        if (best != null) useConsumable(best, null);
+    }
+
+    private void updatePotionButton() {
+        int count = 0;
+        for (ConsumableStack stack : consumableInventory) {
+            if ("heal".equals(stack.item.effect)) count += stack.quantity;
+        }
+        txtPotionCount.setText(String.valueOf(count));
+        btnPotion.setAlpha(count > 0 ? 1f : 0.4f);
+    }
+
     /**
      * Spawns one GoldCoin per drop value at the enemy's death position.
      * Each coin's constructor randomises its own spread offset so they
@@ -2382,6 +2562,7 @@ public class GameActivity extends AppCompatActivity {
                     statsManager.onCoinCollected();
                     coin.collected = true;
                     soundManager.playCoinPickup();
+                    effects.burst(coin.x, coin.y, Color.rgb(255, 215, 0), 4, 3f);
                     playerGold++;
                     runOnUiThread(this::updateGoldHUD);
                 }
@@ -2617,6 +2798,8 @@ public class GameActivity extends AppCompatActivity {
         save.put("checkpointArmor",      checkpointArmor);
         save.put("checkpointGold",       checkpointGold);
         save.put("playtimeSeconds",      playtime);
+        save.put("level",                playerLevel);
+        save.put("xp",                   playerXp);
         dbManager.updateGameSave(gameId, save);
     }
 
@@ -2676,6 +2859,11 @@ public class GameActivity extends AppCompatActivity {
                         ? ((Number) data.get("armorValue")).intValue() : 0;
                 playerGold = data.get("gold") != null
                         ? ((Number) data.get("gold")).intValue() : 0;
+                playerLevel = data.get("level") != null
+                        ? ((Number) data.get("level")).intValue() : 1;
+                playerXp = data.get("xp") != null
+                        ? ((Number) data.get("xp")).intValue() : 0;
+                maxHealth = maxHealthForLevel(playerLevel);
 
                 // Restore checkpoint
                 checkpointFloor = data.get("checkpointFloor") != null
@@ -2702,14 +2890,16 @@ public class GameActivity extends AppCompatActivity {
                 // Armor max isn't known yet (armor pieces load async), so temporarily
                 // set the bar max to the saved armor value so the bar renders correctly
                 // until recalculateMaxArmor() fires once the armor docs arrive.
+                playerHealthBar.setMax(maxHealth);
                 playerHealthBar.setProgress(playerHealth);
                 maxArmor = playerArmor; // temporary; recalculateMaxArmor() will correct this
                 playerArmorBar.setMax(Math.max(1, maxArmor));
                 playerArmorBar.setProgress(playerArmor);
-                if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / 100");
+                if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
                 if (txtArmorValue  != null) txtArmorValue.setText(playerArmor + " / " + maxArmor);
                 updateFloorHUD();
                 updateGoldHUD();
+                updateLevelHUD();
 
                 // Restore inventory weapon IDs and reconstruct Weapon objects
                 if (data.containsKey("inventoryWeaponIds")) {
@@ -2773,6 +2963,7 @@ public class GameActivity extends AppCompatActivity {
                                     ? ((Number) m.get("quantity")).intValue() : 1;
                             consumableInventory.add(new ConsumableStack(si, qty));
                         }
+                        updatePotionButton();
                     }
                 }
 

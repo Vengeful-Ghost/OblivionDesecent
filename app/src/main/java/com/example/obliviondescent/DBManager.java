@@ -237,6 +237,8 @@ public class DBManager {
         save.put("currentFloor",       1);
         save.put("health",             100);
         save.put("armorValue",         0);     // Current numeric armor HP
+        save.put("level",              1);     // max HP = 100 + 10 per level above 1
+        save.put("xp",                 0);
 
         // Equipped items — null means default (Fists / no armor)
         save.put("equippedWeaponId",   null);

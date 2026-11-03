@@ -192,6 +192,19 @@
                 android:shadowDy="1"
                 android:shadowRadius="2"/>
 
+            <TextView
+                android:id="@+id/txt_level"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Lv 1  •  0/20 XP"
+                android:textColor="@color/gold_glow"
+                android:textSize="11sp"
+                android:fontFamily="serif"
+                android:shadowColor="@color/ink_shadow"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="2"/>
+
         </LinearLayout>
 
 
@@ -216,6 +229,45 @@
         android:layout_alignParentEnd="true"
         android:layout_marginBottom="40dp"
         android:layout_marginEnd="40dp">
+
+        <!-- Quick-heal potion with a count badge -->
+        <FrameLayout
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="20dp"
+            android:layout_marginBottom="16dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_potion"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:backgroundTint="@null"
+                android:background="@drawable/icon_btn_circle"
+                android:text="♥"
+                android:textSize="22sp"
+                android:textColor="@color/crimson_glow"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                app:strokeWidth="0dp"/>
+
+            <TextView
+                android:id="@+id/txt_potion_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end"
+                android:minWidth="20dp"
+                android:gravity="center"
+                android:paddingHorizontal="4dp"
+                android:background="@drawable/hud_panel"
+                android:text="0"
+                android:textColor="@color/bone_white"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:translationZ="10dp"/>
+
+        </FrameLayout>
 
         <!-- Dash button wrapped in FrameLayout for cooldown arc overlay -->
         <FrameLayout
