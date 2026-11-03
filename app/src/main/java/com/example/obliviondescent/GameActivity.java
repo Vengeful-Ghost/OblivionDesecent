@@ -157,6 +157,7 @@ public class GameActivity extends AppCompatActivity {
 
     private java.util.EnumMap<Armor.Slot, Armor> equippedArmor = new java.util.EnumMap<>(Armor.Slot.class);
     private java.util.Map<Armor, String> armorFirestoreIds = new java.util.HashMap<>();
+    private java.util.Map<Weapon, String> weaponFirestoreIds = new java.util.HashMap<>();
     private int maxArmor = 0;
     private List<ConsumableStack> consumableInventory = new ArrayList<>();
     private List<Armor> inventoryArmors = new ArrayList<>();
@@ -170,6 +171,10 @@ public class GameActivity extends AppCompatActivity {
 
     // Which range is currently in-flight (being fetched)
     private int batchInFlight = -1;
+    private int batchFailures = 0;
+
+    // Firestore reads still in flight while restoring a save; saving before they finish would drop gear
+    private int pendingLoads = 0;
 
     // Current boss identity
     private String currentBossName  = null;
@@ -486,7 +491,7 @@ public class GameActivity extends AppCompatActivity {
                     Enemy enemy = new Enemy(spawnX, spawnY, type);
                     enemy.applyFloorScaling(floor);
 
-                    if (!pool.isEmpty() && floor > 1) {
+                    if (!pool.isEmpty()) {
                         EnemyTemplate template = pool.get((int)(Math.random() * pool.size()));
                         enemy.applyTemplate(template);
                     }
@@ -697,16 +702,20 @@ public class GameActivity extends AppCompatActivity {
                 BatchGenerator.saveRawBatch(GameActivity.this, rangeStart, jsonText);
                 batchCache.put(rangeStart, result);
                 batchInFlight = -1;
+                batchFailures = 0;
                 Log.d("Batch", "=== Cached + saved batch for floors " + rangeStart + "-" + rangeEnd + " ===");
                 runOnUiThread(() -> applyBatchToCurrentFloorIfReady(rangeStart));
             }
 
             @Override
             public void onFailure(String error) {
-                Log.e("Batch", "=== Batch failed: " + error + " — retrying in 3s ===");
                 batchInFlight = -1;
-                new android.os.Handler().postDelayed(
-                        () -> generateBatch(rangeStart, rangeEnd), 3000);
+                long delay = Math.min(60000L, 3000L << Math.min(batchFailures++, 5));
+                Log.e("Batch", "=== Batch failed: " + error + " — retrying in " + delay / 1000 + "s ===");
+                // Called on an OkHttp thread, which has no Looper of its own
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    if (threadsRunning) generateBatch(rangeStart, rangeEnd);
+                }, delay);
             }
         });
     }
@@ -827,6 +836,7 @@ public class GameActivity extends AppCompatActivity {
                 Armor broken = equippedArmor.remove(slot);
                 if (broken != null) {
                     inventoryArmors.remove(broken);
+                    inventoryArmorIds.remove(armorFirestoreIds.remove(broken));
                     recalculateMaxArmor();
                     showArmorBreakPopup(slot.name());
                 }
@@ -1247,7 +1257,10 @@ public class GameActivity extends AppCompatActivity {
                         item.rarity, item.color, item.knockback, item.isProjectile,
                         item.description,
                         weaponId -> {
-                            if (weaponId != null) inventoryWeaponIds.add(weaponId);
+                            if (weaponId != null) {
+                                inventoryWeaponIds.add(weaponId);
+                                weaponFirestoreIds.put(weapon, weaponId);
+                            }
                             saveGameToFirestore();
                         }
                 );
@@ -1840,6 +1853,7 @@ public class GameActivity extends AppCompatActivity {
         }
 
         btnMainMenu.setOnClickListener(v -> {
+            saveGameToFirestore();
             SoundManager.stopGameMusic();
             Intent intent = new Intent(GameActivity.this, MenuActivity.class);
             startActivity(intent);
@@ -1980,7 +1994,7 @@ public class GameActivity extends AppCompatActivity {
         nameView.setTextColor(rarityColor);
         subView.setText("WEAPON • " + weapon.rarity.name());
 
-        boolean isEquipped = player.getWeapon().name.equals(weapon.name);
+        boolean isEquipped = player.getWeapon() == weapon;
         equippedBadge.setVisibility(isEquipped ? View.VISIBLE : View.GONE);
 
         applyRarityBorder(row, rarityColor);
@@ -2000,8 +2014,7 @@ public class GameActivity extends AppCompatActivity {
         nameView.setTextColor(rarityColor);
         subView.setText(armor.slot.name() + " • " + armor.rarity.name());
 
-        Armor equipped = equippedArmor.get(armor.slot);
-        boolean isEquipped = equipped != null && equipped.name.equals(armor.name);
+        boolean isEquipped = equippedArmor.get(armor.slot) == armor;
         equippedBadge.setVisibility(isEquipped ? View.VISIBLE : View.GONE);
 
         applyRarityBorder(row, rarityColor);
@@ -2039,7 +2052,7 @@ public class GameActivity extends AppCompatActivity {
                 "", buildWeaponStats(weapon), weapon.color);
 
         MaterialButton btn = detail.findViewById(R.id.btn_action);
-        boolean isEquipped = player.getWeapon().name.equals(weapon.name);
+        boolean isEquipped = player.getWeapon() == weapon;
         btn.setText(isEquipped ? "Equipped" : "Equip");
         btn.setEnabled(!isEquipped);
         btn.setAlpha(isEquipped ? 0.4f : 1f);
@@ -2055,14 +2068,15 @@ public class GameActivity extends AppCompatActivity {
         });
 
         MaterialButton btnRemoveWeapon = detail.findViewById(R.id.btn_remove);
-        boolean isFists = weapon.name.equals("Fists");
+        boolean isFists = weapon == weapons.get(0);
         btnRemoveWeapon.setVisibility(isFists ? View.GONE : View.VISIBLE);
         btnRemoveWeapon.setOnClickListener(v -> {
-            if (player.getWeapon().name.equals(weapon.name)) {
+            if (player.getWeapon() == weapon) {
                 player.equipWeapon(weapons.get(0)); // Re-equip Fists
                 refreshAttackUI();
             }
             weapons.remove(weapon);
+            inventoryWeaponIds.remove(weaponFirestoreIds.remove(weapon));
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
             saveGameToFirestore();
@@ -2086,8 +2100,7 @@ public class GameActivity extends AppCompatActivity {
                 "", buildArmorStats(armor), rarityColor);
 
         MaterialButton btn = detail.findViewById(R.id.btn_action);
-        Armor currentlyEquipped = equippedArmor.get(armor.slot);
-        boolean isEquipped = currentlyEquipped != null && currentlyEquipped.name.equals(armor.name);
+        boolean isEquipped = equippedArmor.get(armor.slot) == armor;
         btn.setText(isEquipped ? "Equipped" : "Equip");
         btn.setEnabled(!isEquipped);
         btn.setAlpha(isEquipped ? 0.4f : 1f);
@@ -2100,12 +2113,12 @@ public class GameActivity extends AppCompatActivity {
         MaterialButton btnRemoveArmor = detail.findViewById(R.id.btn_remove);
         btnRemoveArmor.setOnClickListener(v -> {
             // Unequip if currently equipped
-            Armor currentlyEquippedArmor = equippedArmor.get(armor.slot);
-            if (currentlyEquippedArmor != null && currentlyEquippedArmor.name.equals(armor.name)) {
+            if (equippedArmor.get(armor.slot) == armor) {
                 equippedArmor.remove(armor.slot);
                 recalculateMaxArmor();
             }
             inventoryArmors.remove(armor);
+            inventoryArmorIds.remove(armorFirestoreIds.remove(armor));
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
             saveGameToFirestore();
@@ -2175,13 +2188,14 @@ public class GameActivity extends AppCompatActivity {
      * @param inventoryDialog the inventory dialog to update (may be null)
      */
     private void equipArmorPiece(Armor armor, Dialog inventoryDialog) {
-        Armor previous = equippedArmor.get(armor.slot);
-        int prevDef = previous != null ? previous.defense : 0;
+        // Only a never-worn piece adds its defense, so swapping gear back and forth can't refill armor
+        int bonus = armor.worn ? 0 : armor.defense;
+        armor.worn = true;
         equippedArmor.put(armor.slot, armor);
         // Inline max recalculation to avoid intermediate UI flash from recalculateMaxArmor()
         maxArmor = 0;
         for (Armor a : equippedArmor.values()) maxArmor += a.defense;
-        playerArmor = Math.max(0, Math.min(maxArmor, playerArmor + armor.defense - prevDef));
+        playerArmor = Math.min(maxArmor, playerArmor + bonus);
         runOnUiThread(() -> {
             playerArmorBar.setMax(Math.max(1, maxArmor));
             playerArmorBar.setProgress(playerArmor);
@@ -2529,12 +2543,14 @@ public class GameActivity extends AppCompatActivity {
 
     /**
      * Saves the full current game state to Firestore.
-     * Called on every floor transition and on death.
+     * Called on floor transitions, item changes, death and when leaving to the menu.
      */
     private void saveGameToFirestore() {
-        if (gameId == null || userId == null) return;
+        if (gameId == null || userId == null || pendingLoads > 0) return;
 
         long playtime = (System.currentTimeMillis() - gameStartTime) / 1000;
+        // A dead player resumes from the checkpoint, exactly like pressing Respawn
+        boolean dead = playerHealth <= 0;
 
         List<String> weaponNames = new ArrayList<>();
         for (Weapon w : weapons) {
@@ -2569,24 +2585,39 @@ public class GameActivity extends AppCompatActivity {
             }
         }
 
-        dbManager.updateGameSave(
-                gameId,
-                floorManager.getCurrentFloor(),
-                playerHealth,
-                playerArmor,
-                playerGold,
-                weaponNames,
-                null,
-                player.getWeapon().name,
-                headId, chestId, legsId, bootsId,
-                inventoryWeaponIds,
-                inventoryArmorIds,
-                consumableMaps,
-                checkpointFloor,
-                checkpointX,
-                checkpointY,
-                playtime
-        );
+        // Only worn pieces are stored; on load, presence in this map marks a piece as worn
+        Map<String, Object> armorDurability = new HashMap<>();
+        for (Armor a : inventoryArmors) {
+            String id = armorFirestoreIds.get(a);
+            if (a.worn && id != null) armorDurability.put(id, a.durability);
+        }
+
+        Map<String, Object> save = new HashMap<>();
+        save.put("currentFloor",         dead ? checkpointFloor  : floorManager.getCurrentFloor());
+        save.put("health",               dead ? checkpointHealth : playerHealth);
+        save.put("armorValue",           dead ? checkpointArmor  : playerArmor);
+        save.put("gold",                 dead ? checkpointGold   : playerGold);
+        save.put("killsThisFloor",       dead ? 0 : floorManager.getKillsThisFloor());
+        save.put("bossDefeated",         !dead && floorManager.isBossDefeated());
+        save.put("equippedWeaponId",     weaponFirestoreIds.get(player.getWeapon()));
+        save.put("equippedWeaponName",   player.getWeapon().name);
+        save.put("equippedHeadId",       headId);
+        save.put("equippedChestId",      chestId);
+        save.put("equippedLegsId",       legsId);
+        save.put("equippedBootsId",      bootsId);
+        save.put("inventoryWeaponIds",   inventoryWeaponIds);
+        save.put("inventoryWeaponNames", weaponNames);
+        save.put("inventoryArmorIds",    inventoryArmorIds);
+        save.put("armorDurability",      armorDurability);
+        save.put("items",                consumableMaps);
+        save.put("checkpointFloor",      checkpointFloor);
+        save.put("checkpointX",          checkpointX);
+        save.put("checkpointY",          checkpointY);
+        save.put("checkpointHealth",     checkpointHealth);
+        save.put("checkpointArmor",      checkpointArmor);
+        save.put("checkpointGold",       checkpointGold);
+        save.put("playtimeSeconds",      playtime);
+        dbManager.updateGameSave(gameId, save);
     }
 
     /**
@@ -2596,14 +2627,19 @@ public class GameActivity extends AppCompatActivity {
     private void loadGameFromFirestore() {
         if (gameId == null) return;
 
+        pendingLoads++;
         dbManager.loadGame(gameId, data -> {
             if (data == null) return;
 
             runOnUiThread(() -> {
+                pendingLoads--;
+
                 // Restore floor
                 int savedFloor = data.get("currentFloor") != null
                         ? ((Number) data.get("currentFloor")).intValue() : 1;
                 floorManager.setCurrentFloor(savedFloor);
+                int savedKills = data.get("killsThisFloor") != null
+                        ? ((Number) data.get("killsThisFloor")).intValue() : 0;
 
                 // Kick off a batch fetch for the loaded floor's range so that custom
                 // enemy templates are available. applyBatchToCurrentFloorIfReady() will
@@ -2622,7 +2658,7 @@ public class GameActivity extends AppCompatActivity {
                 currentLayout = FloorLayout.generate(
                         floorManager.getCurrentFloor(),
                         floorManager.isBossFloor(),
-                        floorManager.getKillsRequired());
+                        Math.max(0, floorManager.getKillsRequired() - savedKills));
                 gameDisplay.setFloorLayout(currentLayout);
                 currentLayout.entryRoom.explored = true;
                 if (currentLayout.exitRoom != null) {
@@ -2630,6 +2666,7 @@ public class GameActivity extends AppCompatActivity {
                             currentLayout.exitRoom.centerX(),
                             currentLayout.exitRoom.centerY());
                 }
+                floorManager.restoreProgress(savedKills, Boolean.TRUE.equals(data.get("bossDefeated")));
                 spawnEnemiesForLayout(currentLayout);
 
                 // Restore health / armor / gold
@@ -2647,6 +2684,15 @@ public class GameActivity extends AppCompatActivity {
                         ? ((Number) data.get("checkpointX")).floatValue() : 0f;
                 checkpointY = data.get("checkpointY") != null
                         ? ((Number) data.get("checkpointY")).floatValue() : 0f;
+                checkpointHealth = data.get("checkpointHealth") != null
+                        ? ((Number) data.get("checkpointHealth")).intValue() : playerHealth;
+                checkpointArmor = data.get("checkpointArmor") != null
+                        ? ((Number) data.get("checkpointArmor")).intValue() : playerArmor;
+                checkpointGold = data.get("checkpointGold") != null
+                        ? ((Number) data.get("checkpointGold")).intValue() : playerGold;
+
+                if (data.get("playtimeSeconds") != null)
+                    gameStartTime -= ((Number) data.get("playtimeSeconds")).longValue() * 1000L;
 
                 // Always spawn at entry room — layout is regenerated so saved coords are stale
                 player.x = currentLayout.entryRoom.centerX();
@@ -2673,46 +2719,18 @@ public class GameActivity extends AppCompatActivity {
                     if (ids != null && !ids.isEmpty()) {
                         inventoryWeaponIds = new ArrayList<>(ids);
 
-                        final int[] loadedCount = {0};
-                        final int total = ids.size();
-                        final String equippedName = (String) data.get("equippedWeaponName");
+                        final String equippedId = (String) data.get("equippedWeaponId");
 
                         for (String wid : ids) {
-                            dbManager.loadGeneratedWeapon(wid, weaponData -> {
-                                if (weaponData != null) {
-                                    Weapon w = StatsManager.weaponFromMap(weaponData);
-                                    if (w != null) {
-                                        runOnUiThread(() -> {
-                                            // Avoid duplicates if game is reloaded
-                                            boolean exists = false;
-                                            for (Weapon existing : weapons) {
-                                                if (existing.name.equals(w.name)) {
-                                                    exists = true;
-                                                    break;
-                                                }
-                                            }
-                                            if (!exists) weapons.add(w);
-                                        });
-                                    }
-                                }
-
-                                loadedCount[0]++;
-
-                                // After ALL weapons loaded, re-equip the last used one
-                                if (loadedCount[0] >= total) {
-                                    runOnUiThread(() -> {
-                                        if (equippedName != null) {
-                                            for (Weapon w : weapons) {
-                                                if (w.name.equals(equippedName)) {
-                                                    player.equipWeapon(w);
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        refreshAttackUI();
-                                    });
-                                }
-                            });
+                            pendingLoads++;
+                            dbManager.loadGeneratedWeapon(wid, weaponData -> runOnUiThread(() -> {
+                                pendingLoads--;
+                                Weapon w = StatsManager.weaponFromMap(weaponData);
+                                if (w == null) return;
+                                weapons.add(w);
+                                weaponFirestoreIds.put(w, wid);
+                                if (wid.equals(equippedId)) player.equipWeapon(w);
+                            }));
                         }
                     } else {
                         // No purchased weapons — just equip from default list (Fists)
@@ -2768,6 +2786,8 @@ public class GameActivity extends AppCompatActivity {
                         final String savedChestId = (String) data.get("equippedChestId");
                         final String savedLegsId  = (String) data.get("equippedLegsId");
                         final String savedBootsId = (String) data.get("equippedBootsId");
+                        final Map<String, Object> savedDurability =
+                                (Map<String, Object>) data.get("armorDurability");
 
                         // Count-based pattern: collect ALL pieces first, then call
                         // recalculateMaxArmor() exactly once after the last piece arrives.
@@ -2777,14 +2797,21 @@ public class GameActivity extends AppCompatActivity {
                         final int totalArmors = ids.size();
 
                         for (String aid : ids) {
+                            pendingLoads++;
                             dbManager.loadGeneratedArmor(aid, armorData -> {
                                 Armor a = (armorData != null)
                                         ? StatsManager.armorFromMap(aid, armorData)
                                         : null;
                                 runOnUiThread(() -> {
+                                    pendingLoads--;
                                     if (a != null) {
                                         inventoryArmors.add(a);
                                         armorFirestoreIds.put(a, aid);
+                                        Object durability = savedDurability != null ? savedDurability.get(aid) : null;
+                                        if (durability != null) {
+                                            a.durability = ((Number) durability).floatValue();
+                                            a.worn = true;
+                                        }
                                         if (aid.equals(savedHeadId))  equippedArmor.put(Armor.Slot.HEAD,  a);
                                         if (aid.equals(savedChestId)) equippedArmor.put(Armor.Slot.CHEST, a);
                                         if (aid.equals(savedLegsId))  equippedArmor.put(Armor.Slot.LEGS,  a);

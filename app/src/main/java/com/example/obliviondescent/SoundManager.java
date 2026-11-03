@@ -43,6 +43,8 @@ public class SoundManager {
     public static synchronized void registerMenuMusic(Context context) {
         menuRefCount++;
         if (menuPlayer == null) {
+            menuMusicVolume = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                    .getFloat("menu_music_volume", menuMusicVolume);
             menuPlayer = MediaPlayer.create(
                     context.getApplicationContext(), R.raw.menu_music);
             if (menuPlayer != null) {

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "675580820433",
-    "project_id": "oblivion-descent",
-    "storage_bucket": "oblivion-descent.firebasestorage.app"
+    "project_number": "1052462286815",
+    "project_id": "obliviondesecent",
+    "storage_bucket": "obliviondesecent.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:675580820433:android:031a63f2d253d6bca5fef0",
+        "mobilesdk_app_id": "1:1052462286815:android:dd6d5ebd2f863089b6a66a",
         "android_client_info": {
           "package_name": "com.example.obliviondescent"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBefo7NMOnaKbCfI93Epk6nTBIU-iQLxN8"
+          "current_key": "AIzaSyCg4IBl7gRUNN7dVFXSoXqeoHD7weSQYHE"
         }
       ],
       "services": {

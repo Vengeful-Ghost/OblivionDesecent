@@ -108,15 +108,17 @@ public class MainActivity extends AppCompatActivity {
         // Login button
         btnLogin.setOnClickListener(v -> {
             String user = Username.getText() != null ? Username.getText().toString().trim() : "";
-            String pass = Password.getText() != null ? Password.getText().toString().trim() : "";
+            String pass = Password.getText() != null ? Password.getText().toString() : "";
 
             if (user.isEmpty()) {
+                usernameLayout.setError("Enter a username");
                 return;
             } else {
                 usernameLayout.setError(null);
             }
 
             if (pass.length() < 8) {
+                passwordLayout.setError("Password must be at least 8 characters");
                 return;
             } else {
                 passwordLayout.setError(null);

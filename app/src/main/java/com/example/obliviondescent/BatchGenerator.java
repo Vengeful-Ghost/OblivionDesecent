@@ -50,7 +50,7 @@ public class BatchGenerator {
 
     /**
      * Sends a batch request to the Gemini API for the given floor range.
-     * Automatically retries after 3 seconds on a 503 error.
+     * Any failure (network, HTTP error, bad JSON) is reported to onFailure; the caller handles retries.
      * @param rangeStart first floor in the range
      * @param rangeEnd last floor in the range
      * @param listener result listener (onSuccess / onFailure)
@@ -88,15 +88,6 @@ public class BatchGenerator {
 
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
-                    if (response.code() == 503) {
-                        Log.d(TAG, "503 — retrying in 3s");
-                        response.close();
-                        new android.os.Handler(android.os.Looper.getMainLooper())
-                                .postDelayed(() ->
-                                        generateBatch(rangeStart, rangeEnd, listener), 3000);
-                        return;
-                    }
-
                     if (!response.isSuccessful()) {
                         String err = response.body() != null
                                 ? response.body().string() : "unknown";

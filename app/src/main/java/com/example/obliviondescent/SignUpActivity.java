@@ -172,7 +172,6 @@ public class SignUpActivity extends AppCompatActivity
 
                             Map<String, Object> userMap = new HashMap<>();
                             userMap.put("username", username);
-                            userMap.put("password", password);
                             userMap.put("user_id", userId);
 
                             db.collection("users")

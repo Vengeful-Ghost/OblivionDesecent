@@ -28,6 +28,8 @@ public class Armor {
     public Slot slot;
     public String description;  // AI flavor text (empty for default)
 
+    public boolean worn = false; // only a never-worn piece adds armor when equipped
+
     /**
      * Full constructor used when loading from Firestore or AI generation.
      * @param id Firestore document ID (null for default armour)
