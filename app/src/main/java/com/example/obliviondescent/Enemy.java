@@ -94,14 +94,17 @@ public class Enemy {
     // Attacks only land when the wind-up ends, so the player can see them coming and dodge
     private long windupDuration;
     private long lastAttackTime = System.currentTimeMillis();
-    private float aimX = 1f, aimY = 0f;   // locked direction for shots and boss charges
-    private float faceX = 1f, faceY = 0f; // where the eyes look
+    private float aimX = 1f, aimY = 0f;   // locked direction for strikes, shots and boss charges
+    private float faceX = 1f, faceY = 0f; // where the body points
 
     // Results GameActivity resolves (and resets) right after update()
     public int   strikeDamage = 0;
     public float strikeReach  = 0f;
+    public float strikeDirX = 1f, strikeDirY = 0f; // centre of the strike cone
+    public float strikeArc = 180f;                  // half-angle in degrees; 180 hits all around
     public final List<Shot> pendingShots = new ArrayList<>();
     public boolean justEnraged = false;
+    private static final float STRIKE_ARC = 60f;  // melee cone half-angle
 
     // Boss move set
     private enum BossMove { SLAM, CHARGE, BURST }
@@ -112,15 +115,23 @@ public class Enemy {
 
     private FloorLayout layout;
     private final Path shapePath = new Path();
+    private final RectF arcRect = new RectF();
 
-    private static final Paint EYE_PAINT      = solid(Color.WHITE);
-    private static final Paint PUPIL_PAINT    = solid(Color.rgb(20, 10, 10));
+    private static final Paint SHADOW_PAINT   = solid(Color.argb(90, 0, 0, 0));
     private static final Paint FLASH_PAINT    = solid(Color.argb(190, 255, 255, 255));
     private static final Paint OUTLINE_PAINT  = stroke(Color.argb(140, 0, 0, 0), 3f);
     private static final Paint TELEGRAPH_FILL = solid(Color.argb(70, 255, 40, 40));
     private static final Paint TELEGRAPH_RING = stroke(Color.argb(170, 255, 60, 60), 4f);
     private static final Paint AIM_PAINT      = stroke(Color.argb(150, 255, 90, 60), 4f);
     private static final Paint BOW_PAINT      = stroke(Color.rgb(200, 240, 230), 4f);
+    private static final Paint STUN_PAINT     = solid(Color.rgb(255, 220, 90));
+    private static final Paint ALERT_PAINT    = solid(Color.rgb(255, 70, 50));
+    static {
+        ALERT_PAINT.setTextSize(48f);
+        ALERT_PAINT.setTextAlign(Paint.Align.CENTER);
+        ALERT_PAINT.setFakeBoldText(true);
+        ALERT_PAINT.setShadowLayer(4f, 0f, 2f, Color.BLACK);
+    }
 
     // Behavior state machine
     private enum BehaviorState {
@@ -130,7 +141,8 @@ public class Enemy {
         BAIT,       // Deliberately backing off to bait a dash
         CHARGE,     // Full sprint ignoring normal logic
         STRAFE,     // Circling to cut off dodge direction
-        RUSH        // Boss charge attack
+        RUSH,       // Boss charge attack
+        STUNNED     // Wind-up interrupted by a heavy hit
     }
 
     private BehaviorState behaviorState = BehaviorState.APPROACH;
@@ -403,10 +415,11 @@ public class Enemy {
                         aimX = dx / dist;
                         aimY = dy / dist;
                     }
-                } else if (dist > 10f) {
-                    // Creep forward so standing still gets punished
-                    x += (dx / dist) * speed * 0.25f;
-                    y += (dy / dist) * speed * 0.25f;
+                } else {
+                    // Creep forward along the locked aim so standing still gets punished,
+                    // while stepping out of the cone dodges the strike
+                    x += aimX * speed * 0.25f;
+                    y += aimY * speed * 0.25f;
                 }
 
                 if (now - stateStartTime >= stateDuration) {
@@ -415,8 +428,7 @@ public class Enemy {
                         pendingShots.add(new Shot(aimX, aimY, 11f, weapon.range + 150f, 10f, getDamage()));
                         enterState(BehaviorState.APPROACH, 0);
                     } else {
-                        strikeDamage = getDamage();
-                        strikeReach = reach;
+                        strike(getDamage(), reach, STRIKE_ARC);
                         // Melee — retreat after attacking
                         float retreatDist = radius * 3f;
                         retreatTargetX = x - aimX * retreatDist;
@@ -479,6 +491,11 @@ public class Enemy {
                 break;
             }
 
+            case STUNNED: {
+                if (now - stateStartTime >= stateDuration) enterState(BehaviorState.APPROACH, 0);
+                break;
+            }
+
             case STRAFE: {
                 // Circle around the player to cut off a dodge direction
                 float[] dodgeDir = (behaviorTracker != null)
@@ -529,6 +546,26 @@ public class Enemy {
         behaviorState = newState;
         stateStartTime = System.currentTimeMillis();
         stateDuration  = duration;
+    }
+
+    /** Releases a strike along the locked aim; GameActivity checks whether the player is inside it. */
+    private void strike(int damage, float reach, float arc) {
+        strikeDamage = damage;
+        strikeReach = reach;
+        strikeArc = arc;
+        strikeDirX = aimX;
+        strikeDirY = aimY;
+    }
+
+    /**
+     * Interrupts a wind-up in progress so the attack never lands. Bosses can't be staggered.
+     * @return true if a wind-up was interrupted
+     */
+    public boolean stagger() {
+        if (type == Type.BOSS || behaviorState != BehaviorState.WINDUP) return false;
+        lastAttackTime = System.currentTimeMillis();
+        enterState(BehaviorState.STUNNED, 700);
+        return true;
     }
 
     private static long windupFor(Type type) {
@@ -594,8 +631,7 @@ public class Enemy {
 
                 lastAttackTime = now;
                 if (bossMove == BossMove.SLAM) {
-                    strikeDamage = (int) (getDamage() * 1.3f);
-                    strikeReach = BOSS_SLAM_RADIUS;
+                    strike((int) (getDamage() * 1.3f), BOSS_SLAM_RADIUS, 180f);
                     enterState(BehaviorState.APPROACH, 0);
                 } else if (bossMove == BossMove.BURST) {
                     int count = enraged ? 16 : 10;
@@ -619,8 +655,7 @@ public class Enemy {
                 y += aimY * 17f;
                 if (!rushHit && dist <= playerRadius + radius + 10f) {
                     rushHit = true;
-                    strikeDamage = getDamage();
-                    strikeReach = radius + 10f;
+                    strike(getDamage(), radius + 10f, 180f);
                 }
                 if (now - stateStartTime >= stateDuration) enterState(BehaviorState.APPROACH, 0);
                 break;
@@ -706,11 +741,20 @@ public class Enemy {
         drawTelegraph(canvas, drawX, drawY, now);
 
         // --- NORMAL DRAW ---
+        drawShape(canvas, drawX + 6f, drawY + 10f, radius, SHADOW_PAINT);
         bodyPaint.setAlpha(255); // Reset alpha in case it was changed
         drawShape(canvas, drawX, drawY, radius, bodyPaint);
         drawShape(canvas, drawX, drawY, radius, OUTLINE_PAINT);
         if (now < hitFlashUntil) drawShape(canvas, drawX, drawY, radius, FLASH_PAINT);
-        drawEyes(canvas, drawX, drawY);
+
+        // Stars circling the head while stunned
+        if (behaviorState == BehaviorState.STUNNED) {
+            for (int i = 0; i < 3; i++) {
+                double a = now / 150.0 + i * Math.PI * 2 / 3;
+                canvas.drawCircle(drawX + (float) Math.cos(a) * radius * 0.6f,
+                        drawY - radius * 1.1f + (float) Math.sin(a) * 8f, 6f, STUN_PAINT);
+            }
+        }
 
         if (type == Type.ARCHER) {
             float r = radius * 1.15f;
@@ -764,11 +808,19 @@ public class Enemy {
         labelPaint.setTextSize(22f);
     }
 
-    /** Shows where an attack in wind-up will land, filling up as the strike gets closer. */
+    /**
+     * Shows where an attack in wind-up will land, filling up as the strike gets closer,
+     * with a "!" over the attacker. Melee strikes are a cone, so stepping aside dodges them.
+     */
     private void drawTelegraph(Canvas canvas, float drawX, float drawY, long now) {
         if (behaviorState != BehaviorState.WINDUP) return;
         float progress = stateDuration > 0
                 ? Math.min(1f, (float) (now - stateStartTime) / stateDuration) : 1f;
+
+        // Alert marker; pulses faster as the strike gets closer
+        float pulse = 1f + 0.15f * (float) Math.sin(now / (60.0 - 30.0 * progress));
+        ALERT_PAINT.setTextSize(48f * pulse);
+        canvas.drawText("!", drawX, drawY - radius * 1.3f - 62f, ALERT_PAINT);
 
         if (type == Type.BOSS && bossMove == BossMove.CHARGE) {
             // The lane the boss is about to rush down (rush speed × ticks in 900 ms)
@@ -789,11 +841,23 @@ public class Enemy {
             canvas.drawLine(drawX, drawY, drawX + aimX * weapon.range, drawY + aimY * weapon.range, AIM_PAINT);
             return;
         }
-        float reach = type == Type.BOSS ? BOSS_SLAM_RADIUS : getStrikeReach();
+        if (type == Type.BOSS) {
+            // Slam hits all around
+            TELEGRAPH_RING.setAlpha(170);
+            canvas.drawCircle(drawX, drawY, BOSS_SLAM_RADIUS, TELEGRAPH_RING);
+            TELEGRAPH_FILL.setAlpha((int) (50 + 70 * progress));
+            canvas.drawCircle(drawX, drawY, radius + (BOSS_SLAM_RADIUS - radius) * progress, TELEGRAPH_FILL);
+            return;
+        }
+        float reach = getStrikeReach();
+        float start = (float) Math.toDegrees(Math.atan2(aimY, aimX)) - STRIKE_ARC;
+        arcRect.set(drawX - reach, drawY - reach, drawX + reach, drawY + reach);
         TELEGRAPH_RING.setAlpha(170);
-        canvas.drawCircle(drawX, drawY, reach, TELEGRAPH_RING);
+        canvas.drawArc(arcRect, start, STRIKE_ARC * 2f, true, TELEGRAPH_RING);
+        float fill = radius + (reach - radius) * progress;
+        arcRect.set(drawX - fill, drawY - fill, drawX + fill, drawY + fill);
         TELEGRAPH_FILL.setAlpha((int) (50 + 70 * progress));
-        canvas.drawCircle(drawX, drawY, radius + (reach - radius) * progress, TELEGRAPH_FILL);
+        canvas.drawArc(arcRect, start, STRIKE_ARC * 2f, true, TELEGRAPH_FILL);
     }
 
     private void drawShape(Canvas canvas, float cx, float cy, float r, Paint paint) {
@@ -835,17 +899,6 @@ public class Enemy {
         }
         shapePath.close();
         canvas.drawPath(shapePath, paint);
-    }
-
-    private void drawEyes(Canvas canvas, float cx, float cy) {
-        float sideX = -faceY, sideY = faceX;
-        float eye = Math.max(3f, radius * 0.16f);
-        for (int s = -1; s <= 1; s += 2) {
-            float ex = cx + faceX * radius * 0.35f + sideX * radius * 0.32f * s;
-            float ey = cy + faceY * radius * 0.35f + sideY * radius * 0.32f * s;
-            canvas.drawCircle(ex, ey, eye, EYE_PAINT);
-            canvas.drawCircle(ex + faceX * eye * 0.4f, ey + faceY * eye * 0.4f, eye * 0.55f, PUPIL_PAINT);
-        }
     }
 
     /* ============================================================

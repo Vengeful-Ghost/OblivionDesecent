@@ -19,6 +19,9 @@ import java.util.HashSet;
 import java.util.HashMap;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.button.MaterialButton;
 
@@ -98,9 +101,16 @@ public class GameActivity extends AppCompatActivity {
     // No damage is taken until this time: set by dashing and briefly after every hit
     private long invulnerableUntil = 0;
     private static final long HIT_INVULNERABILITY = 300;
+    // Melee combo: quick swings chain 1-2-3; the third is a wide, heavy finisher
+    private int comboStep = 0;
+    private float swingArc = 55f;
+    private static final long COMBO_WINDOW = 700;
+    private static final float CRIT_CHANCE = 0.12f;
+    // Spin: special attack around the player, queued from the UI and resolved on the logic thread
+    private static final long SPIN_COOLDOWN = 6000;
+    private long lastSpinTime = 0;
+    private volatile boolean spinQueued = false;
 
-    private float checkpointX = 0f;
-    private float checkpointY = 0f;
     private int   checkpointFloor  = 1;
     private int   checkpointHealth = 100;
     private int   checkpointArmor  = 0;
@@ -175,13 +185,14 @@ public class GameActivity extends AppCompatActivity {
 
     private BatchGenerator batchGenerator = new BatchGenerator();
 
-    // Cache: key = rangeStart (1, 6, 11 ...), value = result
+    // Cache: key = rangeStart (1, 6, 11 ...), value = result. Written from network threads.
     private final java.util.Map<Integer, BatchResult> batchCache =
-            new java.util.HashMap<>();
+            new java.util.concurrent.ConcurrentHashMap<>();
 
-    // Which range is currently in-flight (being fetched)
-    private int batchInFlight = -1;
-    private int batchFailures = 0;
+    // Ranges currently being fetched, and failed attempts per range
+    private final Set<Integer> batchesInFlight = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Map<Integer, Integer> batchFailures =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     // Firestore reads still in flight while restoring a save; saving before they finish would drop gear
     private int pendingLoads = 0;
@@ -203,6 +214,7 @@ public class GameActivity extends AppCompatActivity {
     private long lastKnownSwingTime = -1;
 
     private DashCooldownView dashCooldownView;
+    private DashCooldownView spinCooldownView;
 
     /**
      * Initialises the game activity: UI, camera, player, floor manager, AI batch,
@@ -214,6 +226,15 @@ public class GameActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_game);
         hideSystemUI();
+
+        // Keep the HUD clear of the camera cutout; the world itself still fills the screen
+        View hudLayer = findViewById(R.id.hud_layer);
+        ViewCompat.setOnApplyWindowInsetsListener(hudLayer, (v, insets) -> {
+            Insets cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+            v.setPadding(cutout.left, cutout.top, cutout.right, cutout.bottom);
+            gameDisplay.setSafeInsets(cutout.top, cutout.right);
+            return insets;
+        });
 
         soundManager = new SoundManager(this);
         // Restore saved volume
@@ -236,6 +257,7 @@ public class GameActivity extends AppCompatActivity {
         btnDash = findViewById(R.id.btn_dash);
         txtGold = findViewById(R.id.txt_gold);
         dashCooldownView = findViewById(R.id.dash_cooldown_view);
+        spinCooldownView = findViewById(R.id.spin_cooldown_view);
         btnPotion = findViewById(R.id.btn_potion);
         txtPotionCount = findViewById(R.id.txt_potion_count);
         txtLevel = findViewById(R.id.txt_level);
@@ -311,27 +333,15 @@ public class GameActivity extends AppCompatActivity {
 
         btnAttack.setOnClickListener(v -> attack());
         btnDash.setOnClickListener(v -> dash());
+        findViewById(R.id.btn_spin).setOnClickListener(v -> {
+            if (System.currentTimeMillis() - lastSpinTime >= SPIN_COOLDOWN) spinQueued = true;
+        });
         btnPotion.setOnClickListener(v -> quickHeal());
         menuBtn.setOnClickListener(v -> showMenuDialog());
         btnInventory.setOnClickListener(v -> showInventoryDialog());
 
+        // Held down = keep attacking; polled by the logic thread in tick()
         aimJoystick = findViewById(R.id.aim_joystick);
-        aimJoystick.setOnFireListener((dx, dy) -> {
-            aimDX = dx;
-            aimDY = dy;
-            if (player.getWeapon().isProjectile) {
-                fireProjectile(dx, dy);
-            } else {
-                // Melee — trigger attack in aimed direction
-                long now = System.currentTimeMillis();
-                if (now - lastAttackTime > player.getWeapon().cooldown) {
-                    isAttacking = true;
-                    soundManager.playSwingMelee();
-                    attackStartTime = now;
-                    lastAttackTime = now;
-                }
-            }
-        });
 
         playerArmor = 0;
         maxArmor = 0;
@@ -404,12 +414,14 @@ public class GameActivity extends AppCompatActivity {
         }
         player.setInvulnerable(now < invulnerableUntil);
 
-        // Update dash cooldown arc
-        long timeSinceDash = now - lastDashTime;
-        float dashProgress = Math.min(1f, (float) timeSinceDash / DASH_COOLDOWN);
+        // Update dash and spin cooldown arcs
+        float dashProgress = Math.min(1f, (float) (now - lastDashTime) / DASH_COOLDOWN);
+        float spinProgress = Math.min(1f, (float) (now - lastSpinTime) / SPIN_COOLDOWN);
         runOnUiThread(() -> {
             if (dashCooldownView != null)
                 dashCooldownView.setProgress(dashProgress);
+            if (spinCooldownView != null)
+                spinCooldownView.setProgress(spinProgress);
         });
 
         // Record kite behavior — is player moving away from nearest enemy?
@@ -431,8 +443,16 @@ public class GameActivity extends AppCompatActivity {
             }
         }
 
-        player.setDebugAttack(isAttacking);
-        player.setAimAngle((float) Math.toDegrees(Math.atan2(aimDY, aimDX)));
+        // Attack: hold the attack stick to keep swinging or shooting
+        if (aimJoystick.isHeld()) tryAttack(now);
+        if (spinQueued) {
+            spinQueued = false;
+            spinAttack(now);
+        }
+        // Face the attack for a moment, otherwise face where the player walks
+        player.setAimAngle(now - lastAttackTime < 400
+                ? (float) Math.toDegrees(Math.atan2(aimDY, aimDX))
+                : player.getFacingAngle());
 
         // Mark current room as explored for minimap
         if (currentLayout != null && !inShopRoom) {
@@ -601,21 +621,28 @@ public class GameActivity extends AppCompatActivity {
                 float dy = e.y - player.y;
                 float angleToEnemy = (float) Math.toDegrees(Math.atan2(dy, dx));
                 float angleDiff = Math.abs((angleToEnemy - aimAngle + 540) % 360 - 180);
+                // Big bodies are easier to clip with the edge of the swing
+                float allowance = (float) Math.toDegrees(Math.atan2(e.radius, Math.max(1f, dist)));
 
-                if (angleDiff > 45f) continue;
+                if (angleDiff > swingArc + allowance) continue;
                 behaviorTracker.recordAttack(dist);
 
-                int damage = Math.round(w.damage * damageMultiplier());
+                boolean finisher = comboStep == 3;
+                boolean crit = Math.random() < CRIT_CHANCE;
+                int damage = Math.round(w.damage * damageMultiplier()
+                        * (finisher ? 1.5f : 1f) * (crit ? 2f : 1f));
                 e.takeDamage(damage);
                 e.lastHitTime = now;
                 hitThisSwing.add(e);
                 soundManager.playHitEnemy();
                 statsManager.onDamageGiven(damage);
-                showEnemyHit(e, damage);
+                showEnemyHit(e, damage, crit);
+                if (finisher || crit) staggerEnemy(e);
                 float d = (float) Math.sqrt(dx * dx + dy * dy);
                 if (d > 0) {
-                    e.knockbackVX = (dx / d) * w.knockback * 25f;
-                    e.knockbackVY = (dy / d) * w.knockback * 25f;
+                    float push = w.knockback * 25f * (finisher ? 2f : 1f);
+                    e.knockbackVX = (dx / d) * push;
+                    e.knockbackVY = (dy / d) * push;
                 }
             }
         }
@@ -713,13 +740,19 @@ public class GameActivity extends AppCompatActivity {
         return 6 + ((floor - 6) / 5) * 5;
     }
 
+    /** Starts fetching the batch that covers the given floor, unless it is cached or already loading. */
+    private void ensureBatchFor(int floor) {
+        int rangeStart = getRangeStart(floor);
+        generateBatch(rangeStart, rangeStart + 4);
+    }
+
     /**
      * Fires a Gemini batch call for the given range.
-     * Caches result keyed by rangeStart.
+     * Caches result keyed by rangeStart. After 3 failed attempts the range uses offline content.
      */
     private void generateBatch(int rangeStart, int rangeEnd) {
         if (batchCache.containsKey(rangeStart)) return;
-        if (batchInFlight == rangeStart) return;
+        if (!batchesInFlight.add(rangeStart)) return;
 
         // Check local storage first — avoids a network call on load game
         String cachedJson = BatchGenerator.loadRawBatch(this, rangeStart);
@@ -727,6 +760,7 @@ public class GameActivity extends AppCompatActivity {
             try {
                 BatchResult result = batchGenerator.parseBatch(cachedJson, rangeStart, rangeEnd);
                 batchCache.put(rangeStart, result);
+                batchesInFlight.remove(rangeStart);
                 Log.d("Batch", "=== Loaded batch " + rangeStart + "-" + rangeEnd + " from local storage ===");
                 runOnUiThread(() -> applyBatchToCurrentFloorIfReady(rangeStart));
                 return;
@@ -735,7 +769,6 @@ public class GameActivity extends AppCompatActivity {
             }
         }
 
-        batchInFlight = rangeStart;
         Log.d("Batch", "=== Firing batch for floors " + rangeStart + "-" + rangeEnd + " ===");
 
         batchGenerator.generateBatch(rangeStart, rangeEnd, new BatchGenerator.OnBatchGeneratedListener() {
@@ -743,21 +776,31 @@ public class GameActivity extends AppCompatActivity {
             public void onSuccess(BatchResult result, String jsonText) {
                 BatchGenerator.saveRawBatch(GameActivity.this, rangeStart, jsonText);
                 batchCache.put(rangeStart, result);
-                batchInFlight = -1;
-                batchFailures = 0;
+                batchesInFlight.remove(rangeStart);
                 Log.d("Batch", "=== Cached + saved batch for floors " + rangeStart + "-" + rangeEnd + " ===");
                 runOnUiThread(() -> applyBatchToCurrentFloorIfReady(rangeStart));
             }
 
             @Override
             public void onFailure(String error) {
-                batchInFlight = -1;
-                long delay = Math.min(60000L, 3000L << Math.min(batchFailures++, 5));
-                Log.e("Batch", "=== Batch failed: " + error + " — retrying in " + delay / 1000 + "s ===");
+                int failures = batchFailures.merge(rangeStart, 1, Integer::sum);
+                Log.e("Batch", "=== Batch " + rangeStart + " failed (" + failures + "): " + error + " ===");
+                if (failures >= 3) {
+                    // Stop waiting on the AI: offline content keeps enemies, shops and bosses coming
+                    batchCache.put(rangeStart, BatchGenerator.fallbackBatch(rangeStart, rangeEnd));
+                    batchesInFlight.remove(rangeStart);
+                    runOnUiThread(() -> {
+                        Toast.makeText(GameActivity.this, "AI content unavailable (" + error
+                                + ") — using classic content", Toast.LENGTH_LONG).show();
+                        applyBatchToCurrentFloorIfReady(rangeStart);
+                    });
+                    return;
+                }
                 // Called on an OkHttp thread, which has no Looper of its own
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    batchesInFlight.remove(rangeStart);
                     if (threadsRunning) generateBatch(rangeStart, rangeEnd);
-                }, delay);
+                }, 3000L * failures);
             }
         });
     }
@@ -771,7 +814,7 @@ public class GameActivity extends AppCompatActivity {
     private void applyBatchToCurrentFloorIfReady(int rangeStart) {
         if (currentLayout == null) return;
         int cur = floorManager.getCurrentFloor();
-        if (cur < rangeStart) return;                        // not our floor yet
+        if (getRangeStart(cur) != rangeStart) return;        // not our floor's batch
         if (floorManager.getKillsThisFloor() > 0) return;   // combat already started
         List<EnemyTemplate> pool = getEnemyPoolForFloor(cur);
         if (pool.isEmpty()) return;                          // batch had nothing useful
@@ -809,11 +852,27 @@ public class GameActivity extends AppCompatActivity {
                     e.strikeDamage = 0;
                     if (e.type == Enemy.Type.BOSS && e.strikeReach > e.radius * 2f)
                         effects.burst(e.x, e.y, Color.rgb(255, 120, 40), 40, 16f); // slam shockwave
-                    if (getDistance(player.x, player.y, e.x, e.y) <= player.radius + e.strikeReach)
+                    else if (e.strikeArc < 180f)
+                        effects.slash(e.x, e.y, (float) Math.toDegrees(Math.atan2(e.strikeDirY, e.strikeDirX)),
+                                e.strikeReach, e.strikeArc, Color.rgb(255, 90, 60));
+                    if (isInStrike(e))
                         hitPlayer(damage, e.x, e.y, e.getWeapon().knockback, now);
                 }
             }
         }
+    }
+
+    /** True when the player stands inside an enemy's strike: within reach and inside its cone. */
+    private boolean isInStrike(Enemy e) {
+        float dx = player.x - e.x;
+        float dy = player.y - e.y;
+        float dist = (float) Math.sqrt(dx * dx + dy * dy);
+        if (dist > player.radius + e.strikeReach) return false;
+        if (e.strikeArc >= 180f || dist < e.radius + player.radius) return true;
+        float toPlayer = (float) Math.toDegrees(Math.atan2(dy, dx));
+        float facing = (float) Math.toDegrees(Math.atan2(e.strikeDirY, e.strikeDirX));
+        float angleDiff = Math.abs((toPlayer - facing + 540) % 360 - 180);
+        return angleDiff <= e.strikeArc + (float) Math.toDegrees(Math.atan2(player.radius, dist));
     }
 
     /**
@@ -846,10 +905,21 @@ public class GameActivity extends AppCompatActivity {
         }
     }
 
-    /** Damage number and sparks when the player hits an enemy. */
-    private void showEnemyHit(Enemy e, int damage) {
-        effects.number(e.x, e.y - e.radius, String.valueOf(damage), Color.WHITE);
-        effects.burst(e.x, e.y, Color.rgb(255, 230, 150), 6, 6f);
+    /** Damage number and sparks when the player hits an enemy; crits show gold with a "!". */
+    private void showEnemyHit(Enemy e, int damage, boolean crit) {
+        if (crit) {
+            effects.number(e.x, e.y - e.radius, damage + "!", Color.rgb(255, 200, 40));
+            effects.burst(e.x, e.y, Color.rgb(255, 200, 40), 14, 10f);
+        } else {
+            effects.number(e.x, e.y - e.radius, String.valueOf(damage), Color.WHITE);
+            effects.burst(e.x, e.y, Color.rgb(255, 230, 150), 6, 6f);
+        }
+    }
+
+    /** Interrupts an enemy's wind-up, so a well-timed heavy hit cancels its attack. */
+    private void staggerEnemy(Enemy e) {
+        if (e.stagger())
+            effects.number(e.x, e.y - e.radius - 40f, "STAGGER", Color.rgb(120, 200, 255));
     }
 
     /**
@@ -921,7 +991,6 @@ public class GameActivity extends AppCompatActivity {
                 player.startDeathAnimation();
                 statsManager.onPlayerDied();
                 statsManager.flush();
-                saveGameToFirestore();
                 new android.os.Handler().postDelayed(
                         this::showGameOverDialog, player.getDeathDuration());
             }
@@ -1073,6 +1142,100 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
+     * Attacks with the equipped weapon once its cooldown allows. Aims where the attack stick is
+     * dragged, otherwise at the nearest awake enemy in reach, otherwise straight ahead.
+     * Runs on the logic thread.
+     * @param now current time in milliseconds
+     */
+    private void tryAttack(long now) {
+        Weapon w = player.getWeapon();
+        if (now - lastAttackTime < w.cooldown) return;
+
+        if (aimJoystick.isAiming()) {
+            aimDX = aimJoystick.getAimX();
+            aimDY = aimJoystick.getAimY();
+        } else {
+            Enemy target = nearestEnemy(w.isProjectile ? w.range : player.radius + w.range + 160f);
+            if (target != null) {
+                aimDX = target.x - player.x;
+                aimDY = target.y - player.y;
+            } else {
+                double facing = Math.toRadians(player.getFacingAngle());
+                aimDX = (float) Math.cos(facing);
+                aimDY = (float) Math.sin(facing);
+            }
+        }
+        float len = (float) Math.sqrt(aimDX * aimDX + aimDY * aimDY);
+        if (len < 0.01f) return;
+        aimDX /= len;
+        aimDY /= len;
+
+        if (w.isProjectile) {
+            fireProjectile(aimDX, aimDY);
+            return;
+        }
+        comboStep = now - lastAttackTime <= w.cooldown + COMBO_WINDOW ? comboStep % 3 + 1 : 1;
+        boolean finisher = comboStep == 3;
+        swingArc = finisher ? 80f : 55f;
+        lastAttackTime = now;
+        attackStartTime = now;
+        isAttacking = true;
+        soundManager.playSwingMelee();
+        effects.slash(player.x, player.y, (float) Math.toDegrees(Math.atan2(aimDY, aimDX)),
+                player.radius + w.range, swingArc, finisher ? Color.rgb(255, 210, 90) : Color.WHITE);
+    }
+
+    /** Closest awake enemy within the given distance, or null. */
+    private Enemy nearestEnemy(float maxDist) {
+        Enemy best = null;
+        float bestDist = maxDist;
+        synchronized (enemies) {
+            for (Enemy e : enemies) {
+                if (e.isDead || !e.isAwake) continue;
+                float d = getDistance(player.x, player.y, e.x, e.y) - e.radius;
+                if (d < bestDist) { bestDist = d; best = e; }
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Spin special: hits every enemy around the player, knocks them back and interrupts wind-ups.
+     * Grants a moment of invulnerability. Runs on the logic thread.
+     * @param now current time in milliseconds
+     */
+    private void spinAttack(long now) {
+        lastSpinTime = now;
+        Weapon w = player.getWeapon();
+        float reach = player.radius + 180f;
+        int damage = Math.round(Math.max(w.damage, 6) * damageMultiplier() * 1.3f);
+        int color = Color.rgb(140, 200, 255);
+        effects.slash(player.x, player.y, 0f, reach, 180f, color);
+        effects.burst(player.x, player.y, color, 24, 12f);
+        soundManager.playSwingMelee();
+        invulnerableUntil = Math.max(invulnerableUntil, now + 250);
+
+        synchronized (enemies) {
+            for (Enemy e : enemies) {
+                if (e.isDead) continue;
+                float dx = e.x - player.x;
+                float dy = e.y - player.y;
+                float dist = (float) Math.sqrt(dx * dx + dy * dy);
+                if (dist > reach + e.radius) continue;
+                e.takeDamage(damage);
+                e.lastHitTime = now;
+                statsManager.onDamageGiven(damage);
+                showEnemyHit(e, damage, false);
+                staggerEnemy(e);
+                if (dist > 0) {
+                    e.knockbackVX = dx / dist * 22f;
+                    e.knockbackVY = dy / dist * 22f;
+                }
+            }
+        }
+    }
+
+    /**
      * Handles a tap on the melee attack button.
      * Triggers an attack only if the current weapon's cooldown has expired.
      */
@@ -1088,7 +1251,7 @@ public class GameActivity extends AppCompatActivity {
 
     /**
      * Handles a tap on the dash button.
-     * Triggers a dash in the current joystick direction if the cooldown has expired.
+     * Dashes in the joystick direction, or the facing direction when standing still.
      */
     private void dash() {
         long now = System.currentTimeMillis();
@@ -1097,7 +1260,11 @@ public class GameActivity extends AppCompatActivity {
 
         float joyX = joystick.getDX();
         float joyY = joystick.getDY();
-        if (joyX == 0 && joyY == 0) return;
+        if (joyX == 0 && joyY == 0) {
+            double facing = Math.toRadians(player.getFacingAngle());
+            joyX = (float) Math.cos(facing);
+            joyY = (float) Math.sin(facing);
+        }
 
         float length = (float) Math.sqrt(joyX * joyX + joyY * joyY);
         dashDX = joyX / length;
@@ -1196,11 +1363,14 @@ public class GameActivity extends AppCompatActivity {
 
                         float dist = getDistance(p.x, p.y, e.x, e.y);
                         if (dist < p.getRadius() + e.radius) {
-                            e.takeDamage(p.damage);
+                            boolean crit = Math.random() < CRIT_CHANCE;
+                            int damage = crit ? p.damage * 2 : p.damage;
+                            e.takeDamage(damage);
                             soundManager.playHitEnemy();
                             behaviorTracker.recordAttack(getDistance(player.x, player.y, e.x, e.y));
-                            statsManager.onDamageGiven(p.damage);
-                            showEnemyHit(e, p.damage);
+                            statsManager.onDamageGiven(damage);
+                            showEnemyHit(e, damage, crit);
+                            if (crit) staggerEnemy(e);
 
                             float dx = e.x - p.x;
                             float dy = e.y - p.y;
@@ -1355,7 +1525,6 @@ public class GameActivity extends AppCompatActivity {
                                 inventoryWeaponIds.add(weaponId);
                                 weaponFirestoreIds.put(weapon, weaponId);
                             }
-                            saveGameToFirestore();
                         }
                 );
                 break;
@@ -1373,7 +1542,6 @@ public class GameActivity extends AppCompatActivity {
                                 inventoryArmorIds.add(armorId);
                                 armorFirestoreIds.put(armor, armorId);
                             }
-                            saveGameToFirestore();
                         }
                 );
                 break;
@@ -1389,7 +1557,6 @@ public class GameActivity extends AppCompatActivity {
                 }
                 if (!found) consumableInventory.add(new ConsumableStack(item, 1));
                 updatePotionButton();
-                saveGameToFirestore();
                 break;
         }
     }
@@ -1673,7 +1840,7 @@ public class GameActivity extends AppCompatActivity {
         floorManager.advanceFloor();
         statsManager.onFloorCleared(floorManager.getCurrentFloor());
         statsManager.flush();
-        setCheckpoint(player.x, player.y, floorManager.getCurrentFloor());
+        setCheckpoint(floorManager.getCurrentFloor());
 
         activeBoss = null;
         bossSpawnHandled = false;
@@ -1703,20 +1870,14 @@ public class GameActivity extends AppCompatActivity {
                     currentLayout.exitRoom.centerY());
         }
         spawnEnemiesForLayout(currentLayout);
+        // This floor's batch should be cached already; start the next range two floors early
+        ensureBatchFor(floorManager.getCurrentFloor());
+        ensureBatchFor(floorManager.getCurrentFloor() + 2);
         Log.d("FloorLayout", "Floor " + floorManager.getCurrentFloor()
                 + " layout: " + currentLayout.rooms.size() + " rooms, "
                 + currentLayout.corridors.size() + " corridors");
 
         updateFloorHUD();
-        saveGameToFirestore();
-    }
-
-    /**
-     * Adds a weapon to the player's inventory and saves to Firestore.
-     * @param weapon the weapon to add
-     */
-    public void addWeaponToInventory(Weapon weapon) {
-        weapons.add(weapon);
         saveGameToFirestore();
     }
 
@@ -1750,10 +1911,8 @@ public class GameActivity extends AppCompatActivity {
             currentBossColor = android.graphics.Color.RED;
         }
 
-        // Pre-fire next batch while boss fight plays out
-        int nextRangeStart = floorManager.getCurrentFloor() + 1;
-        int nextRangeEnd   = floorManager.getCurrentFloor() + 5;
-        generateBatch(nextRangeStart, nextRangeEnd);
+        // Make sure the next range is ready by the time this boss falls
+        ensureBatchFor(floorManager.getCurrentFloor() + 1);
 
         spawnBoss();
     }
@@ -1951,7 +2110,6 @@ public class GameActivity extends AppCompatActivity {
         }
 
         btnMainMenu.setOnClickListener(v -> {
-            saveGameToFirestore();
             SoundManager.stopGameMusic();
             Intent intent = new Intent(GameActivity.this, MenuActivity.class);
             startActivity(intent);
@@ -2162,7 +2320,6 @@ public class GameActivity extends AppCompatActivity {
             populateInventoryList(parentDialog);
             detail.dismiss();
             Toast.makeText(this, "Equipped: " + weapon.name, Toast.LENGTH_SHORT).show();
-            saveGameToFirestore();
         });
 
         MaterialButton btnRemoveWeapon = detail.findViewById(R.id.btn_remove);
@@ -2177,7 +2334,6 @@ public class GameActivity extends AppCompatActivity {
             inventoryWeaponIds.remove(weaponFirestoreIds.remove(weapon));
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
-            saveGameToFirestore();
             detail.dismiss();
         });
 
@@ -2219,7 +2375,6 @@ public class GameActivity extends AppCompatActivity {
             inventoryArmorIds.remove(armorFirestoreIds.remove(armor));
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
-            saveGameToFirestore();
             detail.dismiss();
         });
 
@@ -2252,7 +2407,6 @@ public class GameActivity extends AppCompatActivity {
             consumableInventory.remove(stack);
             updatePotionButton();
             populateInventoryList(parentDialog);
-            saveGameToFirestore();
             detail.dismiss();
         });
 
@@ -2304,7 +2458,6 @@ public class GameActivity extends AppCompatActivity {
                 populateInventoryList(inventoryDialog);
             }
         });
-        saveGameToFirestore();
     }
 
     /**
@@ -2355,7 +2508,6 @@ public class GameActivity extends AppCompatActivity {
                 populateInventoryList(inventoryDialog);
             }
         });
-        saveGameToFirestore();
     }
 
     private String buildWeaponStats(Weapon weapon) {
@@ -2429,14 +2581,10 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * Saves the current checkpoint state (position, floor, HP, armour, gold).
-     * @param x X position
-     * @param y Y position
+     * Saves the current checkpoint state (floor, HP, armour, gold).
      * @param floor current floor number
      */
-    private void setCheckpoint(float x, float y, int floor) {
-        checkpointX      = x;
-        checkpointY      = y;
+    private void setCheckpoint(int floor) {
         checkpointFloor  = floor;
         checkpointHealth = playerHealth;
         checkpointArmor  = playerArmor;
@@ -2635,6 +2783,15 @@ public class GameActivity extends AppCompatActivity {
                         | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                         | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
         );
+        // Keep dialog buttons clear of the camera cutout
+        View content = window.findViewById(android.R.id.content);
+        if (content == null) return;
+        ViewCompat.setOnApplyWindowInsetsListener(content, (v, insets) -> {
+            Insets cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+            v.setPadding(cutout.left, cutout.top, cutout.right, cutout.bottom);
+            return insets;
+        });
+        ViewCompat.requestApplyInsets(content);
     }
 
     /**
@@ -2724,14 +2881,12 @@ public class GameActivity extends AppCompatActivity {
 
     /**
      * Saves the full current game state to Firestore.
-     * Called on floor transitions, item changes, death and when leaving to the menu.
+     * Called only when a new floor starts, so loading always resumes at a floor start.
      */
     private void saveGameToFirestore() {
         if (gameId == null || userId == null || pendingLoads > 0) return;
 
         long playtime = (System.currentTimeMillis() - gameStartTime) / 1000;
-        // A dead player resumes from the checkpoint, exactly like pressing Respawn
-        boolean dead = playerHealth <= 0;
 
         List<String> weaponNames = new ArrayList<>();
         for (Weapon w : weapons) {
@@ -2774,12 +2929,10 @@ public class GameActivity extends AppCompatActivity {
         }
 
         Map<String, Object> save = new HashMap<>();
-        save.put("currentFloor",         dead ? checkpointFloor  : floorManager.getCurrentFloor());
-        save.put("health",               dead ? checkpointHealth : playerHealth);
-        save.put("armorValue",           dead ? checkpointArmor  : playerArmor);
-        save.put("gold",                 dead ? checkpointGold   : playerGold);
-        save.put("killsThisFloor",       dead ? 0 : floorManager.getKillsThisFloor());
-        save.put("bossDefeated",         !dead && floorManager.isBossDefeated());
+        save.put("currentFloor",         floorManager.getCurrentFloor());
+        save.put("health",               playerHealth);
+        save.put("armorValue",           playerArmor);
+        save.put("gold",                 playerGold);
         save.put("equippedWeaponId",     weaponFirestoreIds.get(player.getWeapon()));
         save.put("equippedWeaponName",   player.getWeapon().name);
         save.put("equippedHeadId",       headId);
@@ -2791,12 +2944,6 @@ public class GameActivity extends AppCompatActivity {
         save.put("inventoryArmorIds",    inventoryArmorIds);
         save.put("armorDurability",      armorDurability);
         save.put("items",                consumableMaps);
-        save.put("checkpointFloor",      checkpointFloor);
-        save.put("checkpointX",          checkpointX);
-        save.put("checkpointY",          checkpointY);
-        save.put("checkpointHealth",     checkpointHealth);
-        save.put("checkpointArmor",      checkpointArmor);
-        save.put("checkpointGold",       checkpointGold);
         save.put("playtimeSeconds",      playtime);
         save.put("level",                playerLevel);
         save.put("xp",                   playerXp);
@@ -2821,17 +2968,11 @@ public class GameActivity extends AppCompatActivity {
                 int savedFloor = data.get("currentFloor") != null
                         ? ((Number) data.get("currentFloor")).intValue() : 1;
                 floorManager.setCurrentFloor(savedFloor);
-                int savedKills = data.get("killsThisFloor") != null
-                        ? ((Number) data.get("killsThisFloor")).intValue() : 0;
 
-                // Kick off a batch fetch for the loaded floor's range so that custom
-                // enemy templates are available. applyBatchToCurrentFloorIfReady() will
-                // automatically re-spawn enemies with templates once the fetch completes
-                // (provided no kills have happened yet, which is always true on load).
-                int loadedRangeStart = getRangeStart(savedFloor);
-                if (loadedRangeStart >= 0 && !batchCache.containsKey(loadedRangeStart)) {
-                    generateBatch(loadedRangeStart, loadedRangeStart + 4);
-                }
+                // Fetch the loaded floor's batch (and the next one) so custom enemies and the
+                // shop are ready; applyBatchToCurrentFloorIfReady() re-spawns enemies on arrival.
+                ensureBatchFor(savedFloor);
+                ensureBatchFor(savedFloor + 2);
 
                 // Regenerate layout for the restored floor (floor 1 layout was built at
                 // startup; for loaded games it may be wrong floor, and for new games the
@@ -2841,7 +2982,7 @@ public class GameActivity extends AppCompatActivity {
                 currentLayout = FloorLayout.generate(
                         floorManager.getCurrentFloor(),
                         floorManager.isBossFloor(),
-                        Math.max(0, floorManager.getKillsRequired() - savedKills));
+                        floorManager.getKillsRequired());
                 gameDisplay.setFloorLayout(currentLayout);
                 currentLayout.entryRoom.explored = true;
                 if (currentLayout.exitRoom != null) {
@@ -2849,7 +2990,6 @@ public class GameActivity extends AppCompatActivity {
                             currentLayout.exitRoom.centerX(),
                             currentLayout.exitRoom.centerY());
                 }
-                floorManager.restoreProgress(savedKills, Boolean.TRUE.equals(data.get("bossDefeated")));
                 spawnEnemiesForLayout(currentLayout);
 
                 // Restore health / armor / gold
@@ -2865,26 +3005,13 @@ public class GameActivity extends AppCompatActivity {
                         ? ((Number) data.get("xp")).intValue() : 0;
                 maxHealth = maxHealthForLevel(playerLevel);
 
-                // Restore checkpoint
-                checkpointFloor = data.get("checkpointFloor") != null
-                        ? ((Number) data.get("checkpointFloor")).intValue() : 1;
-                checkpointX = data.get("checkpointX") != null
-                        ? ((Number) data.get("checkpointX")).floatValue() : 0f;
-                checkpointY = data.get("checkpointY") != null
-                        ? ((Number) data.get("checkpointY")).floatValue() : 0f;
-                checkpointHealth = data.get("checkpointHealth") != null
-                        ? ((Number) data.get("checkpointHealth")).intValue() : playerHealth;
-                checkpointArmor = data.get("checkpointArmor") != null
-                        ? ((Number) data.get("checkpointArmor")).intValue() : playerArmor;
-                checkpointGold = data.get("checkpointGold") != null
-                        ? ((Number) data.get("checkpointGold")).intValue() : playerGold;
-
                 if (data.get("playtimeSeconds") != null)
                     gameStartTime -= ((Number) data.get("playtimeSeconds")).longValue() * 1000L;
 
-                // Always spawn at entry room — layout is regenerated so saved coords are stale
+                // Saves are made at floor start, so the loaded state is also this floor's checkpoint
                 player.x = currentLayout.entryRoom.centerX();
                 player.y = currentLayout.entryRoom.centerY();
+                setCheckpoint(savedFloor);
 
                 // Update HUD bars immediately with restored values.
                 // Armor max isn't known yet (armor pieces load async), so temporarily

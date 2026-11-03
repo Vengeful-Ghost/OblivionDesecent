@@ -263,18 +263,6 @@ public class DBManager {
         // Consumables: [{ "name": "Health Potion", "quantity": 2, "effect": "heal", "value": 30 }]
         save.put("items",              new ArrayList<>());
 
-        // Floor progress
-        save.put("killsThisFloor",     0);
-        save.put("bossDefeated",       false);
-
-        // Checkpoint
-        save.put("checkpointFloor",    1);
-        save.put("checkpointX",        1000f);
-        save.put("checkpointY",        1000f);
-        save.put("checkpointHealth",   100);
-        save.put("checkpointArmor",    0);
-        save.put("checkpointGold",     0);
-
         // Meta
         save.put("playtimeSeconds",    0L);
         save.put("lastSaved",          Timestamp.now());

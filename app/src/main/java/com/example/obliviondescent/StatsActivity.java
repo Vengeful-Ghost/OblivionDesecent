@@ -12,6 +12,9 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -61,6 +64,13 @@ public class StatsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_stats);
         hideSystemUI();
+
+        // Keep buttons clear of the camera cutout
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {
+            Insets cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+            v.setPadding(cutout.left, cutout.top, cutout.right, cutout.bottom);
+            return insets;
+        });
 
         dbManager = new DBManager();
         SharedPreferences prefs = getSharedPreferences("loginPrefs", MODE_PRIVATE);

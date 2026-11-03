@@ -9,6 +9,9 @@ import android.view.View;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.firebase.firestore.ListenerRegistration;
@@ -41,6 +44,13 @@ public class MenuActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_menu);
         hideSystemUI();
+
+        // Keep buttons clear of the camera cutout
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {
+            Insets cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+            v.setPadding(cutout.left, cutout.top, cutout.right, cutout.bottom);
+            return insets;
+        });
 
         dbManager = new DBManager();
 
@@ -79,6 +89,44 @@ public class MenuActivity extends AppCompatActivity {
 
         findViewById(R.id.btn_coop).setOnClickListener(v ->
                 startActivity(new Intent(this, LobbyActivity.class)));
+
+        findViewById(R.id.btn_tutorial).setOnClickListener(v -> showTutorial(0));
+    }
+
+    // Title and text of each tutorial page
+    private static final String[][] TUTORIAL = {
+            {"Move & Dash",
+                    "Drag the left stick to move. You face the way you walk.\n\n"
+                    + "Tap D to dash. Nothing can hit you mid-dash, so use it to slip through attacks."},
+            {"Attack",
+                    "Hold ATK to keep attacking. It aims at the nearest enemy; drag it to aim yourself.\n\n"
+                    + "Keep swinging for a 3-hit combo: the third hit is wider and stronger. Gold numbers are critical hits.\n\n"
+                    + "SPIN hits everything around you, then needs a few seconds to recharge."},
+            {"Read the Enemy",
+                    "A red ! means an enemy is about to strike. The red cone or circle shows where it lands, so step out or dash.\n\n"
+                    + "A combo finisher or critical hit during that wind-up staggers the enemy and cancels its attack (bosses can't be staggered)."},
+            {"Floors & Shop",
+                    "Defeat the enemies on a floor to open the purple EXIT portal. Edge arrows point the way.\n\n"
+                    + "The gold SHOP portal sells weapons, armor and potions for the coins you collect.\n\n"
+                    + "Every 5th floor has a boss guarding treasure chests."},
+            {"Grow Stronger",
+                    "Kills give XP. Each level adds max HP and damage.\n\n"
+                    + "Tap \u2665 to drink a healing potion. Armor absorbs hits first but wears down with every hit.\n\n"
+                    + "Your run saves at the start of every floor, and if you fall you can respawn there."}
+    };
+
+    /** Shows one page of the new-player guide, with Back / Next to flip through it. */
+    private void showTutorial(int page) {
+        android.app.AlertDialog.Builder builder =
+                new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
+                        .setTitle(TUTORIAL[page][0] + "  (" + (page + 1) + "/" + TUTORIAL.length + ")")
+                        .setMessage(TUTORIAL[page][1])
+                        .setNegativeButton("Close", null);
+        if (page + 1 < TUTORIAL.length)
+            builder.setPositiveButton("Next", (dialog, which) -> showTutorial(page + 1));
+        if (page > 0)
+            builder.setNeutralButton("Back", (dialog, which) -> showTutorial(page - 1));
+        builder.show();
     }
 
     /**

@@ -23,12 +23,10 @@ public class Player {
     private Weapon currentWeapon;
 
     private Paint paint;
-    private Paint attackDebugPaint;
-    private boolean debugAttack = false;
 
     public long flashUntil = 0;           // red flash after taking a hit
     private boolean invulnerable = false; // drawn see-through while dashing or just hit
-    private Paint outlinePaint, weaponPaint, orbPaint, eyePaint, pupilPaint, flashPaint;
+    private Paint outlinePaint, weaponPaint, orbPaint, flashPaint, shadowPaint, highlightPaint;
 
     // Death animation
     private boolean isDying = false;
@@ -54,17 +52,14 @@ public class Player {
         orbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         orbPaint.setStyle(Paint.Style.FILL);
 
-        eyePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        eyePaint.setColor(Color.WHITE);
-
-        pupilPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        pupilPaint.setColor(Color.rgb(15, 15, 30));
-
         flashPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         flashPaint.setColor(Color.argb(170, 255, 40, 40));
 
-        attackDebugPaint = new Paint();
-        attackDebugPaint.setColor(Color.argb(100, 255, 0, 0));
+        shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        shadowPaint.setColor(Color.argb(90, 0, 0, 0));
+
+        highlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        highlightPaint.setColor(Color.argb(45, 255, 255, 255));
 
         deathPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         deathPaint.setColor(Color.BLUE);
@@ -72,13 +67,11 @@ public class Player {
     }
 
     /**
-     * Equips a new weapon and updates the attack debug paint colour.
+     * Equips a new weapon.
      * @param weapon the weapon to equip
      */
     public void equipWeapon(Weapon weapon) {
         this.currentWeapon = weapon;
-        attackDebugPaint.setColor(Weapon.getRarityColor(weapon.rarity));
-        attackDebugPaint.setAlpha(100);
     }
 
     /** Returns current weapon; defaults to Fists if none equipped. */
@@ -141,7 +134,9 @@ public class Player {
         float ay = (float) Math.sin(Math.toRadians(aimAngle));
         int alpha = invulnerable ? 130 : 255;
 
-        // Weapon held toward the aim direction
+        canvas.drawCircle(drawX + 6f, drawY + 10f, radius, shadowPaint);
+
+        // Weapon held toward the facing direction
         weaponPaint.setColor(weapon.color);
         weaponPaint.setAlpha(alpha);
         orbPaint.setColor(weapon.color);
@@ -162,29 +157,11 @@ public class Player {
 
         paint.setAlpha(alpha);
         canvas.drawCircle(drawX, drawY, radius, paint);
+        canvas.drawCircle(drawX - radius * 0.25f, drawY - radius * 0.25f, radius * 0.55f, highlightPaint);
         canvas.drawCircle(drawX, drawY, radius, outlinePaint);
         if (System.currentTimeMillis() < flashUntil) canvas.drawCircle(drawX, drawY, radius, flashPaint);
-
-        // Eyes look where the player aims
-        float sideX = -ay, sideY = ax;
-        for (int s = -1; s <= 1; s += 2) {
-            float ex = drawX + ax * radius * 0.4f + sideX * radius * 0.3f * s;
-            float ey = drawY + ay * radius * 0.4f + sideY * radius * 0.3f * s;
-            canvas.drawCircle(ex, ey, 8f, eyePaint);
-            canvas.drawCircle(ex + ax * 3f, ey + ay * 3f, 4.5f, pupilPaint);
-        }
-
-        if (debugAttack) {
-            float range = radius + weapon.range;
-            canvas.drawArc(
-                    drawX - range, drawY - range,
-                    drawX + range, drawY + range,
-                    aimAngle - 45, 90, true, attackDebugPaint
-            );
-        }
     }
 
-    public void setDebugAttack(boolean isAttacking) { this.debugAttack = isAttacking; }
     public void setInvulnerable(boolean invulnerable) { this.invulnerable = invulnerable; }
     public float getX() { return x; }
     public float getY() { return y; }

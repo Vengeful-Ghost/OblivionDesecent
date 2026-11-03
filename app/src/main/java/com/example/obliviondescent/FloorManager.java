@@ -200,19 +200,6 @@ public class FloorManager {
         this.hasExitRoom = false;
     }
 
-    /**
-     * Restores kill progress from a save. Call after setExitRoomCenter() so portals land in the exit room.
-     * @param kills enemies already killed on this floor
-     * @param bossKilled whether this floor's boss was already defeated
-     */
-    public void restoreProgress(int kills, boolean bossKilled) {
-        killsThisFloor = Math.min(kills, killsRequired);
-        if (killsThisFloor < killsRequired) return;
-        if (!bossFloor)      openPortal(exitRoomCenterX, exitRoomCenterY);
-        else if (bossKilled) onBossDefeated(exitRoomCenterX, exitRoomCenterY);
-        else                 bossSpawned = true;
-    }
-
     /* ============================================================
        GETTERS
        ============================================================ */

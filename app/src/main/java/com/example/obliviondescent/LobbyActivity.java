@@ -14,6 +14,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.firebase.firestore.ListenerRegistration;
@@ -62,6 +65,13 @@ public class LobbyActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_lobby);
         hideSystemUI();
+
+        // Keep buttons clear of the camera cutout
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {
+            Insets cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+            v.setPadding(cutout.left, cutout.top, cutout.right, cutout.bottom);
+            return insets;
+        });
 
         dbManager = new DBManager();
         SharedPreferences prefs = getSharedPreferences("loginPrefs", MODE_PRIVATE);

@@ -21,6 +21,12 @@
 
     </FrameLayout>
 
+    <!-- HUD layer: padded at runtime by the camera-cutout insets -->
+    <RelativeLayout
+        android:id="@+id/hud_layer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
     <LinearLayout
         android:id="@+id/top_hud"
         android:layout_width="match_parent"
@@ -301,6 +307,38 @@
 
         </FrameLayout>
 
+        <!-- Spin special with cooldown arc -->
+        <FrameLayout
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginEnd="20dp"
+            android:layout_marginBottom="60dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_spin"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:backgroundTint="@null"
+                android:background="@drawable/icon_btn_circle"
+                android:text="SPIN"
+                android:textSize="11sp"
+                android:textColor="@color/gold_bright"
+                android:fontFamily="serif"
+                android:textStyle="bold"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                app:strokeWidth="0dp"/>
+
+            <com.example.obliviondescent.DashCooldownView
+                android:id="@+id/spin_cooldown_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:translationZ="10dp"/>
+
+        </FrameLayout>
+
         <!-- Attack button — hidden, replaced by aim joystick -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_attack"
@@ -321,14 +359,16 @@
             app:strokeColor="@color/crimson_glow"
             android:visibility="gone"/>
 
-        <!-- Aim joystick — always visible -->
+        <!-- Attack stick — hold to attack, drag to aim -->
         <com.example.obliviondescent.AimJoystickView
             android:id="@+id/aim_joystick"
-            android:layout_width="96dp"
-            android:layout_height="96dp"
+            android:layout_width="128dp"
+            android:layout_height="128dp"
             android:visibility="gone"/>
 
     </LinearLayout>
+
+    </RelativeLayout>
 
     <!-- Floor transition overlay -->
     <FrameLayout

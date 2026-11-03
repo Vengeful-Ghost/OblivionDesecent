@@ -15,6 +15,9 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.firebase.auth.FirebaseAuth;
@@ -53,6 +56,13 @@ public class SettingsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
         hideSystemUI();
+
+        // Keep buttons clear of the camera cutout
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {
+            Insets cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+            v.setPadding(cutout.left, cutout.top, cutout.right, cutout.bottom);
+            return insets;
+        });
 
         fromGame = getIntent().getBooleanExtra(EXTRA_FROM_GAME, false);
 

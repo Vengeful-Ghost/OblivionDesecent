@@ -19,6 +19,13 @@ public class GameCamera {
     private long shakeStartTime = 0;
     private long shakeDuration = 0;
     private float shakeMagnitude = 0f;
+    private float shakeX = 0f, shakeY = 0f; // this tick's shake, shared by every draw call
+    private boolean placed = false;
+
+    // Fraction of the distance to the target covered each tick; lower = lazier camera
+    private static final float FOLLOW = 0.2f;
+    // Farther than this (a teleport) the camera jumps instead of gliding
+    private static final float SNAP_DISTANCE = 600f;
 
     /**
      * Creates a new camera for the given screen dimensions.
@@ -31,21 +38,32 @@ public class GameCamera {
     }
 
     /**
-     * Updates the camera offset to centre the given point on screen.
+     * Glides the camera toward centring the given point, and rolls this tick's shake.
+     * Called once per logic tick.
      * @param targetX target X position (typically the player's position)
      * @param targetY target Y position
      */
     public void update(float targetX, float targetY) {
-        this.offsetX = targetX - (screenWidth / 2f);
-        this.offsetY = targetY - (screenHeight / 2f);
+        float goalX = targetX - (screenWidth / 2f);
+        float goalY = targetY - (screenHeight / 2f);
+        if (!placed || Math.abs(goalX - offsetX) > SNAP_DISTANCE || Math.abs(goalY - offsetY) > SNAP_DISTANCE) {
+            offsetX = goalX;
+            offsetY = goalY;
+            placed = true;
+        } else {
+            offsetX += (goalX - offsetX) * FOLLOW;
+            offsetY += (goalY - offsetY) * FOLLOW;
+        }
+        shakeX = getShakeOffset();
+        shakeY = getShakeOffset();
     }
 
     public float getOffsetX() {
-        return offsetX + getShakeOffset();
+        return offsetX + shakeX;
     }
 
     public float getOffsetY() {
-        return offsetY + getShakeOffset();
+        return offsetY + shakeY;
     }
 
     /**
@@ -61,8 +79,7 @@ public class GameCamera {
 
     /**
      * Returns a random offset within [-magnitude, magnitude].
-     * Called inside getOffsetX() and getOffsetY() so every draw
-     * call automatically includes the shake without changing anything else.
+     * Rolled once per tick in update() so the whole scene shakes as one.
      *
      * The shake fades out over its duration — magnitude shrinks linearly
      * from full to zero so it doesn't cut off abruptly.

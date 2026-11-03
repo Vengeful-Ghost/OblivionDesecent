@@ -9,43 +9,25 @@ import android.view.MotionEvent;
 import android.view.View;
 
 /**
- * Aim joystick that replaces the attack button when a projectile weapon is equipped.
- * The player drags toward a direction — a direction line shows where the shot will travel.
- * Releasing the finger fires the projectile (ACTION_UP only), which feels natural for ranged weapons.
+ * Attack stick. Holding it attacks continuously at the weapon's pace; GameActivity polls it every tick.
+ * A plain hold auto-aims at the nearest enemy; dragging aims manually in the dragged direction.
  */
 public class AimJoystickView extends View {
-
-    /* ============================================================
-       CALLBACK — GameActivity implements this to fire the projectile
-       ============================================================ */
-    public interface OnFireListener {
-        void onFire(float dx, float dy);
-    }
-
-    private OnFireListener fireListener;
-
-    /**
-     * Sets the listener that is called when the finger is released to fire.
-     * @param listener the fire listener
-     */
-    public void setOnFireListener(OnFireListener listener) {
-        this.fireListener = listener;
-    }
 
     /* ============================================================
        GEOMETRY
        ============================================================ */
     private float centerX, centerY;
-    private float baseRadius  = 96f;  // Slightly smaller than movement joystick
+    private float baseRadius  = 96f;
     private float hatRadius   = 40f;
     private float touchX, touchY;
-    private boolean touched = false;
 
     /* ============================================================
-       DIRECTION
+       STATE — written on the UI thread, read by the logic thread
        ============================================================ */
-    private float aimDX = 0f;
-    private float aimDY = 0f;
+    private volatile boolean touched = false;
+    private volatile float aimDX = 0f;
+    private volatile float aimDY = 0f;
 
     /* ============================================================
        PAINTS
@@ -53,7 +35,7 @@ public class AimJoystickView extends View {
     private Paint basePaint;
     private Paint hatPaint;
     private Paint arrowPaint;   // Direction line
-    private Paint labelPaint;   // "AIM" label in center
+    private Paint labelPaint;   // "ATK" label in center
 
     /* ============================================================
        CONSTRUCTORS
@@ -110,24 +92,34 @@ public class AimJoystickView extends View {
         centerY = h / 2f;
         touchX  = centerX;
         touchY  = centerY;
+        baseRadius = Math.min(w, h) * 0.45f;
+        hatRadius  = baseRadius * 0.42f;
+        labelPaint.setTextSize(baseRadius * 0.3f);
     }
+
+    /** True while a finger is on the stick. */
+    public boolean isHeld() { return touched; }
+
+    /** True when the finger is dragged far enough from the centre to aim manually. */
+    public boolean isAiming() { return touched && aimDX * aimDX + aimDY * aimDY > 0.09f; }
+
+    public float getAimX() { return aimDX; }
+    public float getAimY() { return aimDY; }
 
     /* ============================================================
        DRAW
        ============================================================ */
     @Override
     protected void onDraw(Canvas canvas) {
-        // Base ring
+        // Base ring, brighter while held
+        basePaint.setAlpha(touched ? 210 : 160);
         canvas.drawCircle(centerX, centerY, baseRadius, basePaint);
 
         if (!touched) {
-            // Idle state — show "AIM" label
-            canvas.drawText("AIM", centerX, centerY + 9f, labelPaint);
+            canvas.drawText("ATK", centerX, centerY + labelPaint.getTextSize() * 0.35f, labelPaint);
         } else {
-            // Dragging — show direction line from center to hat
-            canvas.drawLine(centerX, centerY, touchX, touchY, arrowPaint);
-
-            // Hat (the draggable dot)
+            // Direction line only when aiming manually
+            if (isAiming()) canvas.drawLine(centerX, centerY, touchX, touchY, arrowPaint);
             canvas.drawCircle(touchX, touchY, hatRadius, hatPaint);
         }
     }
@@ -157,7 +149,7 @@ public class AimJoystickView extends View {
                     touchY = centerY + rawDY * ratio;
                 }
 
-                // Store normalized direction — used on release to fire
+                // Normalized drag, -1..1 on each axis
                 if (dist > 0) {
                     aimDX = (touchX - centerX) / baseRadius;
                     aimDY = (touchY - centerY) / baseRadius;
@@ -167,14 +159,7 @@ public class AimJoystickView extends View {
                 break;
 
             case MotionEvent.ACTION_UP:
-                // Fire only if the player actually dragged meaningfully
-                if (touched && (Math.abs(aimDX) > 0.1f || Math.abs(aimDY) > 0.1f)) {
-                    if (fireListener != null) {
-                        fireListener.onFire(aimDX, aimDY);
-                    }
-                }
-
-                // Reset
+            case MotionEvent.ACTION_CANCEL:
                 touched = false;
                 touchX  = centerX;
                 touchY  = centerY;

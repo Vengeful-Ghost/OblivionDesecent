@@ -54,10 +54,16 @@ public class GameDisplay extends View {
     private Paint bossFloorPaint;
     private Paint corridorFloorPaint;
     private Paint wallPaint;
+    private Paint wallEdgePaint;
     private Paint tilePaint;
+    private Paint tileShadePaint;
     private Paint wallShadowPaint;
+    private final Paint vignettePaint = new Paint();
 
     private GameEffects effects;
+
+    // Camera-cutout insets, so the minimap stays visible
+    private int safeTop = 0, safeRight = 0;
 
     // Minimap
     private Paint minimapBgPaint;
@@ -125,34 +131,44 @@ public class GameDisplay extends View {
         shopArrowGlowPaint.setAlpha(60);
 
         roomFloorPaint = new Paint();
-        roomFloorPaint.setColor(Color.rgb(38, 38, 42));
+        roomFloorPaint.setColor(Color.rgb(42, 36, 33));
         roomFloorPaint.setStyle(Paint.Style.FILL);
 
         entryFloorPaint = new Paint();
-        entryFloorPaint.setColor(Color.rgb(30, 44, 30));
+        entryFloorPaint.setColor(Color.rgb(32, 44, 34));
         entryFloorPaint.setStyle(Paint.Style.FILL);
 
         exitFloorPaint = new Paint();
-        exitFloorPaint.setColor(Color.rgb(38, 28, 50));
+        exitFloorPaint.setColor(Color.rgb(42, 32, 54));
         exitFloorPaint.setStyle(Paint.Style.FILL);
 
         bossFloorPaint = new Paint();
-        bossFloorPaint.setColor(Color.rgb(50, 22, 22));
+        bossFloorPaint.setColor(Color.rgb(56, 26, 24));
         bossFloorPaint.setStyle(Paint.Style.FILL);
 
         corridorFloorPaint = new Paint();
-        corridorFloorPaint.setColor(Color.rgb(28, 28, 32));
+        corridorFloorPaint.setColor(Color.rgb(32, 28, 26));
         corridorFloorPaint.setStyle(Paint.Style.FILL);
 
+        // Walls: a dark edge under a stone face
+        wallEdgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        wallEdgePaint.setColor(Color.rgb(16, 13, 12));
+        wallEdgePaint.setStyle(Paint.Style.STROKE);
+        wallEdgePaint.setStrokeWidth(20f);
+        wallEdgePaint.setStrokeCap(Paint.Cap.SQUARE);
+
         wallPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        wallPaint.setColor(Color.rgb(100, 100, 110));
+        wallPaint.setColor(Color.rgb(104, 92, 84));
         wallPaint.setStyle(Paint.Style.STROKE);
-        wallPaint.setStrokeWidth(10f);
+        wallPaint.setStrokeWidth(9f);
         wallPaint.setStrokeCap(Paint.Cap.SQUARE);
 
         tilePaint = new Paint();
-        tilePaint.setColor(Color.argb(18, 255, 255, 255));
-        tilePaint.setStrokeWidth(2f);
+        tilePaint.setColor(Color.argb(22, 0, 0, 0));
+        tilePaint.setStrokeWidth(3f);
+
+        tileShadePaint = new Paint();
+        tileShadePaint.setColor(Color.argb(9, 255, 240, 220));
 
         wallShadowPaint = new Paint();
         wallShadowPaint.setColor(Color.argb(90, 0, 0, 0));
@@ -222,6 +238,22 @@ public class GameDisplay extends View {
 
     public void setEffects(GameEffects effects) {
         this.effects = effects;
+    }
+
+    /** Top and right camera-cutout insets in pixels; the minimap sits inside them. */
+    public void setSafeInsets(int top, int right) {
+        this.safeTop = top;
+        this.safeRight = right;
+    }
+
+    /** Torchlight: the edges of the screen fall off into darkness around the player. */
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        float radius = (float) Math.hypot(w, h) * 0.6f;
+        vignettePaint.setShader(new android.graphics.RadialGradient(w / 2f, h / 2f, radius,
+                new int[]{0x00000000, 0x00000000, 0xC0000000}, new float[]{0f, 0.5f, 1f},
+                android.graphics.Shader.TileMode.CLAMP));
     }
 
     @Override
@@ -305,6 +337,9 @@ public class GameDisplay extends View {
 
         if (effects != null) effects.draw(canvas, camera);
 
+        if (vignettePaint.getShader() != null)
+            canvas.drawRect(0, 0, getWidth(), getHeight(), vignettePaint);
+
         // 4. Minimap HUD overlay (always on top, hidden in shop)
         if (!inShopRoom) {
             drawMinimap(canvas);
@@ -369,17 +404,26 @@ public class GameDisplay extends View {
             float bottom = c.y + c.height - offY;
             if (c.width >= c.height) {
                 // Horizontal corridor — top and bottom walls only
-                canvas.drawLine(left, top,    right, top,    wallPaint);
-                canvas.drawLine(left, bottom, right, bottom, wallPaint);
+                wall(canvas, left, top,    right, top);
+                wall(canvas, left, bottom, right, bottom);
             } else {
                 // Vertical corridor — left and right walls only
-                canvas.drawLine(left,  top, left,  bottom, wallPaint);
-                canvas.drawLine(right, top, right, bottom, wallPaint);
+                wall(canvas, left,  top, left,  bottom);
+                wall(canvas, right, top, right, bottom);
             }
         }
     }
 
-    /** Faint stone-tile grid, drawn only over the visible part of the area. */
+    /** One wall segment: dark edge, then the stone face on top. */
+    private void wall(Canvas canvas, float x1, float y1, float x2, float y2) {
+        canvas.drawLine(x1, y1, x2, y2, wallEdgePaint);
+        canvas.drawLine(x1, y1, x2, y2, wallPaint);
+    }
+
+    /**
+     * Stone tiles anchored to world space (so rooms and corridors line up): a faint checker
+     * plus grout lines, drawn only over the visible part of the area.
+     */
     private void drawTiles(Canvas canvas, float left, float top, float right, float bottom) {
         float visibleLeft   = Math.max(left, 0f);
         float visibleRight  = Math.min(right, getWidth());
@@ -388,13 +432,24 @@ public class GameDisplay extends View {
         if (visibleLeft >= visibleRight || visibleTop >= visibleBottom) return;
 
         float tile = Room.TILE / 2f;
-        for (float lx = left + tile; lx < right; lx += tile) {
-            if (lx > visibleLeft && lx < visibleRight)
-                canvas.drawLine(lx, visibleTop, lx, visibleBottom, tilePaint);
-        }
-        for (float ly = top + tile; ly < bottom; ly += tile) {
-            if (ly > visibleTop && ly < visibleBottom)
-                canvas.drawLine(visibleLeft, ly, visibleRight, ly, tilePaint);
+        float offX = camera.getOffsetX();
+        float offY = camera.getOffsetY();
+        int firstCol = (int) Math.floor((visibleLeft + offX) / tile);
+        int firstRow = (int) Math.floor((visibleTop + offY) / tile);
+        for (int row = firstRow; row * tile - offY < visibleBottom; row++) {
+            float ty = row * tile - offY;
+            if (ty > visibleTop)
+                canvas.drawLine(visibleLeft, ty, visibleRight, ty, tilePaint);
+            for (int col = firstCol; col * tile - offX < visibleRight; col++) {
+                float tx = col * tile - offX;
+                if (row == firstRow && tx > visibleLeft)
+                    canvas.drawLine(tx, visibleTop, tx, visibleBottom, tilePaint);
+                if (((row + col) & 1) == 0) {
+                    canvas.drawRect(Math.max(tx, visibleLeft), Math.max(ty, visibleTop),
+                            Math.min(tx + tile, visibleRight), Math.min(ty + tile, visibleBottom),
+                            tileShadePaint);
+                }
+            }
         }
     }
 
@@ -417,37 +472,37 @@ public class GameDisplay extends View {
         // NORTH wall (top edge)
         if (r.sideUsed[Room.NORTH]) {
             float door = left + r.width * 0.5f;
-            canvas.drawLine(left, top, door - hw, top, wallPaint);
-            canvas.drawLine(door + hw, top, right, top, wallPaint);
+            wall(canvas, left, top, door - hw, top);
+            wall(canvas, door + hw, top, right, top);
         } else {
-            canvas.drawLine(left, top, right, top, wallPaint);
+            wall(canvas, left, top, right, top);
         }
 
         // SOUTH wall (bottom edge)
         if (r.sideUsed[Room.SOUTH]) {
             float door = left + r.width * 0.5f;
-            canvas.drawLine(left, bottom, door - hw, bottom, wallPaint);
-            canvas.drawLine(door + hw, bottom, right, bottom, wallPaint);
+            wall(canvas, left, bottom, door - hw, bottom);
+            wall(canvas, door + hw, bottom, right, bottom);
         } else {
-            canvas.drawLine(left, bottom, right, bottom, wallPaint);
+            wall(canvas, left, bottom, right, bottom);
         }
 
         // EAST wall (right edge)
         if (r.sideUsed[Room.EAST]) {
             float door = top + r.height * 0.5f;
-            canvas.drawLine(right, top, right, door - hw, wallPaint);
-            canvas.drawLine(right, door + hw, right, bottom, wallPaint);
+            wall(canvas, right, top, right, door - hw);
+            wall(canvas, right, door + hw, right, bottom);
         } else {
-            canvas.drawLine(right, top, right, bottom, wallPaint);
+            wall(canvas, right, top, right, bottom);
         }
 
         // WEST wall (left edge)
         if (r.sideUsed[Room.WEST]) {
             float door = top + r.height * 0.5f;
-            canvas.drawLine(left, top, left, door - hw, wallPaint);
-            canvas.drawLine(left, door + hw, left, bottom, wallPaint);
+            wall(canvas, left, top, left, door - hw);
+            wall(canvas, left, door + hw, left, bottom);
         } else {
-            canvas.drawLine(left, top, left, bottom, wallPaint);
+            wall(canvas, left, top, left, bottom);
         }
     }
 
@@ -470,9 +525,9 @@ public class GameDisplay extends View {
         // Scale so the whole layout fits inside MINIMAP_SIZE, keeping aspect ratio
         float scale   = Math.min(MINIMAP_SIZE / layoutW, MINIMAP_SIZE / layoutH);
 
-        // Top-right corner placement
-        float bgLeft   = getWidth()  - MINIMAP_SIZE - MINIMAP_PADDING;
-        float bgTop    = MINIMAP_PADDING;
+        // Top-right corner placement, clear of the camera cutout
+        float bgLeft   = getWidth()  - MINIMAP_SIZE - MINIMAP_PADDING - safeRight;
+        float bgTop    = MINIMAP_PADDING + safeTop;
         float bgRight  = bgLeft + MINIMAP_SIZE;
         float bgBottom = bgTop  + MINIMAP_SIZE;
 

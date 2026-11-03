@@ -65,9 +65,11 @@ public class BatchGenerator {
             JSONObject textPart = new JSONObject().put("text", prompt);
             JSONObject content  = new JSONObject()
                     .put("parts", new JSONArray().put(textPart));
+            // Thinking tokens count toward maxOutputTokens, so leave plenty of room for the JSON itself
             JSONObject genCfg   = new JSONObject()
-                    .put("maxOutputTokens", 16384)
-                    .put("temperature", 0.9);
+                    .put("maxOutputTokens", 32768)
+                    .put("temperature", 0.9)
+                    .put("responseMimeType", "application/json");
             JSONObject body     = new JSONObject()
                     .put("contents", new JSONArray().put(content))
                     .put("generationConfig", genCfg);
@@ -83,7 +85,7 @@ public class BatchGenerator {
                 @Override
                 public void onFailure(Call call, IOException e) {
                     Log.e(TAG, "Network failure: " + e.getMessage());
-                    listener.onFailure(e.getMessage());
+                    listener.onFailure("network: " + e.getMessage());
                 }
 
                 @Override
@@ -105,7 +107,7 @@ public class BatchGenerator {
                         listener.onSuccess(result, jsonText);
                     } catch (Exception e) {
                         Log.e(TAG, "Parse error: " + e.getMessage(), e);
-                        listener.onFailure("Parse error: " + e.getMessage());
+                        listener.onFailure(e.getMessage());
                     }
                 }
             });
@@ -184,18 +186,32 @@ public class BatchGenerator {
 
     /**
      * Extracts the inner JSON text from the Gemini API response wrapper.
-     * Strips markdown fences if present.
+     * Joins all answer parts, strips markdown fences and reports blocked or cut-off replies.
      */
     private static String extractJsonText(String rawResponse) throws Exception {
         JSONObject apiResp = new JSONObject(rawResponse);
-        String text = apiResp
-                .getJSONArray("candidates")
-                .getJSONObject(0)
-                .getJSONObject("content")
-                .getJSONArray("parts")
-                .getJSONObject(0)
-                .getString("text");
-        text = text.trim();
+        JSONArray candidates = apiResp.optJSONArray("candidates");
+        if (candidates == null || candidates.length() == 0) {
+            JSONObject feedback = apiResp.optJSONObject("promptFeedback");
+            throw new Exception("no reply" + (feedback != null ? " (" + feedback.optString("blockReason") + ")" : ""));
+        }
+        JSONObject candidate = candidates.getJSONObject(0);
+        String finishReason = candidate.optString("finishReason", "");
+        Log.d(TAG, "finishReason: " + finishReason);
+
+        StringBuilder sb = new StringBuilder();
+        JSONObject content = candidate.optJSONObject("content");
+        JSONArray parts = content != null ? content.optJSONArray("parts") : null;
+        if (parts != null) {
+            for (int i = 0; i < parts.length(); i++) {
+                JSONObject part = parts.getJSONObject(i);
+                if (!part.optBoolean("thought", false)) sb.append(part.optString("text", ""));
+            }
+        }
+        String text = sb.toString().trim();
+        if (text.isEmpty() || "MAX_TOKENS".equals(finishReason)) {
+            throw new Exception("reply cut off (" + finishReason + ")");
+        }
         if (text.startsWith("```")) {
             text = text.replaceAll("```json", "").replaceAll("```", "").trim();
         }
@@ -254,14 +270,14 @@ public class BatchGenerator {
         }
         Log.d(TAG, "Parsed " + enemyPool.size() + " enemy templates");
 
-        // Parse shop items per floor
+        // Parse shop items per floor; a missing floor is filled with offline items below
         Map<Integer, List<ShopItem>> shopByFloor = new HashMap<>();
-        JSONObject shopObj = root.getJSONObject("shop");
+        JSONObject shopObj = root.optJSONObject("shop");
         for (int f = rangeStart; f <= rangeEnd; f++) {
             String key = "floor" + f;
             List<ShopItem> items = new ArrayList<>();
-            if (shopObj.has(key)) {
-                JSONArray arr = shopObj.getJSONArray(key);
+            JSONArray arr = shopObj != null ? shopObj.optJSONArray(key) : null;
+            if (arr != null) {
                 for (int j = 0; j < arr.length(); j++) {
                     ShopItem item = parseShopItem(arr.getJSONObject(j));
                     if (item != null) items.add(item);
@@ -271,12 +287,15 @@ public class BatchGenerator {
         }
 
         // Parse boss
-        JSONObject bossObj = root.getJSONObject("boss");
+        JSONObject bossObj = root.optJSONObject("boss");
+        if (bossObj == null) bossObj = new JSONObject();
         String bossName  = bossObj.optString("name", "The Ancient One");
         String bossTitle = bossObj.optString("title", "Ruler of the Void");
         int bossColor    = parseColor(bossObj.optString("colorHex", "#FF4444"));
 
-        return new BatchResult(enemyPool, shopByFloor, bossName, bossTitle, bossColor);
+        BatchResult result = new BatchResult(enemyPool, shopByFloor, bossName, bossTitle, bossColor);
+        fillGaps(result, rangeStart, rangeEnd);
+        return result;
     }
 
     private ShopItem parseShopItem(JSONObject obj) {
@@ -320,6 +339,101 @@ public class BatchGenerator {
     private int parseColor(String hex) {
         try { return Color.parseColor(hex); }
         catch (Exception e) { return Color.parseColor("#FF4444"); }
+    }
+
+    // ============================================================
+    // OFFLINE FALLBACK — same formulas as the prompt, used when Gemini can't deliver
+    // ============================================================
+
+    private static final String[] ENEMY_ADJ  = {"Hollow", "Ashen", "Rotting", "Gloom", "Bone", "Blight", "Cinder", "Void"};
+    private static final String[] ENEMY_NOUN = {"Ghoul", "Wretch", "Stalker", "Husk", "Shade", "Fiend", "Revenant", "Crawler"};
+    private static final String[] BOSS_NAMES  = {"Morvath", "Xal'zur", "Veyra", "Grimhold", "Ossmaw", "Nhalek"};
+    private static final String[] BOSS_TITLES = {"the Hollow Crown", "Warden of Ash", "Mother of Rot",
+            "the Last Bell", "Eater of Light", "Lord of the Deep"};
+    private static final String[] COLORS = {"#C0392B", "#8E44AD", "#16A085", "#D35400", "#7F8C8D", "#2E86C1", "#B7950B"};
+    private static final String[] ITEM_ADJ = {"Rusted", "Ashen", "Grim", "Cursed", "Hallowed", "Bloodforged", "Duskwoven"};
+    private static final String[] MELEE   = {"Blade", "Cleaver", "Mace", "Glaive", "Dagger", "Warhammer"};
+    private static final String[] RANGED  = {"Wand", "Staff", "Crossbow", "Sling", "Tome"};
+    private static final String[][] ARMOR = {
+            {"HEAD", "Helm"}, {"HEAD", "Hood"}, {"CHEST", "Cuirass"}, {"CHEST", "Robe"},
+            {"LEGS", "Greaves"}, {"LEGS", "Leggings"}, {"BOOTS", "Boots"}, {"BOOTS", "Sabatons"}};
+
+    /** A complete offline batch for a range. Not saved to disk, so a later session retries Gemini. */
+    static BatchResult fallbackBatch(int rangeStart, int rangeEnd) {
+        BatchResult result = new BatchResult(new ArrayList<>(), new HashMap<>(), null, null, 0);
+        fillGaps(result, rangeStart, rangeEnd);
+        return result;
+    }
+
+    /** Fills whatever the AI reply left out (enemies, a floor's shop, the boss) with offline content. */
+    private static void fillGaps(BatchResult result, int rangeStart, int rangeEnd) {
+        java.util.Random rng = new java.util.Random();
+        if (result.enemyPool.isEmpty()) {
+            for (int i = 0; i < 4; i++) {
+                result.enemyPool.add(new EnemyTemplate(
+                        pick(rng, ENEMY_ADJ) + " " + pick(rng, ENEMY_NOUN), "",
+                        Color.parseColor(pick(rng, COLORS)),
+                        Math.min(3f, 0.8f + rng.nextFloat() * (0.6f + rangeStart * 0.05f)),
+                        0.6f + rng.nextFloat() * 0.4f));
+            }
+        }
+        for (int f = rangeStart; f <= rangeEnd; f++) {
+            List<ShopItem> items = result.shopByFloor.get(f);
+            if (items != null && !items.isEmpty()) continue;
+            items = new ArrayList<>();
+            for (int i = 0; i < 6; i++) items.add(fallbackItem(f, i / 2, rng)); // 2 weapons, 2 armor, 2 consumables
+            result.shopByFloor.put(f, items);
+        }
+        if (result.bossName == null) {
+            result.bossName  = pick(rng, BOSS_NAMES);
+            result.bossTitle = pick(rng, BOSS_TITLES);
+            result.bossColor = Color.parseColor(pick(rng, COLORS));
+        }
+    }
+
+    private static ShopItem fallbackItem(int floor, int kind, java.util.Random rng) {
+        // Rarity: 55% common, 28% rare, 13% epic, 4% legendary
+        float roll = rng.nextFloat();
+        int tier = roll < 0.55f ? 0 : roll < 0.83f ? 1 : roll < 0.96f ? 2 : 3;
+        float[][] statRange  = {{0.7f, 1.3f}, {1.4f, 2.2f}, {2.0f, 3.5f}, {3.0f, 7.0f}};
+        float[][] priceRange = {{0.5f, 1.0f}, {1.0f, 2.0f}, {2.0f, 4.0f}, {4.0f, 9.0f}};
+        float stat = statRange[tier][0] + rng.nextFloat() * (statRange[tier][1] - statRange[tier][0]);
+        float price = priceRange[tier][0] + rng.nextFloat() * (priceRange[tier][1] - priceRange[tier][0]);
+
+        ShopItem item = new ShopItem();
+        item.rarity   = new String[]{"COMMON", "RARE", "EPIC", "LEGENDARY"}[tier];
+        item.colorHex = new String[]{"#B0B0B0", "#4FA3FF", "#B060FF", "#FFB020"}[tier];
+        item.color    = Color.parseColor(item.colorHex);
+        item.price    = Math.max(1, Math.round(floor * 5 * price));
+        item.description = "Scavenged from floor " + floor + ".";
+
+        if (kind == 0) {
+            item.type = ShopItem.ItemType.WEAPON;
+            item.isProjectile = rng.nextFloat() < 0.35f;
+            item.name     = pick(rng, ITEM_ADJ) + " " + pick(rng, item.isProjectile ? RANGED : MELEE);
+            item.damage   = Math.max(1, Math.round(floor * 3 * stat));
+            item.range    = item.isProjectile ? 500 + rng.nextInt(700) : 40 + rng.nextInt(110);
+            item.cooldown = item.isProjectile ? 450 + rng.nextInt(650) : 250 + rng.nextInt(650);
+            item.knockback = 0.05f + rng.nextFloat() * 0.35f;
+        } else if (kind == 1) {
+            String[] piece = ARMOR[rng.nextInt(ARMOR.length)];
+            item.type      = ShopItem.ItemType.ARMOR;
+            item.armorSlot = piece[0];
+            item.name      = pick(rng, ITEM_ADJ) + " " + piece[1];
+            item.defense   = Math.max(1, Math.round(floor * 8 * stat));
+            item.maxDurability = 60 + rng.nextInt(100);
+        } else {
+            boolean heal = rng.nextBoolean();
+            item.type   = ShopItem.ItemType.CONSUMABLE;
+            item.effect = heal ? "heal" : "armor_restore";
+            item.name   = heal ? "Healing Draught" : "Ironbark Tonic";
+            item.effectValue = Math.min(heal ? 100 : 80, Math.round(20 * stat));
+        }
+        return item;
+    }
+
+    private static String pick(java.util.Random rng, String[] options) {
+        return options[rng.nextInt(options.length)];
     }
 
     // ============================================================

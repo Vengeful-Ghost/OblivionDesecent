@@ -3,6 +3,7 @@ package com.example.obliviondescent;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 
 import java.util.ArrayList;
@@ -32,17 +33,51 @@ public class GameEffects {
         long born, life;
     }
 
+    private static class Slash {
+        float x, y, angle, radius, arc;
+        int color;
+        long born;
+    }
+
+    private static final long SLASH_LIFE = 180;
+
     private final List<Particle> particles = new ArrayList<>();
     private final List<FloatingText> texts = new ArrayList<>();
+    private final List<Slash> slashes = new ArrayList<>();
     private final Random rng = new Random();
 
     private final Paint particlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint slashPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF slashRect = new RectF();
 
     public GameEffects() {
         textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setTypeface(Typeface.create(Typeface.SERIF, Typeface.BOLD));
         textPaint.setShadowLayer(4f, 0f, 2f, Color.BLACK);
+        slashPaint.setStyle(Paint.Style.STROKE);
+        slashPaint.setStrokeCap(Paint.Cap.ROUND);
+    }
+
+    /**
+     * A quick fading arc showing where a swing or strike landed.
+     * @param x world X of the attacker
+     * @param y world Y of the attacker
+     * @param angle centre of the arc in degrees
+     * @param radius reach of the swing
+     * @param arc half-angle in degrees; 180 draws a full circle
+     * @param color arc colour
+     */
+    public synchronized void slash(float x, float y, float angle, float radius, float arc, int color) {
+        Slash s = new Slash();
+        s.x = x;
+        s.y = y;
+        s.angle = angle;
+        s.radius = radius;
+        s.arc = arc;
+        s.color = color;
+        s.born = System.currentTimeMillis();
+        slashes.add(s);
     }
 
     /**
@@ -124,6 +159,7 @@ public class GameEffects {
             FloatingText t = tit.next();
             if (now - t.born >= t.life) tit.remove();
         }
+        slashes.removeIf(s -> now - s.born >= SLASH_LIFE);
     }
 
     /**
@@ -135,6 +171,22 @@ public class GameEffects {
         long now = System.currentTimeMillis();
         float offX = camera.getOffsetX();
         float offY = camera.getOffsetY();
+
+        // Slashes widen slightly and thin out as they fade
+        for (Slash s : slashes) {
+            float progress = Math.min(1f, (float) (now - s.born) / SLASH_LIFE);
+            float r = s.radius * (0.85f + 0.15f * progress);
+            float cx = s.x - offX, cy = s.y - offY;
+            slashPaint.setColor(s.color);
+            slashPaint.setAlpha((int) (230 * (1f - progress)));
+            slashPaint.setStrokeWidth(14f * (1f - progress) + 2f);
+            if (s.arc >= 180f) {
+                canvas.drawCircle(cx, cy, r, slashPaint);
+            } else {
+                slashRect.set(cx - r, cy - r, cx + r, cy + r);
+                canvas.drawArc(slashRect, s.angle - s.arc, s.arc * 2f, false, slashPaint);
+            }
+        }
 
         for (Particle p : particles) {
             float progress = Math.min(1f, (float) (now - p.born) / p.life);
@@ -156,5 +208,6 @@ public class GameEffects {
     public synchronized void clear() {
         particles.clear();
         texts.clear();
+        slashes.clear();
     }
 }
