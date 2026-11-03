@@ -11,6 +11,9 @@ if (localPropsFile.exists()) {
     localProps.load(localPropsFile.inputStream())
 }
 
+// CI run number, so every pushed build is a newer version than the one installed
+val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toInt() ?: 1
+
 android {
     namespace = "com.example.obliviondescent"
     compileSdk = 35
@@ -19,8 +22,8 @@ android {
         applicationId = "com.example.obliviondescent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = buildNumber
+        versionName = "1.0.$buildNumber"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
