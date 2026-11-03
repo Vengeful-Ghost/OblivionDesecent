@@ -101,6 +101,11 @@ public class FloorManager {
         openPortal(playerX, playerY);
     }
 
+    /** Co-op guests copy the host's kill count; going through onEnemyKilled opens portals as usual. */
+    public void syncKills(int kills, float playerX, float playerY) {
+        while (killsThisFloor < kills) onEnemyKilled(playerX, playerY);
+    }
+
     /* ============================================================
        PORTAL
        ============================================================ */

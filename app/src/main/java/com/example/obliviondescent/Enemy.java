@@ -53,6 +53,13 @@ public class Enemy {
     public boolean isDead = false;
     public Type type;
 
+    // Co-op: matches a guest's mirror to the host's enemy
+    private static int nextId = 1;
+    public int id = nextId++;
+    public int templateIndex = -1; // AI template in the batch pool, -1 = none
+    private float remoteX, remoteY;
+    private boolean remotePlaced = false;
+
     private int maxHealth;
     private int health;
     private Weapon weapon;
@@ -933,6 +940,72 @@ public class Enemy {
             case ARCHER: return 4;
             case BOSS:   return 40;
             default:     return 3;
+        }
+    }
+
+    /* ============================================================
+       CO-OP SYNC
+       ============================================================ */
+
+    /**
+     * Host: appends "id,type,template,x,y,hp,maxHp,state,elapsed,duration,aim,bossMove,enraged".
+     * hp 0 means it died, -1 that it died without dropping loot.
+     */
+    public void appendState(StringBuilder sb, long now) {
+        sb.append(id).append(',').append(type.ordinal()).append(',').append(templateIndex).append(',')
+                .append((int) x).append(',').append((int) y).append(',')
+                .append(isDead ? (noGoldDrop ? -1 : 0) : health).append(',').append(maxHealth).append(',')
+                .append(behaviorState.ordinal()).append(',').append(now - stateStartTime).append(',')
+                .append(stateDuration).append(',')
+                .append((int) Math.toDegrees(Math.atan2(aimY, aimX))).append(',')
+                .append(bossMove.ordinal()).append(',').append(enraged ? 1 : 0);
+    }
+
+    /** Guest: copies the host's state from appendState's fields; a reported death plays out locally. */
+    public void applyState(String[] f, long now) {
+        remoteX = Float.parseFloat(f[3]);
+        remoteY = Float.parseFloat(f[4]);
+        if (!remotePlaced) {
+            x = remoteX;
+            y = remoteY;
+            remotePlaced = true;
+        }
+        int hp = Integer.parseInt(f[5]);
+        maxHealth = Integer.parseInt(f[6]);
+        if (hp <= 0) {
+            if (!isDead) {
+                noGoldDrop = hp < 0;
+                takeDamage(Integer.MAX_VALUE);
+            }
+            return;
+        }
+        health = hp;
+        behaviorState  = BehaviorState.values()[Integer.parseInt(f[7])];
+        stateStartTime = now - Long.parseLong(f[8]);
+        stateDuration  = Long.parseLong(f[9]);
+        double aim = Math.toRadians(Integer.parseInt(f[10]));
+        aimX = (float) Math.cos(aim);
+        aimY = (float) Math.sin(aim);
+        bossMove = BossMove.values()[Integer.parseInt(f[11])];
+        boolean nowEnraged = "1".equals(f[12]);
+        if (nowEnraged && !enraged) justEnraged = true;
+        enraged = nowEnraged;
+    }
+
+    /** Guest: glides toward the host's latest position instead of running the AI. */
+    public void followRemote() {
+        if (isDead) return;
+        float dx = remoteX - x;
+        float dy = remoteY - y;
+        x += dx * 0.3f;
+        y += dy * 0.3f;
+        if (behaviorState == BehaviorState.WINDUP) {
+            faceX = aimX;
+            faceY = aimY;
+        } else if (dx * dx + dy * dy > 1f) {
+            float d = (float) Math.sqrt(dx * dx + dy * dy);
+            faceX = dx / d;
+            faceY = dy / d;
         }
     }
 

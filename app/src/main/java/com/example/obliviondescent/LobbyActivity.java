@@ -3,6 +3,7 @@ package com.example.obliviondescent;
 import android.app.Dialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -282,16 +283,38 @@ public class LobbyActivity extends AppCompatActivity {
     private void startRun() {
         if (!isHost || lobbyCode == null) return;
         btnStart.setEnabled(false);
-        dbManager.startLobby(lobbyCode, new Random().nextLong());
+        String code = lobbyCode;
+        long seed = new Random().nextLong();
+        // The run must exist before anyone is sent into it
+        CoopSession.createRun(code, userId, success -> {
+            if (success) {
+                dbManager.startLobby(code, seed);
+            } else {
+                btnStart.setEnabled(true);
+                toast("Couldn't start the run. Check your connection.");
+            }
+        });
     }
 
     /**
-     * Every phone in the party receives the start signal and the shared seed here.
-     * Live co-op gameplay (Phase B) will launch the shared run from this point.
+     * Every phone in the party receives the start signal and the shared seed here, then enters the run.
+     * The lobby stays "started" so nobody new can join; the host deletes it when the run ends.
      */
+    @SuppressWarnings("unchecked")
     private void onRunStarted(long seed) {
-        btnStart.setEnabled(false);
-        txtStatus.setText("Everyone got the start signal! Live co-op gameplay arrives in the next update.");
+        Object me = currentPlayers.get(userId);
+        Object slot = me instanceof Map ? ((Map<String, Object>) me).get("slot") : null;
+
+        Intent intent = new Intent(this, GameActivity.class);
+        intent.putExtra(CoopSession.EXTRA_CODE, lobbyCode);
+        intent.putExtra(CoopSession.EXTRA_SEED, seed);
+        intent.putExtra(CoopSession.EXTRA_HOST, isHost);
+        intent.putExtra(CoopSession.EXTRA_SLOT, slot != null ? ((Number) slot).intValue() : 0);
+
+        resetToJoin(); // clears lobbyCode, so onDestroy doesn't leave or close the lobby
+        SoundManager.stopMenuMusic();
+        startActivity(intent);
+        finish();
     }
 
     /* ============================================================

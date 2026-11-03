@@ -39,7 +39,7 @@ import java.util.List;
  * - Batch content generation via Gemini AI
  * - Sound, vibration and HUD management
  */
-public class GameActivity extends AppCompatActivity {
+public class GameActivity extends AppCompatActivity implements CoopSession.Listener {
 
     /* ============================================================
        UI ELEMENTS
@@ -216,6 +216,19 @@ public class GameActivity extends AppCompatActivity {
     private DashCooldownView dashCooldownView;
     private DashCooldownView spinCooldownView;
 
+    // Co-op (null in solo): the host simulates enemies and floors, guests mirror them
+    private CoopSession coop;
+    private String username = "";
+    private int coopTicks = 0;
+    private int swingCount = 0;          // other phones draw a swing whenever this changes
+    private float lookAngle = 0f;
+    private boolean portalRequested = false;
+    private boolean coopEnded = false;
+    private String appliedSnapshot = null;
+    private final Set<Integer> deadEnemyIds = new HashSet<>(); // guest: deaths already shown this floor
+    private final float[] target = new float[2];
+    private Dialog shopDialog;
+
     /**
      * Initialises the game activity: UI, camera, player, floor manager, AI batch,
      * loads a saved game if one exists, and starts the logic and render threads.
@@ -266,6 +279,16 @@ public class GameActivity extends AppCompatActivity {
         player = new Player();
         player.equipWeapon(weapons.get(0));
 
+        String coopCode = getIntent().getStringExtra(CoopSession.EXTRA_CODE);
+        if (coopCode != null) {
+            coop = new CoopSession(coopCode,
+                    getSharedPreferences("loginPrefs", MODE_PRIVATE).getString("user_id", ""),
+                    getIntent().getBooleanExtra(CoopSession.EXTRA_HOST, false),
+                    getIntent().getLongExtra(CoopSession.EXTRA_SEED, 0L),
+                    getIntent().getIntExtra(CoopSession.EXTRA_SLOT, 0));
+            player.setColor(CoopSession.SLOT_COLORS[coop.slot & 3]);
+        }
+
         floorManager = new FloorManager();
 
         // Fire batch for floors 1-5 (floor 1 now included so it has shop items + named enemies)
@@ -275,10 +298,7 @@ public class GameActivity extends AppCompatActivity {
         // When the batch arrives, applyBatchToCurrentFloorIfReady() will re-spawn with
         // AI templates and the shop will auto-populate via pollForBatchThenPopulate().
 
-        currentLayout = FloorLayout.generate(
-                floorManager.getCurrentFloor(),
-                floorManager.isBossFloor(),
-                floorManager.getKillsRequired());
+        currentLayout = generateLayout();
         gameDisplay.setFloorLayout(currentLayout);
         player.x = currentLayout.entryRoom.centerX();
         player.y = currentLayout.entryRoom.centerY();
@@ -295,12 +315,13 @@ public class GameActivity extends AppCompatActivity {
         dbManager = new DBManager();
         SharedPreferences loginPrefs = getSharedPreferences("loginPrefs", MODE_PRIVATE);
         userId = loginPrefs.getString("user_id", null);
+        username = loginPrefs.getString("username", "Player");
         gameId = getIntent().getStringExtra("game_id");
         int slotIndex = getIntent().getIntExtra("slot_index", 1);
 
         statsManager = new StatsManager(dbManager, userId, gameId);
 
-        if (gameId == null && userId != null) {
+        if (gameId == null && userId != null && coop == null) {
             // New game — create Firestore save, get back the ID
             dbManager.createGameSave(userId, slotIndex, newId -> {
                 gameId = newId;
@@ -352,8 +373,258 @@ public class GameActivity extends AppCompatActivity {
         updateLevelHUD();
         updatePotionButton();
 
+        if (coop != null) {
+            gameDisplay.setRemotePlayers(coop.others.values());
+            coop.start(this);
+        }
+
         startLogicThread();
         startRenderThread();
+    }
+
+    private boolean isGuest() {
+        return coop != null && !coop.isHost();
+    }
+
+    /** Layout for the current floor; co-op seeds it so every phone builds the same dungeon. */
+    private FloorLayout generateLayout() {
+        long seed = coop != null ? coop.seed * 31 + floorManager.getCurrentFloor() : System.nanoTime();
+        return FloorLayout.generate(floorManager.getCurrentFloor(), floorManager.isBossFloor(),
+                floorManager.getKillsRequired(), seed);
+    }
+
+    /* ============================================================
+       CO-OP — the host runs the world, guests mirror it (see CoopSession)
+       ============================================================ */
+
+    /** One tick of co-op: exchange state, mirror or publish enemies, follow the host's floor. */
+    private void coopTick(long now) {
+        int floor = floorManager.getCurrentFloor();
+        for (CoopSession.RemotePlayer r : coop.others.values()) {
+            r.follow();
+            if (r.swing != r.shownSwing) {
+                r.shownSwing = r.swing;
+                if (r.floor == floor && !r.dead) showRemoteSwing(r);
+            }
+        }
+
+        if (coop.isHost()) {
+            applyCoopHits();
+            if (!isTransitioning && floorManager.isPortalOpen() && coop.anyPortalRequest(floor))
+                startFloorTransition();
+            if (playerHealth <= 0 && !coopEnded && coop.allOthersDown(floor)) {
+                coopEnded = true;
+                coop.publishState("over");
+            }
+        } else {
+            applyEnemySnapshot(now);
+            applyCoopEvents(now);
+            if (coop.hostFloor > floor && !isTransitioning) startFloorTransition();
+        }
+
+        coopTicks++;
+        if (coopTicks % 5 == 0) publishSelf(floor);
+        if (coop.isHost() && coopTicks % 6 == 0) publishEnemies(floor, now);
+    }
+
+    private void publishSelf(int floor) {
+        Weapon w = player.getWeapon();
+        int flags = (playerHealth <= 0 ? CoopSession.FLAG_DEAD : 0)
+                | (portalRequested ? CoopSession.FLAG_PORTAL : 0)
+                | (w.isProjectile ? CoopSession.FLAG_RANGED : w.range >= 40f ? CoopSession.FLAG_BLADE : 0);
+        coop.publishSelf(player.x, player.y, lookAngle, playerHealth, maxHealth, flags,
+                swingCount, floor, w.color, username);
+    }
+
+    /** Host: "floor,kills" followed by one entry per enemy (see Enemy.appendState). */
+    private void publishEnemies(int floor, long now) {
+        StringBuilder sb = new StringBuilder().append(floor).append(',').append(floorManager.getKillsThisFloor());
+        synchronized (enemies) {
+            for (Enemy e : enemies) {
+                sb.append(';');
+                e.appendState(sb, now);
+            }
+        }
+        coop.publishEnemies(sb.toString());
+    }
+
+    /** Guest: copies the host's latest enemy snapshot onto local stand-ins. */
+    private void applyEnemySnapshot(long now) {
+        String snap = coop.enemySnapshot;
+        if (snap == null || snap.equals(appliedSnapshot)) return;
+        appliedSnapshot = snap;
+        try {
+            String[] parts = snap.split(";");
+            String[] head = parts[0].split(",");
+            if (Integer.parseInt(head[0]) != floorManager.getCurrentFloor()) return;
+            floorManager.syncKills(Integer.parseInt(head[1]), player.x, player.y);
+
+            Set<Integer> seen = new HashSet<>();
+            synchronized (enemies) {
+                for (int i = 1; i < parts.length; i++) {
+                    String[] f = parts[i].split(",");
+                    int id = Integer.parseInt(f[0]);
+                    seen.add(id);
+                    if (deadEnemyIds.contains(id)) continue;
+                    Enemy e = findEnemy(id);
+                    if (e == null) {
+                        if (Integer.parseInt(f[5]) <= 0) continue; // died before this phone saw it
+                        e = createMirror(id, Enemy.Type.values()[Integer.parseInt(f[1])], Integer.parseInt(f[2]));
+                        enemies.add(e);
+                    }
+                    e.applyState(f, now);
+                    if (e.isDead) deadEnemyIds.add(id);
+                }
+                // Removed by the host without dying, e.g. re-spawned once the AI templates arrived
+                enemies.removeIf(e -> !e.isDead && !seen.contains(e.id));
+            }
+        } catch (RuntimeException ex) {
+            Log.e("Coop", "Bad enemy snapshot", ex);
+        }
+    }
+
+    /** Guest: a local stand-in for one of the host's enemies; it never runs AI. */
+    private Enemy createMirror(int id, Enemy.Type type, int template) {
+        Enemy e = new Enemy(0f, 0f, type);
+        e.id = id;
+        e.isAwake = true;
+        List<EnemyTemplate> pool = getEnemyPoolForFloor(floorManager.getCurrentFloor());
+        if (template >= 0 && template < pool.size()) e.applyTemplate(pool.get(template));
+        if (type == Enemy.Type.BOSS) {
+            loadBossIdentity();
+            e.displayName  = currentBossName;
+            e.displayColor = currentBossColor;
+            activeBoss = e;
+        }
+        return e;
+    }
+
+    /** Must be called while holding the enemies lock. */
+    private Enemy findEnemy(int id) {
+        for (Enemy e : enemies) if (e.id == id) return e;
+        return null;
+    }
+
+    /** Guest: replays the host's enemy strikes and shots against this phone's player. */
+    private void applyCoopEvents(long now) {
+        CoopSession.Received event;
+        while ((event = coop.events.poll()) != null) {
+            if (now - event.at > 1000) continue; // arrived during a floor change
+            try {
+                String[] f = event.data.split(",");
+                if (Integer.parseInt(f[1]) != floorManager.getCurrentFloor()) continue;
+                float x = Float.parseFloat(f[2]);
+                float y = Float.parseFloat(f[3]);
+                float dirX = Float.parseFloat(f[4]);
+                float dirY = Float.parseFloat(f[5]);
+                if ("p".equals(f[0])) {
+                    spawnHostileShot(x, y, dirX, dirY, Float.parseFloat(f[6]), Float.parseFloat(f[7]),
+                            Integer.parseInt(f[8]), Float.parseFloat(f[9]));
+                } else {
+                    resolveStrike(x, y, dirX, dirY, Float.parseFloat(f[6]), Float.parseFloat(f[7]),
+                            Integer.parseInt(f[8]), Float.parseFloat(f[9]), Float.parseFloat(f[10]),
+                            "1".equals(f[11]), now);
+                }
+            } catch (RuntimeException ex) {
+                Log.e("Coop", "Bad event: " + event.data);
+            }
+        }
+    }
+
+    /** Host: applies the damage guests dealt ("uid,enemyId,damage,pushX,pushY,stagger"). */
+    private void applyCoopHits() {
+        String hit;
+        while ((hit = coop.hits.poll()) != null) {
+            try {
+                String[] f = hit.split(",");
+                synchronized (enemies) {
+                    Enemy e = findEnemy(Integer.parseInt(f[1]));
+                    if (e == null || e.isDead) continue;
+                    int damage = Math.max(0, Integer.parseInt(f[2]));
+                    e.takeDamage(damage);
+                    e.knockbackVX = Float.parseFloat(f[3]);
+                    e.knockbackVY = Float.parseFloat(f[4]);
+                    showEnemyHit(e, damage, false);
+                    if ("1".equals(f[5])) staggerEnemy(e);
+                }
+            } catch (RuntimeException ex) {
+                Log.e("Coop", "Bad hit: " + hit);
+            }
+        }
+    }
+
+    /** A teammate attacked: draw their swing, or a flash at the staff tip for shots. */
+    private void showRemoteSwing(CoopSession.RemotePlayer r) {
+        if (r.ranged) {
+            double a = Math.toRadians(r.angle);
+            float reach = r.body.radius + 34f;
+            effects.burst(r.body.x + (float) Math.cos(a) * reach, r.body.y + (float) Math.sin(a) * reach,
+                    r.weaponColor, 6, 5f);
+        } else {
+            effects.slash(r.body.x, r.body.y, r.angle, r.body.radius + 60f, 55f, Color.WHITE);
+        }
+    }
+
+    /** Puts the closest living player on this floor into target; false when nobody is left standing. */
+    private boolean nearestTarget(Enemy e) {
+        float best = Float.MAX_VALUE;
+        if (playerHealth > 0) {
+            best = (player.x - e.x) * (player.x - e.x) + (player.y - e.y) * (player.y - e.y);
+            target[0] = player.x;
+            target[1] = player.y;
+        }
+        if (coop == null) return best < Float.MAX_VALUE;
+        int floor = floorManager.getCurrentFloor();
+        for (CoopSession.RemotePlayer r : coop.others.values()) {
+            if (r.dead || r.floor != floor) continue;
+            float dx = r.body.x - e.x;
+            float dy = r.body.y - e.y;
+            if (dx * dx + dy * dy < best) {
+                best = dx * dx + dy * dy;
+                target[0] = r.body.x;
+                target[1] = r.body.y;
+            }
+        }
+        return best < Float.MAX_VALUE;
+    }
+
+    /** Guest: the host's AI content for a floor range ("fallback" = the shared offline set). */
+    @Override
+    public void onBatch(int rangeStart, String json) {
+        BatchResult result;
+        try {
+            result = "fallback".equals(json)
+                    ? BatchGenerator.fallbackBatch(rangeStart, rangeStart + 4, fallbackSeed(rangeStart))
+                    : batchGenerator.parseBatch(json, rangeStart, rangeStart + 4);
+        } catch (Exception e) {
+            Log.e("Coop", "Bad batch from host", e);
+            result = BatchGenerator.fallbackBatch(rangeStart, rangeStart + 4, fallbackSeed(rangeStart));
+        }
+        batchCache.put(rangeStart, result);
+    }
+
+    /** The host left or the whole party fell: end the run on this phone. */
+    @Override
+    public void onRunEnded(String reason) {
+        if (isFinishing()) return;
+        coopEnded = true;
+        isGamePaused = true;
+        new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
+                .setTitle("Run over")
+                .setMessage(reason)
+                .setCancelable(false)
+                .setPositiveButton("Main Menu", (dialog, which) -> {
+                    leaveCoop();
+                    SoundManager.stopGameMusic();
+                    startActivity(new Intent(this, MenuActivity.class));
+                    finish();
+                })
+                .show();
+    }
+
+    /** Leaves the run once; the host also deletes the lobby it started from. */
+    private void leaveCoop() {
+        if (coop != null && coop.leave() && coop.isHost()) dbManager.closeLobby(coop.code);
     }
 
     /* ============================================================
@@ -403,7 +674,7 @@ public class GameActivity extends AppCompatActivity {
             if (now - dashStartTime > DASH_DURATION) {
                 isDashing = false;
             }
-        } else {
+        } else if (playerHealth > 0) {
             player.update(joystick.getDX(), joystick.getDY());
         }
         if (currentLayout != null && !inShopRoom) {
@@ -443,16 +714,18 @@ public class GameActivity extends AppCompatActivity {
             }
         }
 
-        // Attack: hold the attack stick to keep swinging or shooting
-        if (aimJoystick.isHeld()) tryAttack(now);
+        // Attack: hold the attack stick to keep swinging or shooting (a fallen co-op player can't)
+        boolean alive = playerHealth > 0;
+        if (alive && aimJoystick.isHeld()) tryAttack(now);
         if (spinQueued) {
             spinQueued = false;
-            spinAttack(now);
+            if (alive) spinAttack(now);
         }
         // Face the attack for a moment, otherwise face where the player walks
-        player.setAimAngle(now - lastAttackTime < 400
+        lookAngle = now - lastAttackTime < 400
                 ? (float) Math.toDegrees(Math.atan2(aimDY, aimDX))
-                : player.getFacingAngle());
+                : player.getFacingAngle();
+        player.setAimAngle(lookAngle);
 
         // Mark current room as explored for minimap
         if (currentLayout != null && !inShopRoom) {
@@ -463,15 +736,22 @@ public class GameActivity extends AppCompatActivity {
         // --- 2. Update Camera ---
         camera.update(player.getX(), player.getY());
 
-        // --- 3. Update Enemies ---
+        if (coop != null) coopTick(now);
+
+        // --- 3. Update Enemies (co-op guests only mirror the host's) ---
         synchronized (enemies) {
             for (Enemy e : enemies) {
+                if (isGuest()) {
+                    e.followRemote();
+                    continue;
+                }
+                if (!nearestTarget(e)) continue; // every player is down
                 if (!e.isAwake) {
-                    e.tryWake(player.getX(), player.getY());
+                    e.tryWake(target[0], target[1]);
                     continue;
                 }
                 float prevEX = e.x, prevEY = e.y;
-                e.update(player.getX(), player.getY(), player.radius);
+                e.update(target[0], target[1], player.radius);
                 if (currentLayout != null && !inShopRoom) {
                     float[] resolved = currentLayout.resolveWallCollision(
                             prevEX, prevEY, e.x, e.y, e.radius);
@@ -534,6 +814,7 @@ public class GameActivity extends AppCompatActivity {
      * @param layout the floor layout to populate with enemies
      */
     private void spawnEnemiesForLayout(FloorLayout layout) {
+        if (isGuest()) return; // guests mirror the host's enemies
         int floor = floorManager.getCurrentFloor();
         List<EnemyTemplate> pool = getEnemyPoolForFloor(floor);
         float margin = 80f;
@@ -550,8 +831,8 @@ public class GameActivity extends AppCompatActivity {
                     enemy.applyFloorScaling(floor);
 
                     if (!pool.isEmpty()) {
-                        EnemyTemplate template = pool.get((int)(Math.random() * pool.size()));
-                        enemy.applyTemplate(template);
+                        enemy.templateIndex = (int) (Math.random() * pool.size());
+                        enemy.applyTemplate(pool.get(enemy.templateIndex));
                     }
                     enemy.setBehaviorTracker(behaviorTracker);
                     enemy.setLayout(layout);
@@ -631,19 +912,11 @@ public class GameActivity extends AppCompatActivity {
                 boolean crit = Math.random() < CRIT_CHANCE;
                 int damage = Math.round(w.damage * damageMultiplier()
                         * (finisher ? 1.5f : 1f) * (crit ? 2f : 1f));
-                e.takeDamage(damage);
                 e.lastHitTime = now;
                 hitThisSwing.add(e);
-                soundManager.playHitEnemy();
-                statsManager.onDamageGiven(damage);
-                showEnemyHit(e, damage, crit);
-                if (finisher || crit) staggerEnemy(e);
                 float d = (float) Math.sqrt(dx * dx + dy * dy);
-                if (d > 0) {
-                    float push = w.knockback * 25f * (finisher ? 2f : 1f);
-                    e.knockbackVX = (dx / d) * push;
-                    e.knockbackVY = (dy / d) * push;
-                }
+                float push = d > 0 ? w.knockback * 25f * (finisher ? 2f : 1f) / d : 0f;
+                damageEnemy(e, damage, crit, dx * push, dy * push, finisher || crit);
             }
         }
     }
@@ -751,16 +1024,18 @@ public class GameActivity extends AppCompatActivity {
      * Caches result keyed by rangeStart. After 3 failed attempts the range uses offline content.
      */
     private void generateBatch(int rangeStart, int rangeEnd) {
+        if (isGuest()) return; // guests receive the host's batches in onBatch()
         if (batchCache.containsKey(rangeStart)) return;
         if (!batchesInFlight.add(rangeStart)) return;
 
-        // Check local storage first — avoids a network call on load game
-        String cachedJson = BatchGenerator.loadRawBatch(this, rangeStart);
+        // Check local storage first — avoids a network call on load game. Co-op never touches the solo cache.
+        String cachedJson = coop == null ? BatchGenerator.loadRawBatch(this, rangeStart) : null;
         if (cachedJson != null) {
             try {
                 BatchResult result = batchGenerator.parseBatch(cachedJson, rangeStart, rangeEnd);
                 batchCache.put(rangeStart, result);
                 batchesInFlight.remove(rangeStart);
+                if (coop != null) coop.publishBatch(rangeStart, cachedJson);
                 Log.d("Batch", "=== Loaded batch " + rangeStart + "-" + rangeEnd + " from local storage ===");
                 runOnUiThread(() -> applyBatchToCurrentFloorIfReady(rangeStart));
                 return;
@@ -774,9 +1049,10 @@ public class GameActivity extends AppCompatActivity {
         batchGenerator.generateBatch(rangeStart, rangeEnd, new BatchGenerator.OnBatchGeneratedListener() {
             @Override
             public void onSuccess(BatchResult result, String jsonText) {
-                BatchGenerator.saveRawBatch(GameActivity.this, rangeStart, jsonText);
+                if (coop == null) BatchGenerator.saveRawBatch(GameActivity.this, rangeStart, jsonText);
                 batchCache.put(rangeStart, result);
                 batchesInFlight.remove(rangeStart);
+                if (coop != null) coop.publishBatch(rangeStart, jsonText);
                 Log.d("Batch", "=== Cached + saved batch for floors " + rangeStart + "-" + rangeEnd + " ===");
                 runOnUiThread(() -> applyBatchToCurrentFloorIfReady(rangeStart));
             }
@@ -787,8 +1063,9 @@ public class GameActivity extends AppCompatActivity {
                 Log.e("Batch", "=== Batch " + rangeStart + " failed (" + failures + "): " + error + " ===");
                 if (failures >= 3) {
                     // Stop waiting on the AI: offline content keeps enemies, shops and bosses coming
-                    batchCache.put(rangeStart, BatchGenerator.fallbackBatch(rangeStart, rangeEnd));
+                    batchCache.put(rangeStart, BatchGenerator.fallbackBatch(rangeStart, rangeEnd, fallbackSeed(rangeStart)));
                     batchesInFlight.remove(rangeStart);
+                    if (coop != null) coop.publishBatch(rangeStart, "fallback");
                     runOnUiThread(() -> {
                         Toast.makeText(GameActivity.this, "AI content unavailable (" + error
                                 + ") — using classic content", Toast.LENGTH_LONG).show();
@@ -805,6 +1082,11 @@ public class GameActivity extends AppCompatActivity {
         });
     }
 
+    /** Offline content seed: shared in co-op so every phone builds the same fallback. */
+    private long fallbackSeed(int rangeStart) {
+        return coop != null ? coop.seed + rangeStart : System.nanoTime();
+    }
+
     /**
      * Called when a batch lands. If the current floor is covered by that batch
      * and no kills have happened yet, clears and re-spawns enemies so the player
@@ -812,7 +1094,7 @@ public class GameActivity extends AppCompatActivity {
      * when the floor was first generated before the batch was ready.
      */
     private void applyBatchToCurrentFloorIfReady(int rangeStart) {
-        if (currentLayout == null) return;
+        if (currentLayout == null || isGuest()) return;
         int cur = floorManager.getCurrentFloor();
         if (getRangeStart(cur) != rangeStart) return;        // not our floor's batch
         if (floorManager.getKillsThisFloor() > 0) return;   // combat already started
@@ -837,42 +1119,59 @@ public class GameActivity extends AppCompatActivity {
                     effects.banner(e.x, e.y - e.radius - 60f, "ENRAGED", Color.rgb(255, 90, 40));
                 }
 
+                int floor = floorManager.getCurrentFloor();
                 for (Enemy.Shot shot : e.pendingShots) {
-                    Projectile p = new Projectile(
-                            e.x + shot.dirX * e.radius, e.y + shot.dirY * e.radius,
-                            shot.dirX, shot.dirY, shot.speed, shot.range,
-                            shot.damage, 0.15f, shot.radius, HOSTILE_SHOT_COLOR);
-                    p.hostile = true;
-                    projectiles.add(p);
+                    float sx = e.x + shot.dirX * e.radius;
+                    float sy = e.y + shot.dirY * e.radius;
+                    spawnHostileShot(sx, sy, shot.dirX, shot.dirY, shot.speed, shot.range, shot.damage, shot.radius);
+                    if (coop != null) coop.publishEvent("p," + floor + "," + sx + "," + sy + "," + shot.dirX
+                            + "," + shot.dirY + "," + shot.speed + "," + shot.range + "," + shot.damage + "," + shot.radius);
                 }
                 e.pendingShots.clear();
 
                 if (e.strikeDamage > 0) {
-                    int damage = e.strikeDamage;
+                    boolean slam = e.type == Enemy.Type.BOSS && e.strikeReach > e.radius * 2f;
+                    float knockback = e.getWeapon().knockback;
+                    resolveStrike(e.x, e.y, e.strikeDirX, e.strikeDirY, e.strikeReach, e.strikeArc,
+                            e.strikeDamage, knockback, e.radius, slam, now);
+                    if (coop != null) coop.publishEvent("s," + floor + "," + e.x + "," + e.y + "," + e.strikeDirX
+                            + "," + e.strikeDirY + "," + e.strikeReach + "," + e.strikeArc + "," + e.strikeDamage
+                            + "," + knockback + "," + e.radius + "," + (slam ? 1 : 0));
                     e.strikeDamage = 0;
-                    if (e.type == Enemy.Type.BOSS && e.strikeReach > e.radius * 2f)
-                        effects.burst(e.x, e.y, Color.rgb(255, 120, 40), 40, 16f); // slam shockwave
-                    else if (e.strikeArc < 180f)
-                        effects.slash(e.x, e.y, (float) Math.toDegrees(Math.atan2(e.strikeDirY, e.strikeDirX)),
-                                e.strikeReach, e.strikeArc, Color.rgb(255, 90, 60));
-                    if (isInStrike(e))
-                        hitPlayer(damage, e.x, e.y, e.getWeapon().knockback, now);
                 }
             }
         }
     }
 
-    /** True when the player stands inside an enemy's strike: within reach and inside its cone. */
-    private boolean isInStrike(Enemy e) {
-        float dx = player.x - e.x;
-        float dy = player.y - e.y;
+    private void spawnHostileShot(float x, float y, float dirX, float dirY, float speed, float range,
+                                  int damage, float radius) {
+        Projectile p = new Projectile(x, y, dirX, dirY, speed, range, damage, 0.15f, radius, HOSTILE_SHOT_COLOR);
+        p.hostile = true;
+        projectiles.add(p);
+    }
+
+    /** An enemy strike landing: shows it and hurts this phone's player if they stand inside it. */
+    private void resolveStrike(float x, float y, float dirX, float dirY, float reach, float arc,
+                               int damage, float knockback, float bodyRadius, boolean slam, long now) {
+        if (slam)
+            effects.burst(x, y, Color.rgb(255, 120, 40), 40, 16f); // slam shockwave
+        else if (arc < 180f)
+            effects.slash(x, y, (float) Math.toDegrees(Math.atan2(dirY, dirX)), reach, arc, Color.rgb(255, 90, 60));
+        if (isInStrike(x, y, dirX, dirY, reach, arc, bodyRadius))
+            hitPlayer(damage, x, y, knockback, now);
+    }
+
+    /** True when the player stands inside a strike: within reach and inside its cone. */
+    private boolean isInStrike(float x, float y, float dirX, float dirY, float reach, float arc, float bodyRadius) {
+        float dx = player.x - x;
+        float dy = player.y - y;
         float dist = (float) Math.sqrt(dx * dx + dy * dy);
-        if (dist > player.radius + e.strikeReach) return false;
-        if (e.strikeArc >= 180f || dist < e.radius + player.radius) return true;
+        if (dist > player.radius + reach) return false;
+        if (arc >= 180f || dist < bodyRadius + player.radius) return true;
         float toPlayer = (float) Math.toDegrees(Math.atan2(dy, dx));
-        float facing = (float) Math.toDegrees(Math.atan2(e.strikeDirY, e.strikeDirX));
+        float facing = (float) Math.toDegrees(Math.atan2(dirY, dirX));
         float angleDiff = Math.abs((toPlayer - facing + 540) % 360 - 180);
-        return angleDiff <= e.strikeArc + (float) Math.toDegrees(Math.atan2(player.radius, dist));
+        return angleDiff <= arc + (float) Math.toDegrees(Math.atan2(player.radius, dist));
     }
 
     /**
@@ -920,6 +1219,25 @@ public class GameActivity extends AppCompatActivity {
     private void staggerEnemy(Enemy e) {
         if (e.stagger())
             effects.number(e.x, e.y - e.radius - 40f, "STAGGER", Color.rgb(120, 200, 255));
+    }
+
+    /**
+     * Deals the player's damage to an enemy. A co-op guest only shows the hit and reports it;
+     * the host applies it to the real enemy.
+     */
+    private void damageEnemy(Enemy e, int damage, boolean crit, float pushX, float pushY, boolean stagger) {
+        soundManager.playHitEnemy();
+        statsManager.onDamageGiven(damage);
+        showEnemyHit(e, damage, crit);
+        if (isGuest()) {
+            e.hitFlashUntil = System.currentTimeMillis() + 90;
+            coop.sendHit(e.id + "," + damage + "," + pushX + "," + pushY + "," + (stagger ? 1 : 0));
+            return;
+        }
+        e.takeDamage(damage);
+        e.knockbackVX = pushX;
+        e.knockbackVY = pushY;
+        if (stagger) staggerEnemy(e);
     }
 
     /**
@@ -986,7 +1304,13 @@ public class GameActivity extends AppCompatActivity {
                 }
             }
 
-            if (playerHealth <= 0) {
+            if (playerHealth <= 0 && coop != null) {
+                // Co-op: the run goes on; a fallen player revives on the next floor
+                player.startDeathAnimation();
+                statsManager.onPlayerDied();
+                Toast.makeText(this, "You fell! You'll revive when your party reaches the next floor.",
+                        Toast.LENGTH_LONG).show();
+            } else if (playerHealth <= 0) {
                 isGamePaused = true;
                 player.startDeathAnimation();
                 statsManager.onPlayerDied();
@@ -1046,10 +1370,7 @@ public class GameActivity extends AppCompatActivity {
         synchronized (treasureChests) { treasureChests.clear(); }
 
         // Regenerate a fresh layout so rooms aren't pre-explored and enemies respawn
-        currentLayout = FloorLayout.generate(
-                floorManager.getCurrentFloor(),
-                floorManager.isBossFloor(),
-                floorManager.getKillsRequired());
+        currentLayout = generateLayout();
         gameDisplay.setFloorLayout(currentLayout);
         if (currentLayout.exitRoom != null) {
             floorManager.setExitRoomCenter(
@@ -1097,7 +1418,7 @@ public class GameActivity extends AppCompatActivity {
             for (Enemy e : enemies) {
                 if (e.isDead && !e.counted) {
                     e.counted = true;
-                    floorManager.onEnemyKilled(player.x, player.y);
+                    if (!isGuest()) floorManager.onEnemyKilled(player.x, player.y); // guests copy the host's count
                     statsManager.onEnemyKilled();
                     effects.burst(e.x, e.y, e.getColor(), e.type == Enemy.Type.BOSS ? 60 : 16, 9f);
                     if (!e.noGoldDrop)
@@ -1169,6 +1490,7 @@ public class GameActivity extends AppCompatActivity {
         if (len < 0.01f) return;
         aimDX /= len;
         aimDY /= len;
+        swingCount++;
 
         if (w.isProjectile) {
             fireProjectile(aimDX, aimDY);
@@ -1222,15 +1544,9 @@ public class GameActivity extends AppCompatActivity {
                 float dy = e.y - player.y;
                 float dist = (float) Math.sqrt(dx * dx + dy * dy);
                 if (dist > reach + e.radius) continue;
-                e.takeDamage(damage);
                 e.lastHitTime = now;
-                statsManager.onDamageGiven(damage);
-                showEnemyHit(e, damage, false);
-                staggerEnemy(e);
-                if (dist > 0) {
-                    e.knockbackVX = dx / dist * 22f;
-                    e.knockbackVY = dy / dist * 22f;
-                }
+                float push = dist > 0 ? 22f / dist : 0f;
+                damageEnemy(e, damage, false, dx * push, dy * push, true);
             }
         }
     }
@@ -1255,7 +1571,7 @@ public class GameActivity extends AppCompatActivity {
      */
     private void dash() {
         long now = System.currentTimeMillis();
-        if (isDashing) return;
+        if (isDashing || playerHealth <= 0) return;
         if (now - lastDashTime < DASH_COOLDOWN) return;
 
         float joyX = joystick.getDX();
@@ -1292,11 +1608,20 @@ public class GameActivity extends AppCompatActivity {
         );
 
         if (dist < player.radius + FloorManager.PORTAL_RADIUS) {
-            isTransitioning = true;
-            isGamePaused = true;
-            soundManager.playPortalEnter();
-            runOnUiThread(this::triggerFloorTransition);
+            if (isGuest()) portalRequested = true; // the host moves the whole party
+            else startFloorTransition();
         }
+    }
+
+    /** Moves to the next floor, leaving the shop first if needed. Runs on the logic thread. */
+    private void startFloorTransition() {
+        isTransitioning = true;
+        isGamePaused = true;
+        soundManager.playPortalEnter();
+        runOnUiThread(() -> {
+            if (inShopRoom) exitShopRoom();
+            else triggerFloorTransition();
+        });
     }
 
     /**
@@ -1364,21 +1689,12 @@ public class GameActivity extends AppCompatActivity {
                         float dist = getDistance(p.x, p.y, e.x, e.y);
                         if (dist < p.getRadius() + e.radius) {
                             boolean crit = Math.random() < CRIT_CHANCE;
-                            int damage = crit ? p.damage * 2 : p.damage;
-                            e.takeDamage(damage);
-                            soundManager.playHitEnemy();
                             behaviorTracker.recordAttack(getDistance(player.x, player.y, e.x, e.y));
-                            statsManager.onDamageGiven(damage);
-                            showEnemyHit(e, damage, crit);
-                            if (crit) staggerEnemy(e);
-
                             float dx = e.x - p.x;
                             float dy = e.y - p.y;
                             float d = (float) Math.sqrt(dx * dx + dy * dy);
-                            if (d > 0) {
-                                e.knockbackVX = (dx / d) * p.knockback * 25f;
-                                e.knockbackVY = (dy / d) * p.knockback * 25f;
-                            }
+                            float push = d > 0 ? p.knockback * 25f / d : 0f;
+                            damageEnemy(e, crit ? p.damage * 2 : p.damage, crit, dx * push, dy * push, crit);
 
                             p.isDead = true;
                             break;
@@ -1394,6 +1710,7 @@ public class GameActivity extends AppCompatActivity {
      * Prepares the next floor while the screen is black.
      */
     private void triggerFloorTransition() {
+        if (coop != null && coop.isHost()) coop.publishFloor(floorManager.getCurrentFloor() + 1);
         txtFloorTitle.setText("Floor " + (floorManager.getCurrentFloor() + 1));
         txtFloorTitle.setAlpha(0f);
 
@@ -1515,7 +1832,8 @@ public class GameActivity extends AppCompatActivity {
             case WEAPON:
                 Weapon weapon = item.toWeapon();
                 weapons.add(weapon);
-                dbManager.saveGeneratedWeapon(
+                // Co-op items only last for the run, so they're never stored
+                if (coop == null) dbManager.saveGeneratedWeapon(
                         userId != null ? userId : "unknown",
                         item.name, item.damage, item.range, item.cooldown,
                         item.rarity, item.color, item.knockback, item.isProjectile,
@@ -1532,7 +1850,7 @@ public class GameActivity extends AppCompatActivity {
             case ARMOR:
                 Armor armor = item.toArmor();
                 inventoryArmors.add(armor);
-                dbManager.saveGeneratedArmor(
+                if (coop == null) dbManager.saveGeneratedArmor(
                         userId != null ? userId : "unknown",
                         item.name, item.defense, item.maxDurability,
                         item.rarity, item.color, item.armorSlot,
@@ -1690,10 +2008,11 @@ public class GameActivity extends AppCompatActivity {
      * Populates 6 item cards once items are ready.
      */
     private void showShopDialog() {
-        isGamePaused = true;
+        if (coop == null) isGamePaused = true; // a co-op run keeps going for everyone
 
         final android.app.Dialog dialog = new android.app.Dialog(
                 this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        shopDialog = dialog;
         dialog.setContentView(R.layout.dialog_shop);
         dialog.setCancelable(false);
 
@@ -1771,8 +2090,12 @@ public class GameActivity extends AppCompatActivity {
                 ShopRoom.EXIT_PORTAL_X, ShopRoom.EXIT_PORTAL_Y
         );
         if (distToExit < player.radius + ShopRoom.EXIT_PORTAL_RADIUS && !isTransitioning) {
-            isTransitioning = true;
-            runOnUiThread(this::exitShopRoom);
+            if (isGuest()) {
+                portalRequested = true;
+            } else {
+                isTransitioning = true;
+                runOnUiThread(this::exitShopRoom);
+            }
         }
 
         float distToShop = getDistance(
@@ -1838,6 +2161,22 @@ public class GameActivity extends AppCompatActivity {
      */
     private void prepareNextFloor() {
         floorManager.advanceFloor();
+        if (coop != null) {
+            if (playerHealth <= 0) {
+                // Fallen players rejoin at half health
+                player.resetDeathAnimation();
+                playerHealth = maxHealth / 2;
+                playerHealthBar.setProgress(playerHealth);
+                if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
+            }
+            portalRequested = false;
+            appliedSnapshot = null;
+            deadEnemyIds.clear();
+            if (coop.isHost()) coop.clearEvents();
+        }
+        // A co-op guest can be pulled to the next floor while shopping
+        if (shopDialog != null && shopDialog.isShowing()) shopDialog.dismiss();
+        shopDialogOpen = false;
         statsManager.onFloorCleared(floorManager.getCurrentFloor());
         statsManager.flush();
         setCheckpoint(floorManager.getCurrentFloor());
@@ -1856,10 +2195,7 @@ public class GameActivity extends AppCompatActivity {
         shopBoughtIndices.clear(); // New floor → new shop stock, reset purchase state
 
         // Generate a fresh procedural layout for the new floor
-        currentLayout = FloorLayout.generate(
-                floorManager.getCurrentFloor(),
-                floorManager.isBossFloor(),
-                floorManager.getKillsRequired());
+        currentLayout = generateLayout();
         gameDisplay.setFloorLayout(currentLayout);
         player.x = currentLayout.entryRoom.centerX();
         player.y = currentLayout.entryRoom.centerY();
@@ -1899,7 +2235,21 @@ public class GameActivity extends AppCompatActivity {
         if (!floorManager.shouldSpawnBoss() || bossSpawnHandled) return;
 
         bossSpawnHandled = true;
+        loadBossIdentity();
 
+        if (isGuest()) {
+            announceBoss(); // the boss itself arrives in the host's snapshot
+            return;
+        }
+
+        // Make sure the next range is ready by the time this boss falls
+        ensureBatchFor(floorManager.getCurrentFloor() + 1);
+
+        spawnBoss();
+    }
+
+    /** Boss name, title and colour for this floor, from the AI batch when it has one. */
+    private void loadBossIdentity() {
         BatchResult bossData = getBossDataForFloor(floorManager.getCurrentFloor());
         if (bossData != null) {
             currentBossName  = bossData.bossName;
@@ -1910,11 +2260,6 @@ public class GameActivity extends AppCompatActivity {
             currentBossTitle = "Ruler of the Void";
             currentBossColor = android.graphics.Color.RED;
         }
-
-        // Make sure the next range is ready by the time this boss falls
-        ensureBatchFor(floorManager.getCurrentFloor() + 1);
-
-        spawnBoss();
     }
 
     /**
@@ -1961,7 +2306,11 @@ public class GameActivity extends AppCompatActivity {
         }
 
         enemies.add(activeBoss);
+        announceBoss();
+    }
 
+    /** Shows the boss's name and title over the screen. */
+    private void announceBoss() {
         // Build announcement text
         final String announceName  = currentBossName  != null ? currentBossName.toUpperCase()  : "⚠ BOSS ⚠";
         final String announceTitle = currentBossTitle != null ? currentBossTitle : "";
@@ -2081,7 +2430,7 @@ public class GameActivity extends AppCompatActivity {
 
     // ─── DIALOGS ──────────────────────────────────────────────────────────────
     private void showMenuDialog() {
-        isGamePaused = true;
+        if (coop == null) isGamePaused = true;
 
         final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         dialog.setContentView(R.layout.dialog_menu);
@@ -2110,6 +2459,7 @@ public class GameActivity extends AppCompatActivity {
         }
 
         btnMainMenu.setOnClickListener(v -> {
+            leaveCoop();
             SoundManager.stopGameMusic();
             Intent intent = new Intent(GameActivity.this, MenuActivity.class);
             startActivity(intent);
@@ -2211,7 +2561,7 @@ public class GameActivity extends AppCompatActivity {
     }
 
     private void showInventoryDialog() {
-        isGamePaused = true;
+        if (coop == null) isGamePaused = true;
         currentInventoryFilter = "ALL";
 
         final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
@@ -2482,6 +2832,7 @@ public class GameActivity extends AppCompatActivity {
      * @param inventoryDialog the inventory dialog to update
      */
     private void useConsumable(ConsumableStack stack, Dialog inventoryDialog) {
+        if (playerHealth <= 0) return; // a fallen co-op player waits for the next floor
         ShopItem item = stack.item;
         if ("heal".equals(item.effect)) {
             int newHp = Math.min(maxHealth, playerHealth + item.effectValue);
@@ -2801,6 +3152,7 @@ public class GameActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         threadsRunning = false;
+        leaveCoop();
         if (statsManager != null) statsManager.flush();
         if (soundManager != null) soundManager.release();
     }
@@ -2979,10 +3331,7 @@ public class GameActivity extends AppCompatActivity {
                 // layout is fine but enemies were already placed — clear and redo).
                 synchronized (enemies) { enemies.clear(); }
                 synchronized (goldCoins) { goldCoins.clear(); }
-                currentLayout = FloorLayout.generate(
-                        floorManager.getCurrentFloor(),
-                        floorManager.isBossFloor(),
-                        floorManager.getKillsRequired());
+                currentLayout = generateLayout();
                 gameDisplay.setFloorLayout(currentLayout);
                 currentLayout.entryRoom.explored = true;
                 if (currentLayout.exitRoom != null) {

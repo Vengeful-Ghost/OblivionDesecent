@@ -294,7 +294,8 @@ public class BatchGenerator {
         int bossColor    = parseColor(bossObj.optString("colorHex", "#FF4444"));
 
         BatchResult result = new BatchResult(enemyPool, shopByFloor, bossName, bossTitle, bossColor);
-        fillGaps(result, rangeStart, rangeEnd);
+        // Seeded by the reply, so every co-op phone fills the same gaps the same way
+        fillGaps(result, rangeStart, rangeEnd, new java.util.Random(jsonText.hashCode()));
         return result;
     }
 
@@ -358,16 +359,15 @@ public class BatchGenerator {
             {"HEAD", "Helm"}, {"HEAD", "Hood"}, {"CHEST", "Cuirass"}, {"CHEST", "Robe"},
             {"LEGS", "Greaves"}, {"LEGS", "Leggings"}, {"BOOTS", "Boots"}, {"BOOTS", "Sabatons"}};
 
-    /** A complete offline batch for a range. Not saved to disk, so a later session retries Gemini. */
-    static BatchResult fallbackBatch(int rangeStart, int rangeEnd) {
+    /** A complete offline batch for a range; the same seed gives the same content. Not saved to disk. */
+    static BatchResult fallbackBatch(int rangeStart, int rangeEnd, long seed) {
         BatchResult result = new BatchResult(new ArrayList<>(), new HashMap<>(), null, null, 0);
-        fillGaps(result, rangeStart, rangeEnd);
+        fillGaps(result, rangeStart, rangeEnd, new java.util.Random(seed));
         return result;
     }
 
     /** Fills whatever the AI reply left out (enemies, a floor's shop, the boss) with offline content. */
-    private static void fillGaps(BatchResult result, int rangeStart, int rangeEnd) {
-        java.util.Random rng = new java.util.Random();
+    private static void fillGaps(BatchResult result, int rangeStart, int rangeEnd, java.util.Random rng) {
         if (result.enemyPool.isEmpty()) {
             for (int i = 0; i < 4; i++) {
                 result.enemyPool.add(new EnemyTemplate(

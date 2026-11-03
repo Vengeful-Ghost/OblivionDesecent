@@ -163,6 +163,7 @@ public class Player {
     }
 
     public void setInvulnerable(boolean invulnerable) { this.invulnerable = invulnerable; }
+    public void setColor(int color) { paint.setColor(color); }
     public float getX() { return x; }
     public float getY() { return y; }
 

@@ -65,6 +65,13 @@ public class GameDisplay extends View {
     // Camera-cutout insets, so the minimap stays visible
     private int safeTop = 0, safeRight = 0;
 
+    // Co-op teammates (null in solo)
+    private java.util.Collection<CoopSession.RemotePlayer> remotePlayers;
+    private final Paint allyNamePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint allyBarBgPaint = new Paint();
+    private final Paint allyBarPaint = new Paint();
+    private final Paint allyDotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
     // Minimap
     private Paint minimapBgPaint;
     private Paint minimapBorderPaint;
@@ -207,6 +214,19 @@ public class GameDisplay extends View {
         minimapPlayerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         minimapPlayerPaint.setColor(Color.WHITE);
         minimapPlayerPaint.setStyle(Paint.Style.FILL);
+
+        allyNamePaint.setColor(Color.WHITE);
+        allyNamePaint.setTextSize(24f);
+        allyNamePaint.setTextAlign(Paint.Align.CENTER);
+        allyNamePaint.setFakeBoldText(true);
+        allyNamePaint.setShadowLayer(3f, 0f, 1f, Color.BLACK);
+        allyBarBgPaint.setColor(Color.argb(180, 0, 0, 0));
+        allyBarPaint.setColor(Color.rgb(90, 220, 110));
+    }
+
+    /** Co-op: the other players to draw, live from the session. */
+    public void setRemotePlayers(java.util.Collection<CoopSession.RemotePlayer> players) {
+        this.remotePlayers = players;
     }
 
     /**
@@ -333,6 +353,7 @@ public class GameDisplay extends View {
             drawShopPortalArrow(canvas);
         }
         // 3. Draw Player
+        drawRemotePlayers(canvas);
         player.draw(canvas, camera);
 
         if (effects != null) effects.draw(canvas, camera);
@@ -566,6 +587,32 @@ public class GameDisplay extends View {
         float px = ox + (player.x - minX) * scale;
         float py = oy + (player.y - minY) * scale;
         canvas.drawCircle(px, py, 4f, minimapPlayerPaint);
+
+        // Teammates on this floor
+        if (remotePlayers == null || floorManager == null) return;
+        for (CoopSession.RemotePlayer r : remotePlayers) {
+            if (r.dead || r.floor != floorManager.getCurrentFloor()) continue;
+            float ax = ox + (r.body.x - minX) * scale;
+            float ay = oy + (r.body.y - minY) * scale;
+            if (ax < bgLeft || ax > bgRight || ay < bgTop || ay > bgBottom) continue; // e.g. in the shop
+            allyDotPaint.setColor(r.color);
+            canvas.drawCircle(ax, ay, 4f, allyDotPaint);
+        }
+    }
+
+    /** Teammates on this floor, each with a name tag and a small health bar. */
+    private void drawRemotePlayers(Canvas canvas) {
+        if (remotePlayers == null || floorManager == null) return;
+        for (CoopSession.RemotePlayer r : remotePlayers) {
+            if (r.dead || r.floor != floorManager.getCurrentFloor()) continue;
+            r.body.draw(canvas, camera);
+            float sx = r.body.x - camera.getOffsetX();
+            float top = r.body.y - camera.getOffsetY() - r.body.radius - 30f;
+            canvas.drawText(r.name, sx, top - 12f, allyNamePaint);
+            float ratio = r.maxHp > 0 ? Math.max(0f, Math.min(1f, (float) r.hp / r.maxHp)) : 0f;
+            canvas.drawRect(sx - 40f, top - 4f, sx + 40f, top + 4f, allyBarBgPaint);
+            canvas.drawRect(sx - 40f, top - 4f, sx - 40f + 80f * ratio, top + 4f, allyBarPaint);
+        }
     }
 
     private Paint minimapPaintFor(Room r) {

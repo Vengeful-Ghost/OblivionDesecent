@@ -53,10 +53,11 @@ public class FloorLayout {
      * @param floor       Current floor number (1-based).
      * @param isBossFloor Whether a boss room should be attached before the exit.
      * @param killCount   Total enemies that must be distributed across rooms.
+     * @param seed        Same seed, same layout: co-op phones build identical floors.
      */
-    public static FloorLayout generate(int floor, boolean isBossFloor, int killCount) {
+    public static FloorLayout generate(int floor, boolean isBossFloor, int killCount, long seed) {
         FloorLayout layout = new FloorLayout();
-        Random rng = new Random();
+        Random rng = new Random(seed);
 
         // Inner room count scales with floor, capped so layouts don't get absurd.
         // floor 1 → 2-3  |  floor 5 → 4-6  |  floor 10 → 7-9  |  floor 20+ → capped 12
