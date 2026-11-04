@@ -9,12 +9,13 @@
     android:focusable="true"
     android:padding="@dimen/space_lg">
 
-    <!-- Scrolls instead of clipping on short landscape screens -->
+    <!-- Only scrolls if the card is taller than the screen -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
-        android:scrollbars="none">
+        android:scrollbars="none"
+        android:overScrollMode="ifContentScrolls">
 
     <FrameLayout
         android:layout_width="match_parent"

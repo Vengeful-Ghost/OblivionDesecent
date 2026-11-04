@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.util.AttributeSet;
 import android.view.View;
 import java.util.List;
@@ -73,20 +74,31 @@ public class GameDisplay extends View {
     private final Paint allyBarPaint = new Paint();
     private final Paint allyDotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    // Minimap
+    // Minimap: player-centred circle in the top-right corner (the HUD layout reserves this area)
+    private static final float MINIMAP_DIAMETER_DP  = 112f;
+    private static final float MINIMAP_MARGIN_DP    = 12f;
+    private static final float MINIMAP_WORLD_RADIUS = 1600f; // world units from centre to frame
+    private final float density;
+    private final Path minimapClip  = new Path();
+    private final Path minimapArrow = new Path();
+    private float mapCx, mapCy, mapRadius;
     private Paint minimapBgPaint;
+    private Paint minimapRimPaint;
     private Paint minimapBorderPaint;
+    private Paint minimapHighlightPaint;
     private Paint minimapRoomPaint;
     private Paint minimapEntryPaint;
     private Paint minimapExitPaint;
     private Paint minimapBossRoomPaint;
     private Paint minimapCorridorPaint;
     private Paint minimapPlayerPaint;
-    private static final float MINIMAP_SIZE    = 160f;
-    private static final float MINIMAP_PADDING = 20f;
+    private Paint minimapPortalPaint;
+    private Paint minimapShopPaint;
+    private Paint minimapNorthPaint;
 
     public GameDisplay(Context context, AttributeSet attrs) {
         super(context, attrs);
+        density = getResources().getDisplayMetrics().density;
         floorPaint = new Paint();
         floorPaint.setColor(Color.DKGRAY);
         floorPaint.setStrokeWidth(2f);
@@ -183,38 +195,69 @@ public class GameDisplay extends View {
         wallShadowPaint.setStyle(Paint.Style.STROKE);
         wallShadowPaint.setStrokeWidth(24f);
 
-        minimapBgPaint = new Paint();
-        minimapBgPaint.setColor(Color.argb(170, 0, 0, 0));
+        minimapBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        minimapBgPaint.setColor(Color.argb(200, 10, 8, 7));
         minimapBgPaint.setStyle(Paint.Style.FILL);
 
+        // Frame: dark bronze band, gold line inside it, faint gold highlight
+        minimapRimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        minimapRimPaint.setColor(Color.rgb(60, 45, 26));
+        minimapRimPaint.setStyle(Paint.Style.STROKE);
+        minimapRimPaint.setStrokeWidth(4f * density);
+
         minimapBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        minimapBorderPaint.setColor(Color.rgb(110, 110, 125));
+        minimapBorderPaint.setColor(Color.rgb(139, 111, 44));
         minimapBorderPaint.setStyle(Paint.Style.STROKE);
-        minimapBorderPaint.setStrokeWidth(2f);
+        minimapBorderPaint.setStrokeWidth(2f * density);
+
+        minimapHighlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        minimapHighlightPaint.setColor(Color.argb(128, 212, 175, 55));
+        minimapHighlightPaint.setStyle(Paint.Style.STROKE);
+        minimapHighlightPaint.setStrokeWidth(density);
 
         minimapRoomPaint = new Paint();
-        minimapRoomPaint.setColor(Color.rgb(80, 80, 92));
+        minimapRoomPaint.setColor(Color.rgb(58, 49, 40));
         minimapRoomPaint.setStyle(Paint.Style.FILL);
 
         minimapEntryPaint = new Paint();
-        minimapEntryPaint.setColor(Color.rgb(55, 110, 55));
+        minimapEntryPaint.setColor(Color.argb(179, 122, 139, 61));
         minimapEntryPaint.setStyle(Paint.Style.FILL);
 
         minimapExitPaint = new Paint();
-        minimapExitPaint.setColor(Color.rgb(90, 55, 130));
+        minimapExitPaint.setColor(Color.rgb(90, 58, 138));
         minimapExitPaint.setStyle(Paint.Style.FILL);
 
         minimapBossRoomPaint = new Paint();
-        minimapBossRoomPaint.setColor(Color.rgb(130, 40, 40));
+        minimapBossRoomPaint.setColor(Color.rgb(139, 24, 24));
         minimapBossRoomPaint.setStyle(Paint.Style.FILL);
 
         minimapCorridorPaint = new Paint();
-        minimapCorridorPaint.setColor(Color.rgb(58, 58, 65));
+        minimapCorridorPaint.setColor(Color.rgb(42, 33, 26));
         minimapCorridorPaint.setStyle(Paint.Style.FILL);
 
         minimapPlayerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        minimapPlayerPaint.setColor(Color.WHITE);
+        minimapPlayerPaint.setColor(Color.rgb(234, 224, 202));
         minimapPlayerPaint.setStyle(Paint.Style.FILL);
+
+        minimapPortalPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        minimapPortalPaint.setColor(Color.rgb(181, 140, 224));
+
+        minimapShopPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        minimapShopPaint.setColor(Color.rgb(212, 175, 55));
+
+        minimapNorthPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        minimapNorthPaint.setColor(Color.rgb(212, 175, 55));
+        minimapNorthPaint.setTextSize(9f * density);
+        minimapNorthPaint.setTextAlign(Paint.Align.CENTER);
+        minimapNorthPaint.setTypeface(getResources().getFont(R.font.cinzel_bold));
+        minimapNorthPaint.setShadowLayer(2f * density, 0f, 0f, Color.BLACK);
+
+        // Player arrow pointing along +x; rotated to the facing angle when drawn
+        minimapArrow.moveTo(6f * density, 0f);
+        minimapArrow.lineTo(-4f * density, -4.5f * density);
+        minimapArrow.lineTo(-2f * density, 0f);
+        minimapArrow.lineTo(-4f * density, 4.5f * density);
+        minimapArrow.close();
 
         allyNamePaint.setColor(Color.WHITE);
         allyNamePaint.setTextSize(24f);
@@ -268,6 +311,18 @@ public class GameDisplay extends View {
     public void setSafeInsets(int top, int right) {
         this.safeTop = top;
         this.safeRight = right;
+        layoutMinimap(getWidth());
+    }
+
+    /** Places the minimap circle in the top-right corner, inside the safe insets. */
+    private void layoutMinimap(int width) {
+        float margin = MINIMAP_MARGIN_DP * density;
+        mapRadius = MINIMAP_DIAMETER_DP * 0.5f * density;
+        mapCx = width - safeRight - margin - mapRadius;
+        mapCy = safeTop + margin + mapRadius;
+        // Clip edge sits under the bronze band, hiding any aliasing
+        minimapClip.reset();
+        minimapClip.addCircle(mapCx, mapCy, mapRadius - 2f * density, Path.Direction.CW);
     }
 
     /** Torchlight: the edges of the screen fall off into darkness around the player. */
@@ -278,6 +333,7 @@ public class GameDisplay extends View {
         vignettePaint.setShader(new android.graphics.RadialGradient(w / 2f, h / 2f, radius,
                 new int[]{0x00000000, 0x00000000, 0xC0000000}, new float[]{0f, 0.5f, 1f},
                 android.graphics.Shader.TileMode.CLAMP));
+        layoutMinimap(w);
     }
 
     @Override
@@ -377,8 +433,8 @@ public class GameDisplay extends View {
         if (coop == null) return;
         long now = System.currentTimeMillis();
         coopStatusPaint.setColor(coop.isSyncHealthy(now) ? Color.rgb(170, 220, 170) : Color.rgb(255, 120, 90));
-        canvas.drawText(coop.statusLine(now), getWidth() - MINIMAP_PADDING - safeRight,
-                MINIMAP_PADDING + safeTop + MINIMAP_SIZE + 30f, coopStatusPaint);
+        canvas.drawText(coop.statusLine(now), mapCx + mapRadius, mapCy + mapRadius + 18f * density,
+                coopStatusPaint);
     }
 
     // Helper to visualize the "Infinite" world
@@ -541,77 +597,87 @@ public class GameDisplay extends View {
         }
     }
 
+    /** Circular, player-centred, north-up minimap inside a gold frame. */
     private void drawMinimap(Canvas canvas) {
         if (floorLayout == null || player == null) return;
 
-        // Compute world bounding box across all rooms
-        float minX = Float.MAX_VALUE,  minY = Float.MAX_VALUE;
-        float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
-        for (Room r : floorLayout.rooms) {
-            if (r.x           < minX) minX = r.x;
-            if (r.y           < minY) minY = r.y;
-            if (r.x + r.width  > maxX) maxX = r.x + r.width;
-            if (r.y + r.height > maxY) maxY = r.y + r.height;
-        }
-        float layoutW = maxX - minX;
-        float layoutH = maxY - minY;
-        if (layoutW <= 0 || layoutH <= 0) return;
+        // World -> minimap: the player at the centre, MINIMAP_WORLD_RADIUS reaches the frame
+        float scale = (mapRadius - 4f * density) / MINIMAP_WORLD_RADIUS;
+        float ox = mapCx - player.x * scale;
+        float oy = mapCy - player.y * scale;
 
-        // Scale so the whole layout fits inside MINIMAP_SIZE, keeping aspect ratio
-        float scale   = Math.min(MINIMAP_SIZE / layoutW, MINIMAP_SIZE / layoutH);
-
-        // Top-right corner placement, clear of the camera cutout
-        float bgLeft   = getWidth()  - MINIMAP_SIZE - MINIMAP_PADDING - safeRight;
-        float bgTop    = MINIMAP_PADDING + safeTop;
-        float bgRight  = bgLeft + MINIMAP_SIZE;
-        float bgBottom = bgTop  + MINIMAP_SIZE;
-
-        // Origin for world→minimap translation (centres the layout inside the box)
-        float ox = bgLeft + (MINIMAP_SIZE - layoutW * scale) * 0.5f;
-        float oy = bgTop  + (MINIMAP_SIZE - layoutH * scale) * 0.5f;
-
-        // Background
-        canvas.drawRect(bgLeft, bgTop, bgRight, bgBottom, minimapBgPaint);
-        canvas.drawRect(bgLeft, bgTop, bgRight, bgBottom, minimapBorderPaint);
+        canvas.save();
+        canvas.clipPath(minimapClip);
+        canvas.drawCircle(mapCx, mapCy, mapRadius, minimapBgPaint);
 
         // Corridors — visible when at least one endpoint room is explored
         for (Corridor c : floorLayout.corridors) {
             Room rA = minimapRoom(c.roomIdA);
             Room rB = minimapRoom(c.roomIdB);
             if ((rA != null && rA.explored) || (rB != null && rB.explored)) {
-                float cx = ox + (c.x - minX) * scale;
-                float cy = oy + (c.y - minY) * scale;
-                float cw = Math.max(1f, c.width  * scale);
-                float ch = Math.max(1f, c.height * scale);
-                canvas.drawRect(cx, cy, cx + cw, cy + ch, minimapCorridorPaint);
+                canvas.drawRect(ox + c.x * scale, oy + c.y * scale,
+                        ox + (c.x + c.width) * scale, oy + (c.y + c.height) * scale, minimapCorridorPaint);
             }
         }
 
         // Rooms — only explored ones
         for (Room r : floorLayout.rooms) {
             if (!r.explored) continue;
-            float rx = ox + (r.x - minX) * scale;
-            float ry = oy + (r.y - minY) * scale;
-            float rw = Math.max(2f, r.width  * scale);
-            float rh = Math.max(2f, r.height * scale);
-            canvas.drawRect(rx, ry, rx + rw, ry + rh, minimapPaintFor(r));
+            canvas.drawRect(ox + r.x * scale, oy + r.y * scale,
+                    ox + (r.x + r.width) * scale, oy + (r.y + r.height) * scale, minimapPaintFor(r));
         }
 
-        // Player dot
-        float px = ox + (player.x - minX) * scale;
-        float py = oy + (player.y - minY) * scale;
-        canvas.drawCircle(px, py, 4f, minimapPlayerPaint);
-
-        // Teammates on this floor
-        if (coop == null || floorManager == null) return;
-        for (CoopSession.RemotePlayer r : coop.others.values()) {
-            if (r.dead || r.floor != floorManager.getCurrentFloor()) continue;
-            float ax = ox + (r.body.x - minX) * scale;
-            float ay = oy + (r.body.y - minY) * scale;
-            if (ax < bgLeft || ax > bgRight || ay < bgTop || ay > bgBottom) continue; // e.g. in the shop
-            allyDotPaint.setColor(r.color);
-            canvas.drawCircle(ax, ay, 4f, allyDotPaint);
+        // Open portals, same positions as drawPortal() / drawShopPortal()
+        if (floorManager != null) {
+            if (floorManager.isPortalOpen()) {
+                float pulse = (float) (Math.sin(System.currentTimeMillis() / 400.0) * 0.125 + 0.875);
+                drawMinimapMarker(canvas, floorManager.getPortalX(), floorManager.getPortalY(),
+                        scale, pulse, minimapPortalPaint);
+            }
+            if (floorManager.isShopPortalOpen()) {
+                drawMinimapMarker(canvas, floorManager.getShopPortalX(), floorManager.getShopPortalY(),
+                        scale, 1f, minimapShopPaint);
+            }
         }
+
+        // Teammates on this floor (ones in the shop fall outside the clip)
+        if (coop != null && floorManager != null) {
+            for (CoopSession.RemotePlayer r : coop.others.values()) {
+                if (r.dead || r.floor != floorManager.getCurrentFloor()) continue;
+                allyDotPaint.setColor(r.color);
+                canvas.drawCircle(ox + r.body.x * scale, oy + r.body.y * scale, 3f * density, allyDotPaint);
+            }
+        }
+
+        // Player arrow along the facing angle; restore() drops the rotation and the clip
+        canvas.translate(mapCx, mapCy);
+        canvas.rotate(player.getFacingAngle());
+        canvas.drawPath(minimapArrow, minimapPlayerPaint);
+        canvas.restore();
+
+        // Frame on top: bronze band with a gold line, inner highlight, "N" at the top
+        float band = mapRadius - 2f * density;
+        canvas.drawCircle(mapCx, mapCy, band, minimapRimPaint);
+        canvas.drawCircle(mapCx, mapCy, band, minimapBorderPaint);
+        canvas.drawCircle(mapCx, mapCy, mapRadius - 4.5f * density, minimapHighlightPaint);
+        canvas.drawText("N", mapCx, mapCy - mapRadius + 14f * density, minimapNorthPaint);
+    }
+
+    /** Portal marker with a soft glow; pinned just inside the frame when out of range. */
+    private void drawMinimapMarker(Canvas canvas, float worldX, float worldY, float scale,
+                                   float pulse, Paint paint) {
+        float edge = mapRadius - 9f * density;
+        float dx = (worldX - player.x) * scale;
+        float dy = (worldY - player.y) * scale;
+        float dist = (float) Math.hypot(dx, dy);
+        if (dist > edge) {
+            dx *= edge / dist;
+            dy *= edge / dist;
+        }
+        paint.setAlpha((int) (90 * pulse));
+        canvas.drawCircle(mapCx + dx, mapCy + dy, 6f * density * pulse, paint);
+        paint.setAlpha(255);
+        canvas.drawCircle(mapCx + dx, mapCy + dy, 3f * density, paint);
     }
 
     /** Teammates on this floor, each with a name tag and a small health bar. */

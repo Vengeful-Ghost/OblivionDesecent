@@ -109,6 +109,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private static final float CRIT_CHANCE = 0.12f;
     // Spin: special attack around the player, queued from the UI and resolved on the logic thread
     private static final long SPIN_COOLDOWN = 6000;
+    private static final long AIM_GRACE = 90; // ms a fresh touch waits for a drag before auto-aiming
     private long lastSpinTime = 0;
     private volatile boolean spinQueued = false;
 
@@ -187,6 +188,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private List<ConsumableStack> consumableInventory = new ArrayList<>();
     private List<Armor> inventoryArmors = new ArrayList<>();
     private String currentInventoryFilter = "ALL";
+    private String inventorySort = "Type";
+    private int inventoryPage = 0;
+    private static final String[] SORT_KEYS = {"Type", "Rarity", "Damage", "Defense", "Durability", "Healing", "Name"};
+    private static final float[] SELL_RARITY = {1f, 1.6f, 2.4f, 4f}; // by rarity tier
 
     private BatchGenerator batchGenerator = new BatchGenerator();
 
@@ -285,6 +290,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         txtLevel = findViewById(R.id.txt_level);
         gameDisplay.setEffects(effects);
         effects.setFont(getResources().getFont(R.font.cinzel));
+        shopRoom.setFont(getResources().getFont(R.font.cinzel));
 
         player = new Player();
         player.equipWeapon(weapons.get(0));
@@ -742,17 +748,28 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
         }
 
-        // Attack: hold the attack stick to keep swinging or shooting (a fallen co-op player can't)
+        // Attack: hold the attack stick to keep swinging or shooting (a fallen co-op player can't).
+        // The first swing waits a moment so a drag can set the aim; a quick tap still swings.
         boolean alive = playerHealth > 0;
-        if (alive && aimJoystick.isHeld()) tryAttack(now);
+        if (aimJoystick.isHeld()) {
+            if (aimJoystick.isAiming() || aimJoystick.heldMs() >= AIM_GRACE) {
+                aimJoystick.takeTap();
+                if (alive) tryAttack(now);
+            }
+        } else if (aimJoystick.takeTap() && alive) {
+            tryAttack(now);
+        }
         if (spinQueued) {
             spinQueued = false;
             if (alive) spinAttack(now);
         }
-        // Face the attack for a moment, otherwise face where the player walks
-        lookAngle = now - lastAttackTime < 400
-                ? (float) Math.toDegrees(Math.atan2(aimDY, aimDX))
-                : player.getFacingAngle();
+        // Face the aimed direction while aiming, the last attack for a moment, otherwise the walk
+        if (alive && aimJoystick.isAiming())
+            lookAngle = (float) Math.toDegrees(Math.atan2(aimJoystick.getAimY(), aimJoystick.getAimX()));
+        else if (now - lastAttackTime < 400)
+            lookAngle = (float) Math.toDegrees(Math.atan2(aimDY, aimDX));
+        else
+            lookAngle = player.getFacingAngle();
         player.setAimAngle(lookAngle);
 
         // Mark current room as explored for minimap
@@ -1563,8 +1580,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         float reach = player.radius + 180f;
         int damage = Math.round(Math.max(w.damage, 6) * damageMultiplier() * 1.3f);
         int color = Color.rgb(140, 200, 255);
-        effects.slash(player.x, player.y, 0f, reach, 180f, color);
-        effects.burst(player.x, player.y, color, 24, 12f);
+        player.startSpin(reach, color);
+        effects.burst(player.x, player.y, color, 10, 6f);
         soundManager.playSwingMelee();
         invulnerableUntil = Math.max(invulnerableUntil, now + 250);
 
@@ -2350,6 +2367,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         activeBoss = new Enemy(spawnX, spawnY, Enemy.Type.BOSS);
         activeBoss.isAwake = true; // Boss is always immediately active
         activeBoss.applyFloorScaling(floorManager.getCurrentFloor());
+        BatchResult bossData = getBossDataForFloor(floorManager.getCurrentFloor());
+        int floor = floorManager.getCurrentFloor();
+        activeBoss.applyBossScaling(
+                bossData != null ? bossData.bossHpMultiplier : BatchGenerator.bossHpMultiplier(floor),
+                bossData != null ? bossData.bossDmgMultiplier : BatchGenerator.bossDmgMultiplier(floor));
         activeBoss.setBehaviorTracker(behaviorTracker);
         activeBoss.setLayout(currentLayout);
 
@@ -2543,6 +2565,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         TextView tab = dialog.findViewById(viewId);
         tab.setOnClickListener(v -> {
             currentInventoryFilter = filter;
+            inventoryPage = 0;
 
             int[] ids = {R.id.filter_all, R.id.filter_weapons,
                     R.id.filter_armor, R.id.filter_consumables};
@@ -2586,7 +2609,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             view.setText(armor.name);
             view.setTextColor(getRarityColor(armor.rarity.name()));
         } else {
-            view.setText("—");
+            view.setText("Empty");
             view.setTextColor(ContextCompat.getColor(this, R.color.bone_muted));
         }
     }
@@ -2594,29 +2617,55 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void populateInventoryList(Dialog dialog) {
         LinearLayout container = dialog.findViewById(R.id.inventory_list_container);
         if (container == null) return;
+        // The page size comes from the grid's measured size, so wait for the first layout
+        if (!container.isLaidOut()) {
+            container.post(() -> populateInventoryList(dialog));
+            return;
+        }
         container.removeAllViews();
 
         String f = currentInventoryFilter;
+        List<Object> items = new ArrayList<>();
+        if (f.equals("ALL") || f.equals("WEAPONS")) items.addAll(weapons);
+        if (f.equals("ALL") || f.equals("ARMOR")) items.addAll(inventoryArmors);
+        if (f.equals("ALL") || f.equals("CONSUMABLES")) items.addAll(consumableInventory);
+        // Stable sorts, so ties keep the weapons / armor / consumables order
+        if (inventorySort.equals("Name"))
+            items.sort((a, b) -> itemName(a).compareToIgnoreCase(itemName(b)));
+        else if (!inventorySort.equals("Type"))
+            items.sort((a, b) -> Float.compare(sortValue(b), sortValue(a)));
 
-        if (f.equals("ALL") || f.equals("WEAPONS")) {
-            for (Weapon weapon : weapons) {
-                addWeaponRow(container, dialog, weapon);
+        // As many square cells as fit: rows of at least 80dp, at least 4 per row
+        float w = Math.max(1, container.getWidth()), h = Math.max(1, container.getHeight());
+        int rows = Math.max(1, (int) (h / (80 * getResources().getDisplayMetrics().density)));
+        int cols = Math.max(4, (int) Math.ceil(w * rows / h));
+        int perPage = rows * cols;
+        int pages = Math.max(1, (items.size() + perPage - 1) / perPage);
+        inventoryPage = Math.max(0, Math.min(inventoryPage, pages - 1));
+        int start = inventoryPage * perPage;
+
+        LinearLayout row = null;
+        for (int i = start; i < Math.min(items.size(), start + perPage); i++) {
+            if ((i - start) % cols == 0) {
+                row = new LinearLayout(this);
+                row.setWeightSum(cols);
+                container.addView(row);
             }
+            Object item = items.get(i);
+            if (item instanceof Weapon) addWeaponRow(row, dialog, (Weapon) item);
+            else if (item instanceof Armor) addArmorRow(row, dialog, (Armor) item);
+            else addConsumableRow(row, dialog, (ConsumableStack) item);
         }
 
-        if (f.equals("ALL") || f.equals("ARMOR")) {
-            for (Armor armor : inventoryArmors) {
-                addArmorRow(container, dialog, armor);
-            }
-        }
+        ((TextView) dialog.findViewById(R.id.txt_inventory_page)).setText((inventoryPage + 1) + " / " + pages);
+        View prev = dialog.findViewById(R.id.btn_page_prev);
+        View next = dialog.findViewById(R.id.btn_page_next);
+        prev.setEnabled(inventoryPage > 0);
+        prev.setAlpha(inventoryPage > 0 ? 1f : 0.3f);
+        next.setEnabled(inventoryPage < pages - 1);
+        next.setAlpha(inventoryPage < pages - 1 ? 1f : 0.3f);
 
-        if (f.equals("ALL") || f.equals("CONSUMABLES")) {
-            for (ConsumableStack stack : consumableInventory) {
-                addConsumableRow(container, dialog, stack);
-            }
-        }
-
-        if (container.getChildCount() == 0) {
+        if (items.isEmpty()) {
             TextView empty = new TextView(this);
             empty.setText("Nothing here...");
             empty.setTextColor(ContextCompat.getColor(this, R.color.bone_muted));
@@ -2625,6 +2674,64 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             empty.setPadding(0, 48, 0, 48);
             container.addView(empty);
         }
+    }
+
+    // Higher sorts first; -1 when the stat doesn't apply, so those items drop to the end
+    private float sortValue(Object o) {
+        switch (inventorySort) {
+            case "Rarity":
+                String r = o instanceof Weapon ? ((Weapon) o).rarity.name()
+                        : o instanceof Armor ? ((Armor) o).rarity.name()
+                        : String.valueOf(((ConsumableStack) o).item.rarity).toUpperCase();
+                return java.util.Arrays.asList("COMMON", "RARE", "EPIC", "LEGENDARY").indexOf(r);
+            case "Damage":     return o instanceof Weapon ? ((Weapon) o).damage : -1;
+            case "Defense":    return o instanceof Armor ? ((Armor) o).defense : -1;
+            case "Durability": return o instanceof Armor ? ((Armor) o).durability : -1;
+            case "Healing":
+                return o instanceof ConsumableStack && "heal".equals(((ConsumableStack) o).item.effect)
+                        ? ((ConsumableStack) o).item.effectValue : -1;
+            default:           return 0;
+        }
+    }
+
+    private String itemName(Object o) {
+        return o instanceof Weapon ? ((Weapon) o).name
+                : o instanceof Armor ? ((Armor) o).name : ((ConsumableStack) o).item.name;
+    }
+
+    // Share of an item's worth paid when selling; rarer, stronger and less worn items fetch more
+    private int sellValue(Object o) {
+        if (o instanceof ConsumableStack) return Math.max(1, ((ConsumableStack) o).item.price * 2 / 5);
+        if (o instanceof Weapon) {
+            Weapon w = (Weapon) o;
+            return Math.max(1, Math.round((5 + w.damage) * SELL_RARITY[w.rarity.ordinal()]));
+        }
+        Armor a = (Armor) o;
+        float wear = 0.5f + 0.5f * a.durability / Math.max(1f, a.maxDurability);
+        return Math.max(1, Math.round((5 + a.defense * 2) * SELL_RARITY[a.rarity.ordinal()] * wear));
+    }
+
+    private void earnGold(int amount, String itemName) {
+        playerGold += amount;
+        updateGoldHUD();
+        soundManager.playCoinPickup();
+        Toast.makeText(this, "Sold " + itemName + " for " + amount + " gold", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showSortPicker(Dialog dialog, MaterialButton sortBtn) {
+        android.app.AlertDialog picker = new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
+                .setTitle("Sort by")
+                .setSingleChoiceItems(SORT_KEYS, java.util.Arrays.asList(SORT_KEYS).indexOf(inventorySort),
+                        (d, which) -> {
+                            inventorySort = SORT_KEYS[which];
+                            inventoryPage = 0;
+                            sortBtn.setText("Sort: " + inventorySort);
+                            populateInventoryList(dialog);
+                            d.dismiss();
+                        })
+                .create();
+        picker.show();
+        hideSystemUIOnWindow(picker.getWindow());
     }
 
     private void showInventoryDialog() {
@@ -2643,6 +2750,20 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             hideSystemUI();
         });
 
+        MaterialButton sortBtn = dialog.findViewById(R.id.btn_sort_inventory);
+        sortBtn.setText("Sort: " + inventorySort);
+        sortBtn.setOnClickListener(v -> showSortPicker(dialog, sortBtn));
+
+        inventoryPage = 0;
+        dialog.findViewById(R.id.btn_page_prev).setOnClickListener(v -> {
+            inventoryPage--;
+            populateInventoryList(dialog);
+        });
+        dialog.findViewById(R.id.btn_page_next).setOnClickListener(v -> {
+            inventoryPage++;
+            populateInventoryList(dialog);
+        });
+
         setupFilterTab(dialog, R.id.filter_all,          "ALL");
         setupFilterTab(dialog, R.id.filter_weapons,      "WEAPONS");
         setupFilterTab(dialog, R.id.filter_armor,        "ARMOR");
@@ -2655,63 +2776,78 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         hideSystemUIOnWindow(dialog.getWindow());
     }
 
-    private void addWeaponRow(LinearLayout container, Dialog dialog, Weapon weapon) {
-        View row = getLayoutInflater().inflate(R.layout.dialog_inventory_item, container, false);
+    private void addWeaponRow(LinearLayout row, Dialog dialog, Weapon weapon) {
+        View cell = getLayoutInflater().inflate(R.layout.dialog_inventory_item, row, false);
 
-        TextView nameView    = row.findViewById(R.id.inv_item_name);
-        TextView subView     = row.findViewById(R.id.inv_item_subtitle);
-        TextView equippedBadge = row.findViewById(R.id.inv_equipped_badge);
+        TextView nameView    = cell.findViewById(R.id.inv_item_name);
+        TextView subView     = cell.findViewById(R.id.inv_item_subtitle);
+        TextView equippedBadge = cell.findViewById(R.id.inv_equipped_badge);
+        ((android.widget.ImageView) cell.findViewById(R.id.inv_item_icon))
+                .setImageResource(weapon.isProjectile ? R.drawable.ic_range : R.drawable.ic_sword);
 
         int rarityColor = getRarityColor(weapon.rarity.name());
         nameView.setText(weapon.name);
         nameView.setTextColor(rarityColor);
-        subView.setText("WEAPON • " + weapon.rarity.name());
+        subView.setText("DMG " + weapon.damage);
 
         boolean isEquipped = player.getWeapon() == weapon;
         equippedBadge.setVisibility(isEquipped ? View.VISIBLE : View.GONE);
 
-        applyRarityBorder(row, rarityColor);
-        row.setOnClickListener(v -> showWeaponActionDialog(dialog, weapon));
-        container.addView(row);
+        applyRarityBorder(cell, rarityColor);
+        cell.setOnClickListener(v -> showWeaponActionDialog(dialog, weapon));
+        addCell(row, cell);
     }
 
-    private void addArmorRow(LinearLayout container, Dialog dialog, Armor armor) {
-        View row = getLayoutInflater().inflate(R.layout.dialog_inventory_item, container, false);
+    private void addArmorRow(LinearLayout row, Dialog dialog, Armor armor) {
+        View cell = getLayoutInflater().inflate(R.layout.dialog_inventory_item, row, false);
 
-        TextView nameView    = row.findViewById(R.id.inv_item_name);
-        TextView subView     = row.findViewById(R.id.inv_item_subtitle);
-        TextView equippedBadge = row.findViewById(R.id.inv_equipped_badge);
+        TextView nameView    = cell.findViewById(R.id.inv_item_name);
+        TextView subView     = cell.findViewById(R.id.inv_item_subtitle);
+        TextView equippedBadge = cell.findViewById(R.id.inv_equipped_badge);
+        ((android.widget.ImageView) cell.findViewById(R.id.inv_item_icon))
+                .setImageResource(slotIcon(armor.slot.name()));
 
         int rarityColor = getRarityColor(armor.rarity.name());
         nameView.setText(armor.name);
         nameView.setTextColor(rarityColor);
-        subView.setText(armor.slot.name() + " • " + armor.rarity.name());
+        subView.setText("DEF " + armor.defense);
 
         boolean isEquipped = equippedArmor.get(armor.slot) == armor;
         equippedBadge.setVisibility(isEquipped ? View.VISIBLE : View.GONE);
 
-        applyRarityBorder(row, rarityColor);
-        row.setOnClickListener(v -> showArmorActionDialog(dialog, armor));
-        container.addView(row);
+        applyRarityBorder(cell, rarityColor);
+        cell.setOnClickListener(v -> showArmorActionDialog(dialog, armor));
+        addCell(row, cell);
     }
 
-    private void addConsumableRow(LinearLayout container, Dialog dialog, ConsumableStack stack) {
-        View row = getLayoutInflater().inflate(R.layout.dialog_inventory_item, container, false);
+    private void addConsumableRow(LinearLayout row, Dialog dialog, ConsumableStack stack) {
+        View cell = getLayoutInflater().inflate(R.layout.dialog_inventory_item, row, false);
 
-        TextView nameView     = row.findViewById(R.id.inv_item_name);
-        TextView subView      = row.findViewById(R.id.inv_item_subtitle);
-        TextView quantityView = row.findViewById(R.id.inv_item_quantity);
+        TextView nameView     = cell.findViewById(R.id.inv_item_name);
+        TextView subView      = cell.findViewById(R.id.inv_item_subtitle);
+        TextView quantityView = cell.findViewById(R.id.inv_item_quantity);
+        boolean heal = "heal".equals(stack.item.effect);
+        ((android.widget.ImageView) cell.findViewById(R.id.inv_item_icon))
+                .setImageResource(heal ? R.drawable.ic_heart : R.drawable.ic_shield);
 
         int rarityColor = getRarityColor(stack.item.rarity);
         nameView.setText(stack.item.name);
         nameView.setTextColor(rarityColor);
-        subView.setText("CONSUMABLE • " + ("heal".equals(stack.item.effect) ? "Healing" : "Armor"));
+        subView.setText("+" + stack.item.effectValue + (heal ? " HP" : " AR"));
         quantityView.setVisibility(View.VISIBLE);
         quantityView.setText("x" + stack.quantity);
 
-        applyRarityBorder(row, rarityColor);
-        row.setOnClickListener(v -> showConsumableActionDialog(dialog, stack));
-        container.addView(row);
+        applyRarityBorder(cell, rarityColor);
+        cell.setOnClickListener(v -> showConsumableActionDialog(dialog, stack));
+        addCell(row, cell);
+    }
+
+    private void addCell(LinearLayout row, View cell) {
+        int gap = Math.round(4 * getResources().getDisplayMetrics().density);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        lp.setMargins(gap, gap, gap, gap);
+        row.addView(cell, lp);
     }
 
     private void showWeaponActionDialog(Dialog parentDialog, Weapon weapon) {
@@ -2740,16 +2876,19 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             Toast.makeText(this, "Equipped: " + weapon.name, Toast.LENGTH_SHORT).show();
         });
 
-        MaterialButton btnRemoveWeapon = detail.findViewById(R.id.btn_remove);
+        MaterialButton btnSellWeapon = detail.findViewById(R.id.btn_remove);
         boolean isFists = weapon == weapons.get(0);
-        btnRemoveWeapon.setVisibility(isFists ? View.GONE : View.VISIBLE);
-        btnRemoveWeapon.setOnClickListener(v -> {
+        int weaponValue = sellValue(weapon);
+        btnSellWeapon.setText("Sell  +" + weaponValue);
+        btnSellWeapon.setVisibility(isFists ? View.GONE : View.VISIBLE);
+        btnSellWeapon.setOnClickListener(v -> {
             if (player.getWeapon() == weapon) {
                 player.equipWeapon(weapons.get(0)); // Re-equip Fists
                 refreshAttackUI();
             }
             weapons.remove(weapon);
             inventoryWeaponIds.remove(weaponFirestoreIds.remove(weapon));
+            earnGold(weaponValue, weapon.name);
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
             detail.dismiss();
@@ -2783,8 +2922,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             detail.dismiss();
         });
 
-        MaterialButton btnRemoveArmor = detail.findViewById(R.id.btn_remove);
-        btnRemoveArmor.setOnClickListener(v -> {
+        MaterialButton btnSellArmor = detail.findViewById(R.id.btn_remove);
+        int armorValue = sellValue(armor);
+        btnSellArmor.setText("Sell  +" + armorValue);
+        btnSellArmor.setOnClickListener(v -> {
             // Unequip if currently equipped
             if (equippedArmor.get(armor.slot) == armor) {
                 equippedArmor.remove(armor.slot);
@@ -2792,6 +2933,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
             inventoryArmors.remove(armor);
             inventoryArmorIds.remove(armorFirestoreIds.remove(armor));
+            earnGold(armorValue, armor.name);
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
             detail.dismiss();
@@ -2822,9 +2964,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             detail.dismiss();
         });
 
-        MaterialButton btnRemoveConsumable = detail.findViewById(R.id.btn_remove);
-        btnRemoveConsumable.setOnClickListener(v -> {
-            consumableInventory.remove(stack);
+        // Sells one from the stack
+        MaterialButton btnSellConsumable = detail.findViewById(R.id.btn_remove);
+        int potionValue = sellValue(stack);
+        btnSellConsumable.setText("Sell one  +" + potionValue);
+        btnSellConsumable.setOnClickListener(v -> {
+            if (stack.decrement()) consumableInventory.remove(stack);
+            earnGold(potionValue, stack.item.name);
             updatePotionButton();
             populateInventoryList(parentDialog);
             detail.dismiss();

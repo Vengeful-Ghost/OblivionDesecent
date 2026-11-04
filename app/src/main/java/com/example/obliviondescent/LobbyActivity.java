@@ -9,6 +9,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -37,6 +38,8 @@ public class LobbyActivity extends AppCompatActivity {
 
     /** Extra: join this party code right away (used when accepting an invite). */
     public static final String EXTRA_JOIN_CODE = "join_code";
+
+    private static final int INVITE_COLUMNS = 3;
 
     private DBManager dbManager;
     private String userId;
@@ -337,10 +340,11 @@ public class LobbyActivity extends AppCompatActivity {
         dbManager.loadFollowing(userId, ids -> dbManager.loadPlayersByIds(ids, friends ->
                 runOnUiThread(() -> {
                     list.removeAllViews();
+                    int shown = 0;
                     for (LeaderboardItem friend : friends) {
-                        if (!currentPlayers.containsKey(friend.userId)) addInviteRow(list, friend);
+                        if (!currentPlayers.containsKey(friend.userId)) addInviteRow(list, friend, shown++);
                     }
-                    if (list.getChildCount() == 0) {
+                    if (shown == 0) {
                         empty.setText("No friends to invite.\nFollow players from the Stats leaderboard.");
                         empty.setVisibility(View.VISIBLE);
                     } else {
@@ -352,21 +356,36 @@ public class LobbyActivity extends AppCompatActivity {
         hideSystemUIOnWindow(dialog.getWindow());
     }
 
-    private void addInviteRow(LinearLayout list, LeaderboardItem friend) {
-        View row = LayoutInflater.from(this).inflate(R.layout.item_stat_row, list, false);
-        TextView name   = row.findViewById(R.id.stat_label);
-        TextView action = row.findViewById(R.id.stat_value);
+    // Friend cards, three per row, tap to invite
+    private void addInviteRow(LinearLayout list, LeaderboardItem friend, int index) {
+        LinearLayout row;
+        if (index % INVITE_COLUMNS == 0) {
+            row = new LinearLayout(this);
+            row.setWeightSum(INVITE_COLUMNS);
+            list.addView(row);
+        } else {
+            row = (LinearLayout) list.getChildAt(list.getChildCount() - 1);
+        }
+        View cell = LayoutInflater.from(this).inflate(R.layout.item_stat_cell, row, false);
+        TextView name   = cell.findViewById(R.id.stat_value);
+        TextView action = cell.findViewById(R.id.stat_label);
+        cell.findViewById(R.id.stat_icon).setVisibility(View.GONE);
         name.setText(friend.username);
-        action.setText("INVITE");
-        action.setOnClickListener(v -> {
+        action.setText("Tap to invite");
+        cell.setOnClickListener(v -> {
             String code = lobbyCode;
             if (code == null) return;
-            action.setOnClickListener(null);
-            action.setText("...");
+            cell.setOnClickListener(null);
+            action.setText("Sending...");
             dbManager.sendInvite(userId, username, friend.userId, code, success ->
-                    runOnUiThread(() -> action.setText(success ? "SENT" : "FAILED")));
+                    runOnUiThread(() -> action.setText(success ? "Invite sent" : "Failed")));
         });
-        list.addView(row);
+        float dp = getResources().getDisplayMetrics().density;
+        cell.setMinimumHeight(Math.round(48 * dp));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        int gap = Math.round(4 * dp);
+        lp.setMargins(gap, gap, gap, gap);
+        row.addView(cell, lp);
     }
 
     private void copyCode() {

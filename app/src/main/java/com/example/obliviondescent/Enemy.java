@@ -714,6 +714,13 @@ public class Enemy {
         );
     }
 
+    /** Boss strength from the AI batch, on top of floor scaling. */
+    public void applyBossScaling(float hp, float dmg) {
+        maxHealth = Math.max(1, (int) (maxHealth * hp));
+        health = maxHealth;
+        dmgMultiplier = dmg;
+    }
+
     /* ============================================================
        DRAW (with Health Bar + Label)
        ============================================================ */

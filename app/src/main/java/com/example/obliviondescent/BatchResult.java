@@ -18,6 +18,8 @@ public class BatchResult {
     public String bossTitle;
     /** Boss display colour. */
     public int    bossColor;
+    /** Boss stat multipliers on top of floor scaling. */
+    public float  bossHpMultiplier, bossDmgMultiplier;
 
     /**
      * Creates a new batch result with all generated data.

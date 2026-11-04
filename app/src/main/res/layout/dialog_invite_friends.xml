@@ -9,9 +9,22 @@
     android:focusable="true"
     tools:ignore="HardcodedText">
 
+    <!-- Only scrolls if there are more friends than fit -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:overScrollMode="ifContentScrolls">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingVertical="@dimen/space_md">
+
     <LinearLayout
         style="@style/OD.Card"
-        android:layout_width="380dp"
+        android:layout_width="@dimen/card_width_lg"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:orientation="vertical"
@@ -53,6 +66,14 @@
             android:background="@drawable/divider_gold"
             android:layout_marginBottom="@dimen/space_sm"/>
 
+        <!-- Friend cards (people you follow), three per row; filled in Java -->
+        <LinearLayout
+            android:id="@+id/invite_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"/>
+
+        <!-- Loading and empty messages -->
         <TextView
             android:id="@+id/invite_empty"
             style="@style/OD.Text.Caption"
@@ -61,22 +82,12 @@
             android:text="Loading friends..."
             android:textColor="@color/bone_muted"
             android:gravity="center"
-            android:paddingVertical="@dimen/space_xl"/>
-
-        <!-- Friend rows (people you follow) -->
-        <ScrollView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:scrollbars="none">
-
-            <LinearLayout
-                android:id="@+id/invite_list"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"/>
-
-        </ScrollView>
+            android:paddingVertical="@dimen/space_md"/>
 
     </LinearLayout>
+
+    </FrameLayout>
+
+    </ScrollView>
 
 </FrameLayout>

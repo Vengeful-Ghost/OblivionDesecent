@@ -27,19 +27,20 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+    <!-- Top-left: menu + vitals -->
     <LinearLayout
         android:id="@+id/top_hud"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:padding="@dimen/space_md"
-        android:gravity="center_vertical"
-        android:layout_alignParentTop="true">
+        android:layout_alignParentTop="true"
+        android:layout_alignParentStart="true">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_menu"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
+            android:layout_width="@dimen/touch_min"
+            android:layout_height="@dimen/touch_min"
             app:backgroundTint="@null"
             android:background="@drawable/icon_btn_circle"
             app:icon="@drawable/menu_btn"
@@ -53,12 +54,12 @@
             app:strokeWidth="0dp" />
 
         <LinearLayout
-            android:layout_width="240dp"
+            android:layout_width="184dp"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="@dimen/space_sm"
             android:background="@drawable/hud_panel"
-            android:layout_marginStart="@dimen/space_md">
+            android:layout_marginStart="@dimen/space_sm">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -119,13 +120,71 @@
 
             </LinearLayout>
 
+            <TextView
+                android:id="@+id/txt_level"
+                style="@style/OD.Text.Value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="Lv 1  •  0/20 XP"
+                android:textColor="@color/gold_glow"
+                android:textSize="@dimen/text_caption"
+                android:shadowDx="0"/>
+
         </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Top-centre: floor and kill progress -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/space_sm"
+        android:background="@drawable/hud_panel"
+        android:gravity="center_horizontal"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="@dimen/space_md">
+
+        <TextView
+            android:id="@+id/txt_floor_number"
+            style="@style/OD.Text.Value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Floor 1"
+            android:textColor="@color/bone_white"
+            android:textSize="@dimen/text_caption"
+            android:letterSpacing="0.06"
+            android:shadowDx="0"/>
+
+        <TextView
+            android:id="@+id/txt_kill_progress"
+            style="@style/OD.Text.Value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0 / 8"
+            android:textColor="@color/crimson_glow"
+            android:textSize="@dimen/text_caption"
+            android:shadowDx="0"/>
+
+    </LinearLayout>
+
+    <!-- Bag + gold, left of the canvas minimap (top-right 140dp is reserved) -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="@dimen/space_md"
+        android:layout_marginEnd="140dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_inventory"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
-            android:layout_marginStart="@dimen/space_md"
+            android:layout_width="@dimen/touch_min"
+            android:layout_height="@dimen/touch_min"
             app:backgroundTint="@null"
             android:background="@drawable/icon_btn_circle"
             app:icon="@drawable/bag_btn"
@@ -138,90 +197,148 @@
             android:insetBottom="0dp"
             app:strokeWidth="0dp"/>
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/txt_gold"
+            style="@style/OD.Text.Value"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_marginStart="@dimen/space_md"
-            android:padding="@dimen/space_sm"
+            android:layout_marginTop="@dimen/space_sm"
             android:background="@drawable/hud_panel"
-            android:gravity="center_horizontal">
-
-            <TextView
-                android:id="@+id/txt_floor_number"
-                style="@style/OD.Text.Value"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Floor 1"
-                android:textColor="@color/bone_white"
-                android:textSize="@dimen/text_caption"
-                android:letterSpacing="0.06"
-                android:shadowDx="0"/>
-
-            <TextView
-                android:id="@+id/txt_kill_progress"
-                style="@style/OD.Text.Value"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0 / 8"
-                android:textColor="@color/crimson_glow"
-                android:textSize="@dimen/text_caption"
-                android:shadowDx="0"/>
-
-            <TextView
-                android:id="@+id/txt_gold"
-                style="@style/OD.Text.Value"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:text="0"
-                android:textSize="@dimen/text_caption"
-                android:drawableStart="@drawable/ic_coin"
-                android:drawablePadding="@dimen/space_xs"
-                android:drawableTint="@color/gold_bright"
-                android:shadowDx="0"/>
-
-            <TextView
-                android:id="@+id/txt_level"
-                style="@style/OD.Text.Value"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Lv 1  •  0/20 XP"
-                android:textColor="@color/gold_glow"
-                android:textSize="@dimen/text_caption"
-                android:shadowDx="0"/>
-
-        </LinearLayout>
-
+            android:paddingHorizontal="@dimen/space_sm"
+            android:paddingVertical="@dimen/space_xs"
+            android:gravity="center_vertical"
+            android:text="0"
+            android:textSize="@dimen/text_caption"
+            android:drawableStart="@drawable/ic_coin"
+            android:drawablePadding="@dimen/space_xs"
+            android:drawableTint="@color/gold_bright"
+            android:shadowDx="0"/>
 
     </LinearLayout>
 
     <com.example.obliviondescent.JoystickView
         android:id="@+id/joystick"
-        android:layout_width="200dp"
-        android:layout_height="200dp"
+        android:layout_width="168dp"
+        android:layout_height="168dp"
         android:layout_alignParentBottom="true"
         android:layout_alignParentStart="true"
-        android:layout_marginBottom="24dp"
-        android:layout_marginStart="32dp"/>
+        android:layout_marginBottom="@dimen/space_lg"
+        android:layout_marginStart="@dimen/space_xl"/>
 
-    <LinearLayout
+    <!-- Attack stick with dash, spin and potion on an arc ~100dp from its centre -->
+    <FrameLayout
         android:id="@+id/action_buttons"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="bottom"
+        android:layout_width="188dp"
+        android:layout_height="184dp"
         android:layout_alignParentBottom="true"
         android:layout_alignParentEnd="true"
-        android:layout_marginBottom="40dp"
-        android:layout_marginEnd="40dp">
+        android:layout_marginBottom="@dimen/space_lg"
+        android:layout_marginEnd="20dp">
 
-        <!-- Quick-heal potion with a count badge -->
+        <!-- Attack stick — hold to attack, drag to aim -->
+        <com.example.obliviondescent.AimJoystickView
+            android:id="@+id/aim_joystick"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_gravity="bottom|end"
+            android:visibility="gone"/>
+
+        <!-- Attack button — hidden, replaced by aim joystick -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_attack"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_gravity="bottom|end"
+            app:cornerRadius="48dp"
+            android:backgroundTint="@color/crimson_base"
+            android:text="ATK"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="@color/bone_white"
+            android:fontFamily="@font/cinzel"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            app:strokeWidth="2dp"
+            app:strokeColor="@color/crimson_glow"
+            android:visibility="gone"/>
+
+        <!-- Dash button wrapped in FrameLayout for cooldown arc overlay -->
         <FrameLayout
             android:layout_width="56dp"
             android:layout_height="56dp"
-            android:layout_marginEnd="20dp"
-            android:layout_marginBottom="16dp">
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="132dp"
+            android:layout_marginBottom="@dimen/space_sm">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_dash"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:backgroundTint="@null"
+                android:background="@drawable/icon_btn_circle"
+                android:padding="0dp"
+                android:text="DASH"
+                android:textSize="@dimen/text_caption"
+                android:textColor="@color/gold_bright"
+                android:fontFamily="@font/cinzel"
+                android:textStyle="bold"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                app:strokeWidth="0dp"/>
+
+            <com.example.obliviondescent.DashCooldownView
+                android:id="@+id/dash_cooldown_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:translationZ="10dp"/>
+
+        </FrameLayout>
+
+        <!-- Spin special with cooldown arc -->
+        <FrameLayout
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="108dp"
+            android:layout_marginBottom="96dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_spin"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:backgroundTint="@null"
+                android:background="@drawable/icon_btn_circle"
+                android:padding="0dp"
+                android:text="SPIN"
+                android:textSize="@dimen/text_caption"
+                android:textColor="@color/gold_bright"
+                android:fontFamily="@font/cinzel"
+                android:textStyle="bold"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                app:strokeWidth="0dp"/>
+
+            <com.example.obliviondescent.DashCooldownView
+                android:id="@+id/spin_cooldown_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:translationZ="10dp"/>
+
+        </FrameLayout>
+
+        <!-- Quick-heal potion with a count badge -->
+        <FrameLayout
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="34dp"
+            android:layout_marginBottom="132dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_potion"
@@ -258,100 +375,7 @@
 
         </FrameLayout>
 
-        <!-- Dash button wrapped in FrameLayout for cooldown arc overlay -->
-        <FrameLayout
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:layout_marginEnd="24dp"
-            android:layout_marginBottom="12dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_dash"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                app:backgroundTint="@null"
-                android:background="@drawable/icon_btn_circle"
-                android:padding="0dp"
-                android:text="D"
-                android:textSize="20sp"
-                android:textColor="@color/gold_bright"
-                android:fontFamily="@font/cinzel"
-                android:textStyle="bold"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
-                app:strokeWidth="0dp"/>
-
-            <com.example.obliviondescent.DashCooldownView
-                android:id="@+id/dash_cooldown_view"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:translationZ="10dp"/>
-
-        </FrameLayout>
-
-        <!-- Spin special with cooldown arc -->
-        <FrameLayout
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:layout_marginEnd="20dp"
-            android:layout_marginBottom="60dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_spin"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                app:backgroundTint="@null"
-                android:background="@drawable/icon_btn_circle"
-                android:padding="0dp"
-                android:text="SPIN"
-                android:textSize="@dimen/text_caption"
-                android:textColor="@color/gold_bright"
-                android:fontFamily="@font/cinzel"
-                android:textStyle="bold"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
-                app:strokeWidth="0dp"/>
-
-            <com.example.obliviondescent.DashCooldownView
-                android:id="@+id/spin_cooldown_view"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:translationZ="10dp"/>
-
-        </FrameLayout>
-
-        <!-- Attack button — hidden, replaced by aim joystick -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_attack"
-            android:layout_width="96dp"
-            android:layout_height="96dp"
-            app:cornerRadius="48dp"
-            android:backgroundTint="@color/crimson_base"
-            android:text="ATK"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:textColor="@color/bone_white"
-            android:fontFamily="@font/cinzel"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            app:strokeWidth="2dp"
-            app:strokeColor="@color/crimson_glow"
-            android:visibility="gone"/>
-
-        <!-- Attack stick — hold to attack, drag to aim -->
-        <com.example.obliviondescent.AimJoystickView
-            android:id="@+id/aim_joystick"
-            android:layout_width="128dp"
-            android:layout_height="128dp"
-            android:visibility="gone"/>
-
-    </LinearLayout>
+    </FrameLayout>
 
     </RelativeLayout>
 

@@ -1,61 +1,77 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Square inventory cell: the icon's adjustViewBounds keeps it as tall as it is wide -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:minHeight="56dp"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
-    android:paddingHorizontal="@dimen/space_md"
-    android:paddingVertical="@dimen/space_sm"
-    android:layout_marginBottom="@dimen/space_sm"
     android:clickable="true"
     android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
     android:background="@drawable/dialog_bg">
 
-    <LinearLayout
-        android:layout_width="0dp"
+    <!-- Equal side/vertical padding totals keep the cell square -->
+    <ImageView
+        android:id="@+id/inv_item_icon"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical">
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        android:paddingStart="22dp"
+        android:paddingEnd="22dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="32dp"
+        android:src="@drawable/ic_sword"
+        android:importantForAccessibility="no"/>
 
-        <TextView
-            android:id="@+id/inv_item_name"
-            style="@style/OD.Text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Item Name"
-            android:textStyle="bold"
-            android:maxLines="1"
-            android:ellipsize="end"/>
-
-        <TextView
-            android:id="@+id/inv_item_subtitle"
-            style="@style/OD.Text.Label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="WEAPON"
-            android:maxLines="1"
-            android:ellipsize="end"/>
-
-    </LinearLayout>
+    <!-- Key stat (damage, defense or restore amount) -->
+    <TextView
+        android:id="@+id/inv_item_subtitle"
+        style="@style/OD.Text.Label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="@dimen/space_xs"
+        android:text="DMG 12"
+        android:letterSpacing="0.04"
+        android:maxLines="1"/>
 
     <TextView
         android:id="@+id/inv_item_quantity"
         style="@style/OD.Text.Value"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="@dimen/space_xs"
         android:text="x2"
-        android:visibility="gone"
-        android:layout_marginEnd="@dimen/space_md"/>
+        android:textSize="@dimen/text_caption"
+        android:visibility="gone"/>
 
     <TextView
         android:id="@+id/inv_equipped_badge"
         style="@style/OD.Text.Label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/space_sm"
-        android:text="EQUIPPED"
+        android:layout_gravity="top|end"
+        android:layout_margin="@dimen/space_xs"
+        android:paddingHorizontal="@dimen/space_xs"
+        android:background="@drawable/hud_panel"
+        android:text="E"
         android:textColor="@color/success_green"
         android:visibility="gone"/>
 
-</LinearLayout>
+    <TextView
+        android:id="@+id/inv_item_name"
+        style="@style/OD.Text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center"
+        android:paddingHorizontal="@dimen/space_xs"
+        android:paddingBottom="@dimen/space_xs"
+        android:text="Item Name"
+        android:textSize="@dimen/text_caption"
+        android:textStyle="bold"
+        android:lineSpacingMultiplier="0.9"
+        android:maxLines="2"
+        android:ellipsize="end"/>
+
+</FrameLayout>

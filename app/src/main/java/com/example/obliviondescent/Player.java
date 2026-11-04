@@ -34,6 +34,14 @@ public class Player {
     private static final long PLAYER_DEATH_DURATION = 800; // ms
     private Paint deathPaint;
 
+    // Spin special: the blade sweeps a full turn around the body
+    private static final long SPIN_TIME = 380;
+    private volatile long spinStart = 0;
+    private float spinFrom, spinReach;
+    private int spinColor;
+    private final Paint spinPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.RectF spinRect = new android.graphics.RectF();
+
     public Player() {
         paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setColor(Color.rgb(70, 120, 235));
@@ -64,6 +72,21 @@ public class Player {
         deathPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         deathPaint.setColor(Color.BLUE);
         deathPaint.setStyle(Paint.Style.FILL);
+
+        spinPaint.setStyle(Paint.Style.STROKE);
+        spinPaint.setStrokeCap(Paint.Cap.ROUND);
+    }
+
+    /**
+     * Starts the spin animation: the weapon whips a full turn around the body.
+     * @param reach distance the spin hits, from the player's centre
+     * @param color colour of the blade trail
+     */
+    public void startSpin(float reach, int color) {
+        spinFrom = aimAngle;
+        spinReach = reach;
+        spinColor = color;
+        spinStart = System.currentTimeMillis();
     }
 
     /**
@@ -130,8 +153,16 @@ public class Player {
         }
 
         Weapon weapon = getWeapon();
-        float ax = (float) Math.cos(Math.toRadians(aimAngle));
-        float ay = (float) Math.sin(Math.toRadians(aimAngle));
+        float angle = aimAngle;
+        long sinceSpin = System.currentTimeMillis() - spinStart;
+        if (sinceSpin < SPIN_TIME) {
+            float t = (float) sinceSpin / SPIN_TIME;
+            float sweep = (1f - (1f - t) * (1f - t)) * 400f; // eases out, a little over one turn
+            angle = spinFrom + sweep;
+            drawSpin(canvas, drawX, drawY, angle, sweep, t);
+        }
+        float ax = (float) Math.cos(Math.toRadians(angle));
+        float ay = (float) Math.sin(Math.toRadians(angle));
         int alpha = invulnerable ? 130 : 255;
 
         canvas.drawCircle(drawX + 6f, drawY + 10f, radius, shadowPaint);
@@ -160,6 +191,25 @@ public class Player {
         canvas.drawCircle(drawX - radius * 0.25f, drawY - radius * 0.25f, radius * 0.55f, highlightPaint);
         canvas.drawCircle(drawX, drawY, radius, outlinePaint);
         if (System.currentTimeMillis() < flashUntil) canvas.drawCircle(drawX, drawY, radius, flashPaint);
+    }
+
+    /** Glowing blade out to the spin's reach, with a fading trail behind it. */
+    private void drawSpin(Canvas canvas, float cx, float cy, float angle, float sweep, float t) {
+        float fade = 1f - t;
+        spinRect.set(cx - spinReach, cy - spinReach, cx + spinReach, cy + spinReach);
+        float trail = Math.min(sweep, 170f) / 5f;
+        spinPaint.setColor(spinColor);
+        for (int i = 0; i < 5; i++) {
+            spinPaint.setAlpha((int) (fade * (210 - i * 40)));
+            spinPaint.setStrokeWidth(30f - i * 5f);
+            canvas.drawArc(spinRect, angle - trail * (i + 1), trail, false, spinPaint);
+        }
+        double rad = Math.toRadians(angle);
+        float cos = (float) Math.cos(rad), sin = (float) Math.sin(rad);
+        spinPaint.setAlpha((int) (fade * 255));
+        spinPaint.setStrokeWidth(10f);
+        canvas.drawLine(cx + cos * radius, cy + sin * radius,
+                cx + cos * spinReach, cy + sin * spinReach, spinPaint);
     }
 
     public void setInvulnerable(boolean invulnerable) { this.invulnerable = invulnerable; }

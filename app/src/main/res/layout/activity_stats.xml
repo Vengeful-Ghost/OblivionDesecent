@@ -18,28 +18,34 @@
         android:padding="@dimen/space_lg"
         android:layout_marginEnd="@dimen/space_sm">
 
-        <!-- Title -->
-        <TextView
-            style="@style/OD.Text.Title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Personal Stats"
-            android:textAllCaps="true"
-            android:gravity="center"
-            android:maxLines="1"
-            app:autoSizeTextType="uniform"
-            app:autoSizeMinTextSize="16sp"
-            app:autoSizeMaxTextSize="@dimen/text_title"
-            app:autoSizeStepGranularity="1sp"
-            android:layout_marginBottom="@dimen/space_md"
-            tools:ignore="HardcodedText"/>
-
-        <!-- Lifetime / Current Game toggle -->
+        <!-- Back + Lifetime / This Run toggle -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="@dimen/space_md"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="@dimen/space_sm">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_back_stats"
+            style="@style/OD.Button.Secondary"
+            android:layout_width="@dimen/touch_min"
+            android:layout_height="@dimen/touch_min"
+            android:layout_marginEnd="@dimen/space_sm"
+            android:minWidth="0dp"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
+            android:contentDescription="Back"
+            app:icon="@drawable/ic_back"
+            app:iconPadding="0dp"
+            app:iconGravity="textStart"
+            tools:ignore="HardcodedText"/>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="horizontal"
             android:background="@drawable/dialog_bg"
             android:padding="@dimen/space_xs">
 
@@ -61,10 +67,12 @@
                 android:layout_width="0dp"
                 android:layout_height="@dimen/touch_min"
                 android:layout_weight="1"
-                android:text="Current Game"
+                android:text="This Run"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
 
         </LinearLayout>
 
@@ -72,33 +80,15 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="@drawable/divider_gold"
-            android:layout_marginBottom="@dimen/space_md"/>
+            android:layout_marginBottom="@dimen/space_sm"/>
 
-        <!-- Stats scroll -->
-        <ScrollView
+        <!-- Stat cards, two per row, sharing the panel height (no scrolling) -->
+        <LinearLayout
+            android:id="@+id/stats_container"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:scrollbars="none">
-
-            <LinearLayout
-                android:id="@+id/stats_container"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"/>
-
-        </ScrollView>
-
-        <!-- Back button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_back_stats"
-            style="@style/OD.Button.Secondary"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/touch_min"
-            android:layout_marginTop="@dimen/space_md"
-            android:text="Back"
-            app:icon="@drawable/ic_back"
-            tools:ignore="HardcodedText"/>
+            android:orientation="vertical"/>
 
     </LinearLayout>
 

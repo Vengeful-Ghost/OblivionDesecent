@@ -60,6 +60,9 @@
     <color name="armor_blue_dim">#1F3252</color>
     <color name="armor_blue_track">#0F1A2A</color>
 
+    <!-- Weapon icons -->
+    <color name="steel">#B4BEC8</color>
+
     <!-- Bone / parchment text colors -->
     <color name="bone_white">#EAE0CA</color>
     <color name="bone_dim">#B8AC91</color>

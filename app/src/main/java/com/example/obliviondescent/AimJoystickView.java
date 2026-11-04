@@ -4,15 +4,20 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 
 /**
  * Attack stick. Holding it attacks continuously at the weapon's pace; GameActivity polls it every tick.
- * A plain hold auto-aims at the nearest enemy; dragging aims manually in the dragged direction.
+ * A plain hold auto-aims at the nearest enemy; dragging aims manually in the dragged direction,
+ * measured from where the thumb landed, and that direction holds until release.
  */
 public class AimJoystickView extends View {
+
+    // Drag needed before a manual aim counts, as a share of the stick radius
+    private static final float AIM_DEADZONE = 0.22f;
 
     /* ============================================================
        GEOMETRY
@@ -21,11 +26,15 @@ public class AimJoystickView extends View {
     private float baseRadius  = 96f;
     private float hatRadius   = 40f;
     private float touchX, touchY;
+    private float anchorX, anchorY;
 
     /* ============================================================
        STATE — written on the UI thread, read by the logic thread
        ============================================================ */
     private volatile boolean touched = false;
+    private volatile boolean aiming = false;
+    private volatile boolean tapPending = false;
+    private volatile long downAt = 0;
     private volatile float aimDX = 0f;
     private volatile float aimDY = 0f;
 
@@ -100,9 +109,20 @@ public class AimJoystickView extends View {
     /** True while a finger is on the stick. */
     public boolean isHeld() { return touched; }
 
-    /** True when the finger is dragged far enough from the centre to aim manually. */
-    public boolean isAiming() { return touched && aimDX * aimDX + aimDY * aimDY > 0.09f; }
+    /** True once the finger has been dragged far enough to aim manually; stays true until release. */
+    public boolean isAiming() { return touched && aiming; }
 
+    /** How long the current touch has lasted, 0 when not touched. */
+    public long heldMs() { return touched ? SystemClock.uptimeMillis() - downAt : 0; }
+
+    /** True once per touch that hasn't attacked yet, so a quick tap still swings after release. */
+    public boolean takeTap() {
+        boolean tap = tapPending;
+        tapPending = false;
+        return tap;
+    }
+
+    /** Unit aim direction of the current or last manual drag. */
     public float getAimX() { return aimDX; }
     public float getAimY() { return aimDY; }
 
@@ -129,42 +149,44 @@ public class AimJoystickView extends View {
        ============================================================ */
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        switch (event.getAction()) {
+        switch (event.getActionMasked()) {
 
             case MotionEvent.ACTION_DOWN:
-            case MotionEvent.ACTION_MOVE:
                 touched = true;
+                aiming = false;
+                tapPending = true;
+                downAt = SystemClock.uptimeMillis();
+                // Aim is measured from where the thumb lands, not from the stick's centre
+                anchorX = event.getX();
+                anchorY = event.getY();
+                touchX = centerX;
+                touchY = centerY;
+                invalidate();
+                break;
 
-                float rawDX = event.getX() - centerX;
-                float rawDY = event.getY() - centerY;
-                float dist  = (float) Math.sqrt(rawDX * rawDX + rawDY * rawDY);
-
-                if (dist < baseRadius) {
-                    touchX = event.getX();
-                    touchY = event.getY();
-                } else {
-                    // Clamp to edge of base
-                    float ratio = baseRadius / dist;
-                    touchX = centerX + rawDX * ratio;
-                    touchY = centerY + rawDY * ratio;
+            case MotionEvent.ACTION_MOVE:
+                float dx = event.getX() - anchorX;
+                float dy = event.getY() - anchorY;
+                float dist = (float) Math.sqrt(dx * dx + dy * dy);
+                if (dist > baseRadius * AIM_DEADZONE) {
+                    aimDX = dx / dist;
+                    aimDY = dy / dist;
+                    aiming = true;
                 }
-
-                // Normalized drag, -1..1 on each axis
-                if (dist > 0) {
-                    aimDX = (touchX - centerX) / baseRadius;
-                    aimDY = (touchY - centerY) / baseRadius;
-                }
-
+                // The hat shows the drag, clamped to the base
+                float reach = Math.min(dist, baseRadius);
+                touchX = dist > 0 ? centerX + dx / dist * reach : centerX;
+                touchY = dist > 0 ? centerY + dy / dist * reach : centerY;
                 invalidate();
                 break;
 
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+                if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) tapPending = false;
                 touched = false;
+                aiming  = false;
                 touchX  = centerX;
                 touchY  = centerY;
-                aimDX   = 0f;
-                aimDY   = 0f;
                 invalidate();
                 break;
         }

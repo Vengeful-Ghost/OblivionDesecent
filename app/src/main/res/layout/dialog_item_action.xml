@@ -6,19 +6,20 @@
     android:layout_height="match_parent"
     android:background="@color/bg_overlay"
     android:clickable="true"
-    android:focusable="true">
+    android:focusable="true"
+    android:padding="@dimen/space_md">
 
-    <!-- Scrolls instead of clipping on short landscape screens -->
+    <!-- Only scrolls if the card is taller than the screen -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
-        android:scrollbars="none">
+        android:scrollbars="none"
+        android:overScrollMode="ifContentScrolls">
 
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingVertical="@dimen/space_md">
+        android:layout_height="wrap_content">
 
     <LinearLayout
         style="@style/OD.Card"
@@ -121,6 +122,8 @@
             android:textStyle="italic"
             android:gravity="center"
             android:lineSpacingExtra="2dp"
+            android:maxLines="3"
+            android:ellipsize="end"
             android:layout_marginBottom="@dimen/space_md"/>
 
         <!-- Action button -->
@@ -134,15 +137,16 @@
             android:translationZ="4dp"
             tools:ignore="HardcodedText"/>
 
-        <!-- Remove button -->
+        <!-- Sell button (text set in Java with the gold it fetches) -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_remove"
-            style="@style/OD.Button.Danger"
+            style="@style/OD.Button.Secondary"
             android:layout_width="match_parent"
             android:layout_height="@dimen/touch_min"
             android:layout_marginTop="@dimen/space_md"
-            android:text="Remove"
+            android:text="Sell"
             android:textSize="@dimen/text_small"
+            app:icon="@drawable/ic_coin"
             tools:ignore="HardcodedText"/>
 
         </LinearLayout>

@@ -10,7 +10,7 @@
 
     <!-- LEFT: Equipped Panel -->
     <LinearLayout
-        android:layout_width="230dp"
+        android:layout_width="200dp"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
@@ -58,16 +58,11 @@
             android:background="@drawable/divider_gold"
             android:layout_marginBottom="@dimen/space_sm"/>
 
-        <!-- Slots scroll instead of pushing Close off short screens -->
-        <ScrollView
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:scrollbars="none">
-
+        <!-- Compact one-line slots, so all five fit without scrolling -->
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:orientation="vertical">
 
                 <!-- Weapon slot -->
@@ -79,36 +74,23 @@
                     android:layout_marginBottom="@dimen/space_sm">
 
                     <ImageView
-                        android:layout_width="@dimen/icon_lg"
-                        android:layout_height="@dimen/icon_lg"
-                        android:layout_marginEnd="@dimen/space_md"
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:layout_marginEnd="@dimen/space_sm"
                         android:src="@drawable/ic_sword"
-                        android:tint="@color/gold_bright"
                         android:importantForAccessibility="no"/>
 
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/txt_equipped_weapon"
+                        style="@style/OD.Text"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/OD.Text.Label"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="WEAPON"
-                            android:textColor="@color/border_gold"
-                            tools:ignore="HardcodedText"/>
-
-                        <TextView
-                            android:id="@+id/txt_equipped_weapon"
-                            style="@style/OD.Text"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="Fists"
-                            tools:ignore="HardcodedText"/>
-
-                    </LinearLayout>
+                        android:text="Fists"
+                        android:textSize="@dimen/text_small"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        tools:ignore="HardcodedText"/>
 
                 </LinearLayout>
 
@@ -121,37 +103,24 @@
                     android:layout_marginBottom="@dimen/space_sm">
 
                     <ImageView
-                        android:layout_width="@dimen/icon_lg"
-                        android:layout_height="@dimen/icon_lg"
-                        android:layout_marginEnd="@dimen/space_md"
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:layout_marginEnd="@dimen/space_sm"
                         android:src="@drawable/ic_helmet"
-                        android:tint="@color/gold_bright"
                         android:importantForAccessibility="no"/>
 
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/txt_equipped_head"
+                        style="@style/OD.Text"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/OD.Text.Label"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="HEAD"
-                            android:textColor="@color/border_gold"
-                            tools:ignore="HardcodedText"/>
-
-                        <TextView
-                            android:id="@+id/txt_equipped_head"
-                            style="@style/OD.Text"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="—"
-                            android:textColor="@color/bone_faint"
-                            tools:ignore="HardcodedText"/>
-
-                    </LinearLayout>
+                        android:text="No helmet"
+                        android:textSize="@dimen/text_small"
+                        android:textColor="@color/bone_muted"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        tools:ignore="HardcodedText"/>
 
                 </LinearLayout>
 
@@ -164,37 +133,24 @@
                     android:layout_marginBottom="@dimen/space_sm">
 
                     <ImageView
-                        android:layout_width="@dimen/icon_lg"
-                        android:layout_height="@dimen/icon_lg"
-                        android:layout_marginEnd="@dimen/space_md"
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:layout_marginEnd="@dimen/space_sm"
                         android:src="@drawable/ic_chest_armor"
-                        android:tint="@color/gold_bright"
                         android:importantForAccessibility="no"/>
 
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/txt_equipped_chest"
+                        style="@style/OD.Text"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/OD.Text.Label"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="CHEST"
-                            android:textColor="@color/border_gold"
-                            tools:ignore="HardcodedText"/>
-
-                        <TextView
-                            android:id="@+id/txt_equipped_chest"
-                            style="@style/OD.Text"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="—"
-                            android:textColor="@color/bone_faint"
-                            tools:ignore="HardcodedText"/>
-
-                    </LinearLayout>
+                        android:text="No chest armor"
+                        android:textSize="@dimen/text_small"
+                        android:textColor="@color/bone_muted"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        tools:ignore="HardcodedText"/>
 
                 </LinearLayout>
 
@@ -207,37 +163,24 @@
                     android:layout_marginBottom="@dimen/space_sm">
 
                     <ImageView
-                        android:layout_width="@dimen/icon_lg"
-                        android:layout_height="@dimen/icon_lg"
-                        android:layout_marginEnd="@dimen/space_md"
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:layout_marginEnd="@dimen/space_sm"
                         android:src="@drawable/ic_leg_armor"
-                        android:tint="@color/gold_bright"
                         android:importantForAccessibility="no"/>
 
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/txt_equipped_legs"
+                        style="@style/OD.Text"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/OD.Text.Label"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="LEGS"
-                            android:textColor="@color/border_gold"
-                            tools:ignore="HardcodedText"/>
-
-                        <TextView
-                            android:id="@+id/txt_equipped_legs"
-                            style="@style/OD.Text"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="—"
-                            android:textColor="@color/bone_faint"
-                            tools:ignore="HardcodedText"/>
-
-                    </LinearLayout>
+                        android:text="No leg armor"
+                        android:textSize="@dimen/text_small"
+                        android:textColor="@color/bone_muted"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        tools:ignore="HardcodedText"/>
 
                 </LinearLayout>
 
@@ -249,43 +192,28 @@
                     android:gravity="center_vertical">
 
                     <ImageView
-                        android:layout_width="@dimen/icon_lg"
-                        android:layout_height="@dimen/icon_lg"
-                        android:layout_marginEnd="@dimen/space_md"
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:layout_marginEnd="@dimen/space_sm"
                         android:src="@drawable/ic_boots"
-                        android:tint="@color/gold_bright"
                         android:importantForAccessibility="no"/>
 
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/txt_equipped_boots"
+                        style="@style/OD.Text"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/OD.Text.Label"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="BOOTS"
-                            android:textColor="@color/border_gold"
-                            tools:ignore="HardcodedText"/>
-
-                        <TextView
-                            android:id="@+id/txt_equipped_boots"
-                            style="@style/OD.Text"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="—"
-                            android:textColor="@color/bone_faint"
-                            tools:ignore="HardcodedText"/>
-
-                    </LinearLayout>
+                        android:text="No boots"
+                        android:textSize="@dimen/text_small"
+                        android:textColor="@color/bone_muted"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        tools:ignore="HardcodedText"/>
 
                 </LinearLayout>
 
             </LinearLayout>
-
-        </ScrollView>
 
         <!-- Close button -->
         <com.google.android.material.button.MaterialButton
@@ -312,77 +240,39 @@
         android:background="@drawable/rounded_dialog_bg"
         android:padding="@dimen/space_lg">
 
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="@dimen/space_xs">
-
-            <TextView
-                style="@style/OD.Text.Title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Inventory"
-                android:textAllCaps="true"
-                android:textSize="@dimen/text_heading"
-                android:textColor="@color/shadow_soft"
-                android:shadowColor="@color/shadow_hard"
-                android:gravity="center"
-                android:translationX="2dp"
-                android:translationY="2dp"
-                tools:ignore="HardcodedText"/>
-
-            <TextView
-                style="@style/OD.Text.Title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Inventory"
-                android:textAllCaps="true"
-                android:textSize="@dimen/text_heading"
-                android:gravity="center"
-                android:shadowColor="@color/gold_glow"
-                android:shadowDx="0"
-                android:shadowDy="0"
-                android:shadowRadius="10"
-                tools:ignore="HardcodedText"/>
-
-        </FrameLayout>
-
-        <!-- Filter tabs: content-sized (Cinzel CONSUMABLES won't fit a quarter width) -->
+        <!-- Header: filter tabs + sort, one row so the grid gets the height -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:layout_marginBottom="@dimen/space_xs">
 
             <TextView
                 android:id="@+id/filter_all"
                 style="@style/OD.Text.Tab"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:paddingStart="@dimen/space_xs"
-                android:paddingEnd="@dimen/space_xs"
+                android:layout_height="@dimen/touch_min"
+                android:minWidth="@dimen/touch_min"
+                android:paddingStart="@dimen/space_sm"
+                android:paddingEnd="@dimen/space_sm"
                 android:text="ALL"
                 android:textSize="@dimen/text_caption"
                 android:textColor="@color/gold_bright"
                 android:maxLines="1"
-                android:ellipsize="end"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
 
+            <!-- Icon tabs: the top padding centres the icon in the 48dp tab -->
             <TextView
                 android:id="@+id/filter_weapons"
                 style="@style/OD.Text.Tab"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:paddingStart="@dimen/space_xs"
-                android:paddingEnd="@dimen/space_xs"
-                android:text="WEAPONS"
-                android:textSize="@dimen/text_caption"
-                android:maxLines="1"
-                android:ellipsize="end"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
+                android:paddingTop="14dp"
+                android:drawableTop="@drawable/ic_sword"
+                android:contentDescription="Weapons"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
@@ -390,15 +280,11 @@
             <TextView
                 android:id="@+id/filter_armor"
                 style="@style/OD.Text.Tab"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:paddingStart="@dimen/space_xs"
-                android:paddingEnd="@dimen/space_xs"
-                android:text="ARMOR"
-                android:textSize="@dimen/text_caption"
-                android:maxLines="1"
-                android:ellipsize="end"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
+                android:paddingTop="14dp"
+                android:drawableTop="@drawable/ic_chest_armor"
+                android:contentDescription="Armor"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
@@ -406,17 +292,28 @@
             <TextView
                 android:id="@+id/filter_consumables"
                 style="@style/OD.Text.Tab"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:paddingStart="@dimen/space_xs"
-                android:paddingEnd="@dimen/space_xs"
-                android:text="CONSUMABLES"
-                android:textSize="@dimen/text_caption"
-                android:maxLines="1"
-                android:ellipsize="end"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
+                android:paddingTop="14dp"
+                android:drawableTop="@drawable/ic_heart"
+                android:contentDescription="Consumables"
                 android:clickable="true"
                 android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_sort_inventory"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/touch_min"
+                android:layout_marginStart="@dimen/space_sm"
+                android:text="Sort: Type"
+                android:textSize="@dimen/text_caption"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
@@ -427,20 +324,54 @@
             android:background="@drawable/divider_gold"
             android:layout_marginBottom="@dimen/space_sm"/>
 
-        <!-- Item list -->
-        <ScrollView
+        <!-- One page of square item cells, sized in Java to fit (no scrolling) -->
+        <LinearLayout
+            android:id="@+id/inventory_list_container"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:scrollbars="none">
+            android:orientation="vertical"/>
 
-            <LinearLayout
-                android:id="@+id/inventory_list_container"
-                android:layout_width="match_parent"
+        <!-- Pages -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_page_prev"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="64dp"
+                android:layout_height="@dimen/touch_min"
+                android:minWidth="0dp"
+                android:text="‹"
+                android:textSize="@dimen/text_heading"
+                android:contentDescription="Previous page"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/txt_inventory_page"
+                style="@style/OD.Text.Label"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"/>
+                android:minWidth="72dp"
+                android:gravity="center"
+                android:text="1 / 1"
+                tools:ignore="HardcodedText"/>
 
-        </ScrollView>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_page_next"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="64dp"
+                android:layout_height="@dimen/touch_min"
+                android:minWidth="0dp"
+                android:text="›"
+                android:textSize="@dimen/text_heading"
+                android:contentDescription="Next page"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
 
     </LinearLayout>
 

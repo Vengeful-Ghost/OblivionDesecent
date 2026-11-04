@@ -6,19 +6,20 @@
     android:layout_height="match_parent"
     android:background="@color/bg_overlay"
     android:clickable="true"
-    android:focusable="true">
+    android:focusable="true"
+    android:padding="@dimen/space_md">
 
-    <!-- Scrolls instead of clipping on short landscape screens -->
+    <!-- Only scrolls if the card is taller than the screen -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
-        android:scrollbars="none">
+        android:scrollbars="none"
+        android:overScrollMode="ifContentScrolls">
 
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingVertical="@dimen/space_md">
+        android:layout_height="wrap_content">
 
     <LinearLayout
         style="@style/OD.Card"
@@ -121,6 +122,8 @@
             android:textColor="@color/bone_dim"
             android:textStyle="italic"
             android:lineSpacingExtra="2dp"
+            android:maxLines="3"
+            android:ellipsize="end"
             android:gravity="center"
             android:layout_marginBottom="@dimen/space_md"
             tools:ignore="HardcodedText"/>

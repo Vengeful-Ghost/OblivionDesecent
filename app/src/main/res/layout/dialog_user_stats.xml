@@ -8,17 +8,18 @@
     android:clickable="true"
     android:focusable="true">
 
-    <!-- Scroll fallback for short landscape screens -->
+    <!-- Only scrolls if the card is taller than the screen -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
-        android:scrollbars="none">
+        android:scrollbars="none"
+        android:overScrollMode="ifContentScrolls">
 
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingVertical="@dimen/space_lg">
+            android:paddingVertical="@dimen/space_md">
 
             <LinearLayout
                 style="@style/OD.Card"
@@ -68,13 +69,13 @@
                     android:background="@drawable/divider_gold"
                     android:layout_marginBottom="@dimen/space_md"/>
 
-                <!-- Stats list -->
+                <!-- Stat cards, two per row (3 rows) -->
                 <LinearLayout
                     android:id="@+id/user_detail_stats"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="144dp"
                     android:orientation="vertical"
-                    android:layout_marginBottom="@dimen/space_lg"/>
+                    android:layout_marginBottom="@dimen/space_md"/>
 
                 <!-- Follow button -->
                 <com.google.android.material.button.MaterialButton

@@ -5,7 +5,7 @@
     android:height="20dp"
     android:viewportWidth="512"
     android:viewportHeight="512"
-    android:tint="@color/gold_bright">
+    android:tint="@color/bone_dim">
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M64 448v-64h64v-64h64v-64h64v-64h64v-64h64V64h64v384z"/>

@@ -232,6 +232,10 @@ public class StatsActivity extends AppCompatActivity {
             addStatRow(R.drawable.ic_sword, "Equipped Weapon",
                     safeString(data, "equippedWeaponName"));
         }
+        // Five rows on both tabs, so the cards keep one size
+        while (statsContainer.getChildCount() < 5)
+            statsContainer.addView(new View(this),
+                    new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
     }
 
     private void showEmptyStats() {
@@ -246,24 +250,26 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     private void addStatRow(int icon, String label, String value) {
-        View row = LayoutInflater.from(this)
-                .inflate(R.layout.item_stat_row, statsContainer, false);
+        addStatCell(statsContainer, icon, label, value);
+    }
 
-        android.widget.ImageView iconView = row.findViewById(R.id.stat_icon);
-        iconView.setImageResource(icon);
-        iconView.setVisibility(View.VISIBLE);
-        ((TextView) row.findViewById(R.id.stat_label)).setText(label);
-        ((TextView) row.findViewById(R.id.stat_value)).setText(value);
-
-        // Divider
-        View divider = new View(this);
-        divider.setBackgroundColor(getColor(R.color.divider_gold));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 1);
-        divider.setLayoutParams(lp);
-
-        statsContainer.addView(row);
-        statsContainer.addView(divider);
+    // Two cards per row; rows share the grid's fixed height, so nothing scrolls
+    private void addStatCell(LinearLayout grid, int icon, String label, String value) {
+        int count = grid.getChildCount();
+        LinearLayout row = count > 0 ? (LinearLayout) grid.getChildAt(count - 1) : null;
+        if (row == null || row.getChildCount() >= 2) {
+            row = new LinearLayout(this);
+            row.setWeightSum(2);
+            grid.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        }
+        View cell = LayoutInflater.from(this).inflate(R.layout.item_stat_cell, row, false);
+        ((android.widget.ImageView) cell.findViewById(R.id.stat_icon)).setImageResource(icon);
+        ((TextView) cell.findViewById(R.id.stat_label)).setText(label);
+        ((TextView) cell.findViewById(R.id.stat_value)).setText(value);
+        int gap = Math.round(3 * getResources().getDisplayMetrics().density);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+        lp.setMargins(gap, gap, gap, gap);
+        row.addView(cell, lp);
     }
 
     /* ============================================================
@@ -376,11 +382,11 @@ public class StatsActivity extends AppCompatActivity {
         closeBtn.setOnClickListener(v -> dialog.dismiss());
 
         // Populate stats
-        addUserStatRow(statsContainer, R.drawable.ic_trophy, "Highest Floor", item.highestFloor + "");
-        addUserStatRow(statsContainer, R.drawable.ic_crossed_swords, "Enemies Killed", item.enemiesKilled + "");
-        addUserStatRow(statsContainer, R.drawable.ic_skull, "Bosses Killed", item.bossesKilled + "");
-        addUserStatRow(statsContainer, R.drawable.ic_broken_heart, "Times Died", item.timesDied + "");
-        addUserStatRow(statsContainer, R.drawable.ic_hourglass, "Playtime",
+        addStatCell(statsContainer, R.drawable.ic_trophy, "Highest Floor", item.highestFloor + "");
+        addStatCell(statsContainer, R.drawable.ic_crossed_swords, "Enemies Killed", item.enemiesKilled + "");
+        addStatCell(statsContainer, R.drawable.ic_skull, "Bosses Killed", item.bossesKilled + "");
+        addStatCell(statsContainer, R.drawable.ic_broken_heart, "Times Died", item.timesDied + "");
+        addStatCell(statsContainer, R.drawable.ic_hourglass, "Playtime",
                 StatsManager.secondsToHours(item.playtimeSeconds) + "h");
 
         // Follow button
@@ -415,17 +421,6 @@ public class StatsActivity extends AppCompatActivity {
         btn.setText(following ? "Unfollow" : "Follow");
         btn.setBackgroundResource(following ? R.drawable.btn_gothic_danger : R.drawable.btn_login);
         btn.setTextColor(getColor(following ? R.color.crimson_glow : R.color.gold_glow));
-    }
-
-    private void addUserStatRow(LinearLayout container, int icon, String label, String value) {
-        View row = LayoutInflater.from(this)
-                .inflate(R.layout.item_stat_row, container, false);
-        android.widget.ImageView iconView = row.findViewById(R.id.stat_icon);
-        iconView.setImageResource(icon);
-        iconView.setVisibility(View.VISIBLE);
-        ((TextView) row.findViewById(R.id.stat_label)).setText(label);
-        ((TextView) row.findViewById(R.id.stat_value)).setText(value);
-        container.addView(row);
     }
 
     /* ============================================================
