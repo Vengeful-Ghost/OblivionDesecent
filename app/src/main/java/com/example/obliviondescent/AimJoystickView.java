@@ -37,6 +37,7 @@ public class AimJoystickView extends View {
     private volatile long downAt = 0;
     private volatile float aimDX = 0f;
     private volatile float aimDY = 0f;
+    private volatile boolean aimEnabled = true; // false: a plain button, attacks go where the player faces
 
     /* ============================================================
        PAINTS
@@ -126,6 +127,12 @@ public class AimJoystickView extends View {
     public float getAimX() { return aimDX; }
     public float getAimY() { return aimDY; }
 
+    /** Switches between an aiming stick and a plain attack button. */
+    public void setAimEnabled(boolean enabled) {
+        aimEnabled = enabled;
+        invalidate();
+    }
+
     /* ============================================================
        DRAW
        ============================================================ */
@@ -135,7 +142,7 @@ public class AimJoystickView extends View {
         basePaint.setAlpha(touched ? 210 : 160);
         canvas.drawCircle(centerX, centerY, baseRadius, basePaint);
 
-        if (!touched) {
+        if (!touched || !aimEnabled) {
             canvas.drawText("ATK", centerX, centerY + labelPaint.getTextSize() * 0.35f, labelPaint);
         } else {
             // Direction line only when aiming manually
@@ -165,6 +172,7 @@ public class AimJoystickView extends View {
                 break;
 
             case MotionEvent.ACTION_MOVE:
+                if (!aimEnabled) break;
                 float dx = event.getX() - anchorX;
                 float dy = event.getY() - anchorY;
                 float dist = (float) Math.sqrt(dx * dx + dy * dy);

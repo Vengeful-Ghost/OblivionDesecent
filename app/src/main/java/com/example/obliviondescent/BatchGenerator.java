@@ -219,7 +219,7 @@ public class BatchGenerator {
     static float enemyHpMax(int rangeStart)  { return 1.6f + rangeStart * 0.15f; }
     static float enemyDmgMin(int rangeStart) { return 1.0f + rangeStart * 0.06f; }
     static float enemyDmgMax(int rangeStart) { return 1.4f + rangeStart * 0.08f; }
-    static float bossHpMultiplier(int floor)  { return 2.5f + floor * 0.15f; }
+    static float bossHpMultiplier(int floor)  { return 2.1f + floor * 0.13f; }
     static float bossDmgMultiplier(int floor) { return 1.2f + floor * 0.05f; }
 
     private static String span(float base, float[] mult) { return span(base, mult[0], mult[1]); }

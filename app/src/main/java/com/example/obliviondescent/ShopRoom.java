@@ -1,11 +1,12 @@
 package com.example.obliviondescent;
 
+import static com.example.obliviondescent.Props.*;
+
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
@@ -89,43 +90,6 @@ public class ShopRoom {
 
     private static final String GREETING = "Welcome, wanderer...";
 
-    // Palette (matches res/values/colors.xml)
-    private static final int GROUT = Color.rgb(14, 11, 9);
-    private static final int WALL_TOP = Color.rgb(54, 41, 31);
-    private static final int WALL_FACE_COLOR = Color.rgb(30, 24, 19);
-    private static final int MORTAR = Color.rgb(16, 12, 10);
-    private static final int WALL_EDGE = Color.rgb(92, 69, 23);
-    private static final int GOLD_DEEP = Color.rgb(122, 90, 31);
-    private static final int GOLD_BASE = Color.rgb(184, 145, 30);
-    private static final int GOLD_BRIGHT = Color.rgb(212, 175, 55);
-    private static final int CRIMSON_DEEP = Color.rgb(74, 10, 10);
-    private static final int CRIMSON_BASE = Color.rgb(139, 24, 24);
-    private static final int ARCANE_BRIGHT = Color.rgb(139, 95, 191);
-    private static final int ARCANE_GLOW = Color.rgb(181, 140, 224);
-    private static final int BONE_DIM = Color.rgb(184, 172, 145);
-    private static final int INK = Color.rgb(42, 33, 26);
-    private static final int PARCHMENT = Color.rgb(222, 205, 168);
-    private static final int WOOD_LIGHT = Color.rgb(120, 84, 48);
-    private static final int WOOD_MID = Color.rgb(92, 62, 34);
-    private static final int WOOD_DARK = Color.rgb(58, 38, 22);
-    private static final int WOOD_LINE = Color.rgb(38, 24, 14);
-    private static final int LEATHER = Color.rgb(70, 52, 30);
-    private static final int IRON = Color.rgb(60, 60, 66);
-    private static final int IRON_LIGHT = Color.rgb(120, 122, 130);
-    private static final int STEEL = Color.rgb(180, 190, 200);
-    private static final int STONE_DARK = Color.rgb(36, 30, 26);
-    private static final int STONE_MID = Color.rgb(70, 60, 52);
-    private static final int STONE_LIGHT = Color.rgb(104, 92, 80);
-    private static final int CLOAK_DARK = Color.rgb(28, 20, 34);
-    private static final int CLOAK_MID = Color.rgb(48, 34, 58);
-    private static final int FLAME = Color.rgb(230, 110, 30);
-    private static final int FLAME_CORE = Color.rgb(255, 214, 120);
-    private static final int BREW = Color.rgb(70, 130, 60);
-    private static final int BREW_LIGHT = Color.rgb(160, 230, 120);
-    private static final int SHADOW = Color.argb(90, 0, 0, 0);
-    private static final int[] POTION_COLORS = {Color.rgb(224, 72, 72), Color.rgb(181, 140, 224),
-            Color.rgb(122, 184, 92), Color.rgb(86, 136, 199), Color.rgb(244, 215, 122)};
-
     /* ============================================================
        STATE
        ============================================================ */
@@ -138,39 +102,26 @@ public class ShopRoom {
        ============================================================ */
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint lightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);      // warm pools on the floor
-    private final Paint haloPaint = new Paint(Paint.ANTI_ALIAS_FLAG);       // small glow round flames
-    private final Paint portalGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint wallShadowPaint = new Paint();
     private final Paint signPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint hintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path cloakPath = new Path(), cloakFoldPath = new Path(), hoodPath = new Path();
-    private final Path bannerPath = new Path(), emblemPath = new Path(), bubbleTail = new Path();
+    private final Path bubbleTail = new Path();
     private final RectF arcRect = new RectF();
     private final int[] tileColors = new int[100];
+    private final Props props = new Props(); // portal, torches, pillars, crates and other shared props
 
     public ShopRoom() {
         stroke.setStyle(Paint.Style.STROKE);
         stroke.setStrokeCap(Paint.Cap.ROUND);
 
-        lightPaint.setShader(new RadialGradient(0, 0, 260,
-                new int[]{0x50FF9A40, 0x20FF7A20, 0x00000000}, new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
-        haloPaint.setShader(new RadialGradient(0, 0, 40,
-                new int[]{0x99FFC060, 0x00FF8020}, null, Shader.TileMode.CLAMP));
-        portalGlowPaint.setShader(new RadialGradient(0, 0, 130,
-                new int[]{0xAA8B5FBF, 0x442B1840, 0x00000000}, new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
         wallShadowPaint.setShader(new LinearGradient(0, ROOM_TOP + WALL_FACE, 0, ROOM_TOP + WALL_FACE + 50,
                 0x99000000, 0x00000000, Shader.TileMode.CLAMP));
 
         signPaint.setTextAlign(Paint.Align.CENTER);
         signPaint.setColor(GOLD_BRIGHT);
         signPaint.setTextSize(28f);
-        labelPaint.setTextAlign(Paint.Align.CENTER);
-        labelPaint.setColor(ARCANE_GLOW);
-        labelPaint.setTextSize(28f);
-        labelPaint.setShadowLayer(6f, 0f, 0f, Color.BLACK);
         hintPaint.setTextAlign(Paint.Align.CENTER);
         hintPaint.setColor(BONE_DIM);
         hintPaint.setTextSize(24f);
@@ -203,19 +154,6 @@ public class ShopRoom {
         hoodPath.quadTo(0, 2, -26, -8);
         hoodPath.close();
 
-        // Banner cloth hanging from (0, 0) and its gold emblem
-        bannerPath.moveTo(-22, 0);
-        bannerPath.lineTo(22, 0);
-        bannerPath.lineTo(22, 84);
-        bannerPath.lineTo(0, 68);
-        bannerPath.lineTo(-22, 84);
-        bannerPath.close();
-        emblemPath.moveTo(0, 22);
-        emblemPath.lineTo(10, 36);
-        emblemPath.lineTo(0, 50);
-        emblemPath.lineTo(-10, 36);
-        emblemPath.close();
-
         // Speech bubble tail, pointing left at the hood
         bubbleTail.moveTo(1, -8);
         bubbleTail.lineTo(-16, 2);
@@ -227,7 +165,7 @@ public class ShopRoom {
     public void setFont(Typeface font) {
         Typeface bold = Typeface.create(font, Typeface.BOLD);
         signPaint.setTypeface(bold);
-        labelPaint.setTypeface(bold);
+        props.setFont(font);
         hintPaint.setTypeface(font);
         bubblePaint.setTypeface(font);
         bubbleWidth = bubblePaint.measureText(GREETING) + 32f;
@@ -251,31 +189,31 @@ public class ShopRoom {
         canvas.save();
         canvas.translate(-camera.getOffsetX(), -camera.getOffsetY());
         drawFloor(canvas);
-        drawLights(canvas, now);
-        drawRug(canvas);
-        drawPortal(canvas, now);
+        for (int i = 0; i < TORCHES.length; i++) props.drawLight(canvas, TORCHES[i][2], TORCHES[i][3], now, i);
+        props.drawRug(canvas, ROOM_LEFT + 380, ROOM_TOP + 350, ROOM_LEFT + 620, ROOM_TOP + 570);
+        props.drawPortal(canvas, EXIT_PORTAL_X, EXIT_PORTAL_Y, EXIT_PORTAL_RADIUS, now, false, "NEXT FLOOR");
         drawWalls(canvas);
-        drawBanner(canvas, ROOM_LEFT + 140, now);
-        drawBanner(canvas, ROOM_RIGHT - 140, now + 700);
-        drawTorches(canvas, now);
+        props.drawBanner(canvas, ROOM_LEFT + 140, ROOM_TOP + WALL + 2, now);
+        props.drawBanner(canvas, ROOM_RIGHT - 140, ROOM_TOP + WALL + 2, now + 700);
+        for (int i = 0; i < TORCHES.length; i++) props.drawTorch(canvas, TORCHES[i][0], TORCHES[i][1], now, i);
         drawSign(canvas, now);
         drawShelf(canvas, SHELF_L, 0);
         drawShelf(canvas, SHELF_R, 2);
-        drawPillar(canvas, PILLAR_L);
-        drawPillar(canvas, PILLAR_R);
-        drawRuneStone(canvas, STONE_A, now);
-        drawRuneStone(canvas, STONE_B, now + 500);
+        props.drawPillar(canvas, PILLAR_L[0], PILLAR_L[1], PILLAR_L[2]);
+        props.drawPillar(canvas, PILLAR_R[0], PILLAR_R[1], PILLAR_R[2]);
+        props.drawRuneStone(canvas, STONE_A[0], STONE_A[1], STONE_A[2], now);
+        props.drawRuneStone(canvas, STONE_B[0], STONE_B[1], STONE_B[2], now + 500);
         drawShopkeeper(canvas, now);
         drawCounter(canvas, now);
         drawKeeperHands(canvas, now);
         drawCauldron(canvas, now);
         drawCoins(canvas, now);
         drawRack(canvas);
-        drawCrate(canvas, CRATE_A);
-        drawCrate(canvas, CRATE_B);
-        drawCrate(canvas, CRATE_C);
-        drawBarrel(canvas, BARREL_A);
-        drawBarrel(canvas, BARREL_B);
+        props.drawCrate(canvas, CRATE_A[0], CRATE_A[1], CRATE_A[2], CRATE_A[3]);
+        props.drawCrate(canvas, CRATE_B[0], CRATE_B[1], CRATE_B[2], CRATE_B[3]);
+        props.drawCrate(canvas, CRATE_C[0], CRATE_C[1], CRATE_C[2], CRATE_C[3]);
+        props.drawBarrel(canvas, BARREL_A[0], BARREL_A[1], BARREL_A[2]);
+        props.drawBarrel(canvas, BARREL_B[0], BARREL_B[1], BARREL_B[2]);
         canvas.drawText("walk up to trade", SHOP_X, SHOP_Y + 34, hintPaint);
         drawGreeting(canvas, viewX, viewY);
         canvas.restore();
@@ -295,93 +233,6 @@ public class ShopRoom {
                 canvas.drawLine(x + 4, y + 5, x + 96, y + 5, stroke);
             }
         }
-    }
-
-    /** Warm flickering pools of torchlight on the floor. */
-    private void drawLights(Canvas canvas, long now) {
-        for (int i = 0; i < TORCHES.length; i++) {
-            float flick = 0.92f + 0.08f * (float) (Math.sin(now / 90.0 + i * 1.7) * Math.sin(now / 37.0 + i));
-            canvas.save();
-            canvas.translate(TORCHES[i][2], TORCHES[i][3]);
-            canvas.scale(flick, flick);
-            canvas.drawCircle(0, 0, 260, lightPaint);
-            canvas.restore();
-        }
-    }
-
-    private void drawRug(Canvas canvas) {
-        float l = ROOM_LEFT + 380, t = ROOM_TOP + 350, r = ROOM_LEFT + 620, b = ROOM_TOP + 570;
-        fill.setColor(CRIMSON_DEEP);
-        canvas.drawRect(l, t, r, b, fill);
-        fill.setColor(CRIMSON_BASE);
-        canvas.drawRect(l + 14, t + 14, r - 14, b - 14, fill);
-        stroke.setColor(GOLD_DEEP);
-        stroke.setStrokeWidth(4f);
-        canvas.drawRect(l + 7, t + 7, r - 7, b - 7, stroke);
-        stroke.setColor(GOLD_BASE);
-        stroke.setStrokeWidth(2f);
-        canvas.drawRect(l + 24, t + 24, r - 24, b - 24, stroke);
-        // Diamond medallion
-        float cx = (l + r) / 2f, cy = (t + b) / 2f;
-        canvas.save();
-        canvas.rotate(45f, cx, cy);
-        fill.setColor(CRIMSON_DEEP);
-        canvas.drawRect(cx - 38, cy - 38, cx + 38, cy + 38, fill);
-        stroke.setColor(GOLD_BRIGHT);
-        canvas.drawRect(cx - 38, cy - 38, cx + 38, cy + 38, stroke);
-        canvas.drawRect(cx - 18, cy - 18, cx + 18, cy + 18, stroke);
-        canvas.restore();
-        // Fringe on the short ends
-        stroke.setColor(GOLD_DEEP);
-        for (float x = l + 6; x < r; x += 12) {
-            canvas.drawLine(x, t, x, t - 10, stroke);
-            canvas.drawLine(x, b, x, b + 10, stroke);
-        }
-    }
-
-    /** Rune circle with counter-turning arcane arcs and a pulsing core. */
-    private void drawPortal(Canvas canvas, long now) {
-        float x = EXIT_PORTAL_X, y = EXIT_PORTAL_Y, r = EXIT_PORTAL_RADIUS;
-        float pulse = 0.85f + 0.15f * (float) Math.sin(now / 400.0);
-        canvas.save();
-        canvas.translate(x, y);
-        canvas.scale(pulse, pulse);
-        canvas.drawCircle(0, 0, 130, portalGlowPaint);
-        canvas.restore();
-
-        stroke.setColor(STONE_MID);
-        stroke.setStrokeWidth(12f);
-        canvas.drawCircle(x, y, r + 18, stroke);
-        stroke.setColor(STONE_DARK);
-        stroke.setStrokeWidth(3f);
-        canvas.drawCircle(x, y, r + 26, stroke);
-
-        // Runes on the stone ring, turning slowly
-        canvas.save();
-        canvas.rotate((now % 12000) / 12000f * 360f, x, y);
-        stroke.setColor(ARCANE_GLOW);
-        for (int i = 0; i < 8; i++) {
-            canvas.rotate(45f, x, y);
-            canvas.drawLine(x, y - r - 23, x, y - r - 13, stroke);
-        }
-        canvas.restore();
-
-        float a = (now % 3000) / 3000f * 360f;
-        stroke.setColor(ARCANE_BRIGHT);
-        stroke.setStrokeWidth(5f);
-        arcRect.set(x - 52, y - 52, x + 52, y + 52);
-        canvas.drawArc(arcRect, a, 100, false, stroke);
-        canvas.drawArc(arcRect, a + 180, 100, false, stroke);
-        stroke.setColor(ARCANE_GLOW);
-        stroke.setStrokeWidth(3f);
-        arcRect.set(x - 34, y - 34, x + 34, y + 34);
-        canvas.drawArc(arcRect, -a * 1.5f, 120, false, stroke);
-        canvas.drawArc(arcRect, -a * 1.5f + 180, 120, false, stroke);
-
-        fill.setColor(ARCANE_GLOW);
-        fill.setAlpha((int) (200 * pulse));
-        canvas.drawCircle(x, y, 18 * pulse, fill);
-        canvas.drawText("NEXT FLOOR", x, y - r - 44, labelPaint);
     }
 
     /** Back wall with a lit top and a brick face; side and front walls seen from above. */
@@ -412,43 +263,6 @@ public class ShopRoom {
         canvas.drawLine(ROOM_LEFT + WALL, ROOM_BOTTOM - WALL, ROOM_RIGHT - WALL, ROOM_BOTTOM - WALL, stroke);
     }
 
-    private void drawBanner(Canvas canvas, float x, long now) {
-        canvas.save();
-        canvas.translate(x, ROOM_TOP + WALL + 2);
-        canvas.rotate((float) Math.sin(now / 900.0) * 2f);
-        fill.setColor(CRIMSON_BASE);
-        canvas.drawPath(bannerPath, fill);
-        stroke.setColor(GOLD_DEEP);
-        stroke.setStrokeWidth(3f);
-        canvas.drawPath(bannerPath, stroke);
-        fill.setColor(GOLD_BRIGHT);
-        canvas.drawPath(emblemPath, fill);
-        fill.setColor(IRON);
-        canvas.drawRect(-26, -4, 26, 2, fill);
-        canvas.restore();
-    }
-
-    private void drawTorches(Canvas canvas, long now) {
-        for (int i = 0; i < TORCHES.length; i++) {
-            float x = TORCHES[i][0], y = TORCHES[i][1];
-            float flick = 0.85f + 0.15f * (float) Math.sin(now / 70.0 + i * 2.1);
-            fill.setColor(IRON);
-            canvas.drawRect(x - 6, y - 2, x + 6, y + 14, fill);
-            fill.setColor(WOOD_DARK);
-            canvas.drawRect(x - 4, y - 16, x + 4, y + 2, fill);
-            canvas.save();
-            canvas.translate(x, y - 22);
-            canvas.scale(flick, flick);
-            canvas.drawCircle(0, 0, 40, haloPaint);
-            fill.setColor(FLAME);
-            canvas.drawCircle(0, 0, 9, fill);
-            canvas.drawCircle(0, -8, 6, fill);
-            fill.setColor(FLAME_CORE);
-            canvas.drawCircle(0, 1, 5, fill);
-            canvas.restore();
-        }
-    }
-
     /** Wooden "MERCHANT" sign hanging from the back wall, swaying a little. */
     private void drawSign(Canvas canvas, long now) {
         float cx = ROOM_LEFT + 500, top = ROOM_TOP + 50;
@@ -468,14 +282,9 @@ public class ShopRoom {
         canvas.restore();
     }
 
-    private void drawShadow(Canvas canvas, float[] b) {
-        fill.setColor(SHADOW);
-        canvas.drawRect(b[0] + 8, b[1] + 10, b[2] + 8, b[3] + 10, fill);
-    }
-
     /** Shelf against the back wall with glowing potion bottles. */
     private void drawShelf(Canvas canvas, float[] b, int colorOffset) {
-        drawShadow(canvas, b);
+        props.drawShadow(canvas, b[0], b[1], b[2], b[3]);
         fill.setColor(WOOD_MID);
         canvas.drawRect(b[0], b[1], b[2], b[3] - 18, fill);
         fill.setColor(WOOD_DARK);
@@ -498,31 +307,6 @@ public class ShopRoom {
             fill.setColor(Color.argb(150, 255, 255, 255));
             canvas.drawCircle(x - 3, y - 3, 3, fill);
         }
-    }
-
-    /** Round stone pillar lit from the top-left. */
-    private void drawPillar(Canvas canvas, float[] c) {
-        float x = c[0], y = c[1], r = c[2];
-        fill.setColor(SHADOW);
-        canvas.drawCircle(x + 8, y + 10, r, fill);
-        fill.setColor(STONE_DARK);
-        canvas.drawCircle(x, y, r, fill);
-        fill.setColor(STONE_MID);
-        canvas.drawCircle(x - 3, y - 3, r - 6, fill);
-        fill.setColor(STONE_LIGHT);
-        canvas.drawCircle(x - r * 0.3f, y - r * 0.3f, r * 0.35f, fill);
-        stroke.setColor(GOLD_DEEP);
-        stroke.setStrokeWidth(3f);
-        canvas.drawCircle(x, y, r - 2, stroke);
-    }
-
-    /** Small standing stone beside the portal with a glowing rune. */
-    private void drawRuneStone(Canvas canvas, float[] c, long now) {
-        drawPillar(canvas, c);
-        fill.setColor(ARCANE_GLOW);
-        fill.setAlpha((int) (140 + 100 * Math.sin(now / 500.0)));
-        canvas.drawRect(c[0] - 2, c[1] - 9, c[0] + 2, c[1] + 9, fill);
-        canvas.drawRect(c[0] - 7, c[1] - 2, c[0] + 7, c[1] + 2, fill);
     }
 
     /** Hooded merchant behind the counter; his face stays lost in the hood's shadow. */
@@ -559,7 +343,7 @@ public class ShopRoom {
         stroke.setStrokeWidth(2f);
         canvas.drawLine(0, 4, 0, 16, stroke);
         canvas.translate(0, 30);
-        canvas.drawCircle(0, 0, 40, haloPaint);
+        props.drawHalo(canvas, 0, 0, 1f);
         fill.setColor(IRON);
         canvas.drawRect(-9, -14, 9, 12, fill);
         fill.setColor(FLAME_CORE);
@@ -571,7 +355,7 @@ public class ShopRoom {
     private void drawCounter(Canvas canvas, long now) {
         float[] b = COUNTER;
         float face = b[3] - 28;
-        drawShadow(canvas, b);
+        props.drawShadow(canvas, b[0], b[1], b[2], b[3]);
         fill.setColor(WOOD_LIGHT);
         canvas.drawRect(b[0], b[1], b[2], face, fill);
         stroke.setColor(WOOD_MID);
@@ -602,21 +386,8 @@ public class ShopRoom {
         canvas.drawOval(sx - 30, sy + 10, sx - 14, sy + 16, fill);
         canvas.drawOval(sx + 14, sy + 10, sx + 30, sy + 16, fill);
 
-        drawCandle(canvas, b[0] + 20, b[1] + 24, now);
-        drawCandle(canvas, b[2] - 20, b[1] + 24, now + 300);
-    }
-
-    private void drawCandle(Canvas canvas, float x, float y, long now) {
-        float flick = 0.8f + 0.2f * (float) Math.sin(now / 60.0);
-        fill.setColor(PARCHMENT);
-        canvas.drawRect(x - 4, y - 14, x + 4, y + 4, fill);
-        canvas.save();
-        canvas.translate(x, y - 20);
-        canvas.scale(flick * 0.6f, flick * 0.6f);
-        canvas.drawCircle(0, 0, 40, haloPaint);
-        canvas.restore();
-        fill.setColor(FLAME_CORE);
-        canvas.drawCircle(x, y - 19, 3.5f * flick, fill);
+        props.drawCandle(canvas, b[0] + 20, b[1] + 24, now);
+        props.drawCandle(canvas, b[2] - 20, b[1] + 24, now + 300);
     }
 
     /** Iron cauldron with a bubbling green brew. */
@@ -663,7 +434,7 @@ public class ShopRoom {
     /** Weapon rack against the right wall: three swords and a round shield. */
     private void drawRack(Canvas canvas) {
         float[] b = RACK;
-        drawShadow(canvas, b);
+        props.drawShadow(canvas, b[0], b[1], b[2], b[3]);
         fill.setColor(WOOD_DARK);
         canvas.drawRect(b[0], b[1], b[2], b[3], fill);
         fill.setColor(WOOD_MID);
@@ -688,43 +459,6 @@ public class ShopRoom {
         canvas.drawCircle(sx, sy, 22, stroke);
         fill.setColor(IRON_LIGHT);
         canvas.drawCircle(sx, sy, 6, fill);
-    }
-
-    /** Wooden crate: lit top with a brace, darker front face. */
-    private void drawCrate(Canvas canvas, float[] b) {
-        float face = b[3] - 22;
-        drawShadow(canvas, b);
-        fill.setColor(WOOD_LIGHT);
-        canvas.drawRect(b[0], b[1], b[2], face, fill);
-        fill.setColor(WOOD_DARK);
-        canvas.drawRect(b[0], face, b[2], b[3], fill);
-        stroke.setColor(WOOD_LINE);
-        stroke.setStrokeWidth(3f);
-        canvas.drawRect(b[0] + 4, b[1] + 4, b[2] - 4, face - 4, stroke);
-        canvas.drawLine(b[0] + 4, b[1] + 4, b[2] - 4, face - 4, stroke);
-        canvas.drawLine(b[0], face + 11, b[2], face + 11, stroke);
-    }
-
-    /** Barrel seen from slightly above: lid, staves and iron hoops. */
-    private void drawBarrel(Canvas canvas, float[] c) {
-        float x = c[0], y = c[1], r = c[2];
-        fill.setColor(SHADOW);
-        canvas.drawCircle(x + 7, y + 10, r, fill);
-        fill.setColor(WOOD_MID);
-        arcRect.set(x - r, y - r * 0.6f, x + r, y + r);
-        canvas.drawRoundRect(arcRect, r * 0.5f, r * 0.5f, fill);
-        stroke.setColor(IRON);
-        stroke.setStrokeWidth(5f);
-        canvas.drawLine(x - r + 3, y + r * 0.05f, x + r - 3, y + r * 0.05f, stroke);
-        canvas.drawLine(x - r + 4, y + r * 0.6f, x + r - 4, y + r * 0.6f, stroke);
-        fill.setColor(WOOD_LIGHT);
-        arcRect.set(x - r, y - r, x + r, y - r * 0.2f);
-        canvas.drawOval(arcRect, fill);
-        stroke.setStrokeWidth(4f);
-        canvas.drawOval(arcRect, stroke);
-        stroke.setColor(WOOD_LINE);
-        stroke.setStrokeWidth(2f);
-        canvas.drawLine(x - r * 0.5f, y - r * 0.6f, x + r * 0.5f, y - r * 0.6f, stroke);
     }
 
     /** Parchment speech bubble that fades in while the player is near the counter. */

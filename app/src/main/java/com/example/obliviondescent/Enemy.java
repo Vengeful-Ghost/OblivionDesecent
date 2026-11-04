@@ -317,6 +317,7 @@ public class Enemy {
             knockbackVY *= 0.75f;
             if (Math.abs(knockbackVX) < 0.5f) knockbackVX = 0f;
             if (Math.abs(knockbackVY) < 0.5f) knockbackVY = 0f;
+            if (Math.abs(knockbackVX) + Math.abs(knockbackVY) > 4f) return; // a hard shove interrupts walking
         }
 
         long now = System.currentTimeMillis();
@@ -933,7 +934,8 @@ public class Enemy {
         }
     }
 
-    public int getDamage() { return Math.max(1, (int)(weapon.damage * dmgMultiplier * 0.65f));}
+    // Normal enemies hit hard; the boss keeps its own scale since its base damage is already high
+    public int getDamage() { return Math.max(1, (int)(weapon.damage * dmgMultiplier * (type == Type.BOSS ? 0.65f : 1.6f)));}
     public Weapon getWeapon()   { return weapon; }
     public int getGoldDrop() { return goldDrop; }
 

@@ -31,7 +31,7 @@ public class Player {
     // Death animation
     private boolean isDying = false;
     private long deathStartTime = 0;
-    private static final long PLAYER_DEATH_DURATION = 800; // ms
+    private static final long PLAYER_DEATH_DURATION = 1000; // ms
     private Paint deathPaint;
 
     // Spin special: the blade sweeps a full turn around the body
@@ -70,7 +70,7 @@ public class Player {
         highlightPaint.setColor(Color.argb(45, 255, 255, 255));
 
         deathPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        deathPaint.setColor(Color.BLUE);
+        deathPaint.setColor(Color.WHITE);
         deathPaint.setStyle(Paint.Style.FILL);
 
         spinPaint.setStyle(Paint.Style.STROKE);
@@ -140,15 +140,12 @@ public class Player {
         float drawY = y - camera.getOffsetY();
 
         if (isDying) {
-            long elapsed = System.currentTimeMillis() - deathStartTime;
-            float progress = Math.min(1f, (float) elapsed / PLAYER_DEATH_DURATION);
-
-            // Player expands outward and fades simultaneously
-            float expandedRadius = radius * (1f + progress * 2.5f);
-            int alpha = (int)(255 * (1f - progress));
-
-            deathPaint.setAlpha(alpha);
-            canvas.drawCircle(drawX, drawY, expandedRadius, deathPaint);
+            // The body flashes white and collapses while GameEffects.poof() scatters it
+            float progress = Math.min(1f, (System.currentTimeMillis() - deathStartTime) / 220f);
+            if (progress < 1f) {
+                deathPaint.setAlpha((int) (255 * (1f - progress)));
+                canvas.drawCircle(drawX, drawY, radius * (1f - progress * 0.7f), deathPaint);
+            }
             return; // Skip normal draw
         }
 
@@ -214,6 +211,7 @@ public class Player {
 
     public void setInvulnerable(boolean invulnerable) { this.invulnerable = invulnerable; }
     public void setColor(int color) { paint.setColor(color); }
+    public int getColor() { return paint.getColor(); }
     public float getX() { return x; }
     public float getY() { return y; }
 

@@ -24,11 +24,6 @@ public class GameDisplay extends View {
 
     private FloorManager floorManager; // Reference passed in from GameActivity
 
-    // Portal drawing paints
-    private Paint portalGlowPaint;  // Outer soft glow ring
-    private Paint portalCorePaint;  // Solid inner circle
-    private Paint portalLabelPaint; // "EXIT" text above it
-
     private List<Projectile> projectiles;
 
     private Paint arrowPaint;
@@ -38,9 +33,6 @@ public class GameDisplay extends View {
 
     private List<TreasureChest> treasureChests;
 
-    private Paint shopPortalGlowPaint;
-    private Paint shopPortalCorePaint;
-    private Paint shopPortalLabelPaint;
     private Paint shopArrowPaint;
     private Paint shopArrowGlowPaint;
 
@@ -49,6 +41,8 @@ public class GameDisplay extends View {
 
     // Floor layout rendering
     private FloorLayout floorLayout;
+    private final Props props = new Props(); // portals and room decorations, shared with the shop
+    private volatile List<Props.Decor> decor;
     private Paint roomFloorPaint;
     private Paint entryFloorPaint;
     private Paint exitFloorPaint;
@@ -103,20 +97,7 @@ public class GameDisplay extends View {
         floorPaint.setColor(Color.DKGRAY);
         floorPaint.setStrokeWidth(2f);
         floorPaint.setAlpha(50); // Faint grid lines
-
-        portalGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        portalGlowPaint.setColor(Color.rgb(100, 60, 255)); // Purple glow
-        portalGlowPaint.setStyle(Paint.Style.FILL);
-
-        portalCorePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        portalCorePaint.setColor(Color.rgb(160, 100, 255));
-        portalCorePaint.setStyle(Paint.Style.FILL);
-
-        portalLabelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        portalLabelPaint.setColor(Color.WHITE);
-        portalLabelPaint.setTextSize(28f);
-        portalLabelPaint.setTextAlign(Paint.Align.CENTER);
-        portalLabelPaint.setFakeBoldText(true);
+        props.setFont(getResources().getFont(R.font.cinzel));
 
         arrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         arrowPaint.setColor(Color.rgb(160, 100, 255));
@@ -126,20 +107,6 @@ public class GameDisplay extends View {
         arrowGlowPaint.setColor(Color.rgb(160, 100, 255));
         arrowGlowPaint.setStyle(Paint.Style.FILL);
         arrowGlowPaint.setAlpha(60);
-
-        shopPortalGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        shopPortalGlowPaint.setColor(Color.rgb(255, 200, 0));
-        shopPortalGlowPaint.setStyle(Paint.Style.FILL);
-
-        shopPortalCorePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        shopPortalCorePaint.setColor(Color.rgb(255, 230, 80));
-        shopPortalCorePaint.setStyle(Paint.Style.FILL);
-
-        shopPortalLabelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        shopPortalLabelPaint.setColor(Color.WHITE);
-        shopPortalLabelPaint.setTextSize(28f);
-        shopPortalLabelPaint.setTextAlign(Paint.Align.CENTER);
-        shopPortalLabelPaint.setFakeBoldText(true);
 
         shopArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         shopArrowPaint.setColor(Color.rgb(255, 215, 0));
@@ -371,6 +338,12 @@ public class GameDisplay extends View {
             drawGrid(canvas);
         }
 
+        // Portals lie on the floor, under coins, enemies and players
+        if (!inShopRoom) {
+            drawPortal(canvas);
+            drawShopPortal(canvas);
+        }
+
         // Draw gold coins
         if (goldCoins != null) {
             synchronized (goldCoins) {
@@ -407,9 +380,7 @@ public class GameDisplay extends View {
         }
 
         if (!inShopRoom) {
-            drawPortal(canvas);
             drawPortalArrow(canvas);
-            drawShopPortal(canvas);
             drawShopPortalArrow(canvas);
         }
         // 3. Draw Player
@@ -460,6 +431,7 @@ public class GameDisplay extends View {
      * @param layout the current floor layout
      */
     public void setFloorLayout(FloorLayout layout) {
+        decor = layout != null ? Props.decorate(layout) : null;
         this.floorLayout = layout;
     }
 
@@ -503,6 +475,24 @@ public class GameDisplay extends View {
                 wall(canvas, right, top, right, bottom);
             }
         }
+        drawDecor(canvas);
+    }
+
+    /** Room decorations near the screen, in world space: torchlight first, then the props. */
+    private void drawDecor(Canvas canvas) {
+        List<Props.Decor> list = decor;
+        if (list == null) return;
+        long now = System.currentTimeMillis();
+        float offX = camera.getOffsetX(), offY = camera.getOffsetY();
+        float left = offX - 400, top = offY - 400;
+        float right = offX + getWidth() + 400, bottom = offY + getHeight() + 400;
+        canvas.save();
+        canvas.translate(-offX, -offY);
+        for (Props.Decor d : list)
+            if (d.x > left && d.x < right && d.y > top && d.y < bottom) props.drawDecorLight(canvas, d, now);
+        for (Props.Decor d : list)
+            if (d.x > left && d.x < right && d.y > top && d.y < bottom) props.drawDecor(canvas, d, now);
+        canvas.restore();
     }
 
     /** One wall segment: dark edge, then the stone face on top. */
@@ -718,41 +708,12 @@ public class GameDisplay extends View {
         this.floorManager = floorManager;
     }
 
-    /**
-     * Draws the exit portal with a pulsing animation.
-     *
-     * The pulse works by feeding System.currentTimeMillis() into Math.sin().
-     * sin() returns a value between -1 and 1 smoothly over time.
-     * We scale it to 0.75–1.0 so the portal breathes slightly rather than
-     * fully disappearing.
-     *
-     * The outer glow is drawn first (larger radius, semi-transparent),
-     * then the solid core on top, then the "EXIT" label.
-     */
+    /** Exit portal: the same arcane rune circle as in the shop room. */
     private void drawPortal(Canvas canvas) {
         if (floorManager == null || !floorManager.isPortalOpen()) return;
-
-        // Convert world position to screen position
         float drawX = floorManager.getPortalX() - camera.getOffsetX();
         float drawY = floorManager.getPortalY() - camera.getOffsetY();
-
-        // Pulse value smoothly oscillates between 0.75 and 1.0
-        // Dividing millis by 400 controls the speed of the pulse
-        float pulse = (float)(Math.sin(System.currentTimeMillis() / 400.0) * 0.125 + 0.875);
-
-        float coreRadius   = FloorManager.PORTAL_RADIUS * pulse;
-        float glowRadius   = FloorManager.PORTAL_RADIUS * 1.8f * pulse;
-
-        // Outer glow — semi-transparent, larger than the core
-        portalGlowPaint.setAlpha((int)(90 * pulse));
-        canvas.drawCircle(drawX, drawY, glowRadius, portalGlowPaint);
-
-        // Inner core — more opaque
-        portalCorePaint.setAlpha((int)(210 * pulse));
-        canvas.drawCircle(drawX, drawY, coreRadius, portalCorePaint);
-
-        // "EXIT" label floats above the portal
-        canvas.drawText("EXIT", drawX, drawY - FloorManager.PORTAL_RADIUS - 16f, portalLabelPaint);
+        props.drawPortal(canvas, drawX, drawY, FloorManager.PORTAL_RADIUS, System.currentTimeMillis(), false, "NEXT FLOOR");
     }
 
     /**
@@ -820,25 +781,12 @@ public class GameDisplay extends View {
         canvas.restore();
     }
 
+    /** Shop portal: the rune circle in gold. */
     private void drawShopPortal(Canvas canvas) {
         if (floorManager == null || !floorManager.isShopPortalOpen()) return;
-
         float drawX = floorManager.getShopPortalX() - camera.getOffsetX();
         float drawY = floorManager.getShopPortalY() - camera.getOffsetY();
-
-        float pulse = (float)(Math.sin(System.currentTimeMillis() / 400.0) * 0.125 + 0.875);
-
-        float coreRadius = FloorManager.SHOP_PORTAL_RADIUS * pulse;
-        float glowRadius = FloorManager.SHOP_PORTAL_RADIUS * 1.8f * pulse;
-
-        shopPortalGlowPaint.setAlpha((int)(90 * pulse));
-        canvas.drawCircle(drawX, drawY, glowRadius, shopPortalGlowPaint);
-
-        shopPortalCorePaint.setAlpha((int)(210 * pulse));
-        canvas.drawCircle(drawX, drawY, coreRadius, shopPortalCorePaint);
-
-        canvas.drawText("SHOP", drawX, drawY - FloorManager.SHOP_PORTAL_RADIUS - 16f,
-                shopPortalLabelPaint);
+        props.drawPortal(canvas, drawX, drawY, FloorManager.SHOP_PORTAL_RADIUS, System.currentTimeMillis(), true, "SHOP");
     }
 
     private void drawShopPortalArrow(Canvas canvas) {

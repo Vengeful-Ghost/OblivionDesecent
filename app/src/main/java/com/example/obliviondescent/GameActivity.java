@@ -109,9 +109,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private static final float CRIT_CHANCE = 0.12f;
     // Spin: special attack around the player, queued from the UI and resolved on the logic thread
     private static final long SPIN_COOLDOWN = 6000;
+    private static final float SPIN_PUSH = 60f; // starting slide speed; enemies glide about four times this far
     private static final long AIM_GRACE = 90; // ms a fresh touch waits for a drag before auto-aiming
     private long lastSpinTime = 0;
     private volatile boolean spinQueued = false;
+    // Settings: attack where the player faces (a plain button) instead of aiming with the attack stick
+    private volatile boolean attackFacing = false;
 
     private int   checkpointFloor  = 1;
     private int   checkpointHealth = 100;
@@ -676,6 +679,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 if (layoutReady) checkBossDeathDetection();
 
                 if (isGamePaused || !layoutReady) backlog = 0;
+                if (isGamePaused) effects.update(); // the death poof keeps moving while paused
                 for (int i = 0; i < 5 && backlog >= tickNanos && !isGamePaused; i++) {
                     tick(System.currentTimeMillis());
                     backlog -= tickNanos;
@@ -750,9 +754,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         // Attack: hold the attack stick to keep swinging or shooting (a fallen co-op player can't).
         // The first swing waits a moment so a drag can set the aim; a quick tap still swings.
+        // In facing mode the stick is a plain button, so it swings at once.
         boolean alive = playerHealth > 0;
         if (aimJoystick.isHeld()) {
-            if (aimJoystick.isAiming() || aimJoystick.heldMs() >= AIM_GRACE) {
+            if (attackFacing || aimJoystick.isAiming() || aimJoystick.heldMs() >= AIM_GRACE) {
                 aimJoystick.takeTap();
                 if (alive) tryAttack(now);
             }
@@ -1352,12 +1357,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             if (playerHealth <= 0 && coop != null) {
                 // Co-op: the run goes on; a fallen player revives on the next floor
                 player.startDeathAnimation();
+                effects.poof(player.x, player.y, player.getColor());
                 statsManager.onPlayerDied();
                 Toast.makeText(this, "You fell! You'll revive when your party reaches the next floor.",
                         Toast.LENGTH_LONG).show();
             } else if (playerHealth <= 0) {
                 isGamePaused = true;
                 player.startDeathAnimation();
+                effects.poof(player.x, player.y, player.getColor());
                 statsManager.onPlayerDied();
                 statsManager.flush();
                 new android.os.Handler().postDelayed(
@@ -1513,6 +1520,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     /**
      * Attacks with the equipped weapon once its cooldown allows. Aims where the attack stick is
      * dragged, otherwise at the nearest awake enemy in reach, otherwise straight ahead.
+     * In facing mode it always attacks straight ahead.
      * Runs on the logic thread.
      * @param now current time in milliseconds
      */
@@ -1524,7 +1532,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             aimDX = aimJoystick.getAimX();
             aimDY = aimJoystick.getAimY();
         } else {
-            Enemy target = nearestEnemy(w.isProjectile ? w.range : player.radius + w.range + 160f);
+            Enemy target = attackFacing ? null : nearestEnemy(w.isProjectile ? w.range : player.radius + w.range + 160f);
             if (target != null) {
                 aimDX = target.x - player.x;
                 aimDY = target.y - player.y;
@@ -1570,20 +1578,21 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /**
-     * Spin special: hits every enemy around the player, knocks them back and interrupts wind-ups.
-     * Grants a moment of invulnerability. Runs on the logic thread.
+     * Spin special: an evasive shove. Throws every enemy around the player far back with light damage,
+     * interrupts wind-ups and grants a moment of invulnerability. Runs on the logic thread.
      * @param now current time in milliseconds
      */
     private void spinAttack(long now) {
         lastSpinTime = now;
         Weapon w = player.getWeapon();
-        float reach = player.radius + 180f;
-        int damage = Math.round(Math.max(w.damage, 6) * damageMultiplier() * 1.3f);
+        float reach = player.radius + 200f;
+        int damage = Math.max(1, Math.round(Math.max(w.damage, 6) * damageMultiplier() * 0.5f));
         int color = Color.rgb(140, 200, 255);
         player.startSpin(reach, color);
         effects.burst(player.x, player.y, color, 10, 6f);
+        effects.slash(player.x, player.y, 0f, reach, 180f, color);
         soundManager.playSwingMelee();
-        invulnerableUntil = Math.max(invulnerableUntil, now + 250);
+        invulnerableUntil = Math.max(invulnerableUntil, now + 450);
 
         synchronized (enemies) {
             for (Enemy e : enemies) {
@@ -1593,7 +1602,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 float dist = (float) Math.sqrt(dx * dx + dy * dy);
                 if (dist > reach + e.radius) continue;
                 e.lastHitTime = now;
-                float push = dist > 0 ? 22f / dist : 0f;
+                float push = dist > 0 ? SPIN_PUSH / dist : 0f;
                 damageEnemy(e, damage, false, dx * push, dy * push, true);
             }
         }
@@ -1977,10 +1986,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             } else if (playerGold < item.price) {
                 card.setAlpha(0.5f);
                 card.setOnClickListener(v ->
-                        showItemDetailDialog(dialog, item, card, goldDisplay, shopBoughtIndices, index));
+                        showItemDetailDialog(dialog, item, goldDisplay, shopBoughtIndices, index));
             } else {
                 card.setOnClickListener(v ->
-                        showItemDetailDialog(dialog, item, card, goldDisplay, shopBoughtIndices, index));
+                        showItemDetailDialog(dialog, item, goldDisplay, shopBoughtIndices, index));
             }
 
             rows[i / 3].addView(card);
@@ -1989,7 +1998,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     private void showItemDetailDialog(android.app.Dialog shopDialog,
                                       ShopItem item,
-                                      android.view.View cardView,
                                       TextView goldDisplay,
                                       Set<Integer> boughtIndices,
                                       int itemIndex) {
@@ -2038,8 +2046,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             purchaseItem(item);
 
             boughtIndices.add(itemIndex);
-            cardView.setAlpha(0.3f);
-            cardView.setOnClickListener(null);
+            // Redraw every card: items that were affordable may not be any more
+            populateShopGridFromItems(shopDialog, shopDialog.findViewById(R.id.shop_items_container),
+                    goldDisplay, getShopItemsForFloor(floorManager.getCurrentFloor()));
 
             detail.dismiss();
         });
@@ -2452,6 +2461,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void spawnTreasureChests(float bossX, float bossY) {
         int floor = floorManager.getCurrentFloor();
         List<ShopItem> pool = getChestItemPool(floor);
+        long launch = System.currentTimeMillis() + 250; // the boss starts to fall first
 
         synchronized (treasureChests) {
             treasureChests.clear();
@@ -2476,7 +2486,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     cy = bossY + (float)(Math.sin(angle) * 80f);
                 }
 
-                TreasureChest chest = new TreasureChest(cx, cy);
+                TreasureChest chest = new TreasureChest(cx, cy, bossX, bossY, launch + i * 180L);
                 if (!pool.isEmpty()) {
                     ShopItem reward = pool.get((int)(Math.random() * pool.size()));
                     chest.rewardItem      = reward;
@@ -2501,15 +2511,29 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return pool;
     }
 
-    /** Opens a chest when player walks close enough; gives the stored reward item. */
+    /** Plays each chest's landing burst, then opens a chest when the player walks close enough. */
     private void checkChestInteraction() {
+        long now = System.currentTimeMillis();
+        int gold = Color.rgb(244, 215, 122);
         synchronized (treasureChests) {
             for (TreasureChest chest : treasureChests) {
+                if (!chest.landed) {
+                    if (!chest.hasLanded(now)) continue;
+                    chest.landed = true;
+                    effects.burst(chest.x, chest.y, gold, 18, 9f);
+                    effects.burst(chest.x, chest.y + 20, Color.rgb(120, 100, 80), 10, 5f); // dust
+                    effects.slash(chest.x, chest.y + 10, 0f, 60f, 180f, gold);
+                    if (camera != null) camera.startShake(150, 6f);
+                    soundManager.playCoinPickup();
+                }
                 if (chest.opened) continue;
                 float dist = getDistance(player.x, player.y, chest.x, chest.y);
                 if (dist < player.radius + TreasureChest.OPEN_RADIUS) {
                     chest.opened = true;
                     soundManager.playChestOpen();
+                    effects.burst(chest.x, chest.y - 10, chest.rewardItemColor, 28, 11f);
+                    effects.burst(chest.x, chest.y - 10, gold, 14, 7f);
+                    effects.slash(chest.x, chest.y, 0f, 80f, 180f, chest.rewardItemColor);
                     if (chest.rewardItem != null) {
                         final ShopItem reward = chest.rewardItem;
                         runOnUiThread(() -> purchaseItem(reward));
@@ -2718,6 +2742,18 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         Toast.makeText(this, "Sold " + itemName + " for " + amount + " gold", Toast.LENGTH_SHORT).show();
     }
 
+    /** Asks before selling, since a sold item is gone for good. */
+    private void confirmSell(String itemName, int amount, Runnable sell) {
+        android.app.AlertDialog confirm = new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
+                .setTitle("Sell " + itemName + " for " + amount + " gold?")
+                .setMessage("Are you sure? You will lose this item when you sell it.")
+                .setPositiveButton("Sell", (d, which) -> sell.run())
+                .setNegativeButton("Keep", null)
+                .create();
+        confirm.show();
+        hideSystemUIOnWindow(confirm.getWindow());
+    }
+
     private void showSortPicker(Dialog dialog, MaterialButton sortBtn) {
         android.app.AlertDialog picker = new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
                 .setTitle("Sort by")
@@ -2881,7 +2917,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         int weaponValue = sellValue(weapon);
         btnSellWeapon.setText("Sell  +" + weaponValue);
         btnSellWeapon.setVisibility(isFists ? View.GONE : View.VISIBLE);
-        btnSellWeapon.setOnClickListener(v -> {
+        btnSellWeapon.setOnClickListener(v -> confirmSell(weapon.name, weaponValue, () -> {
             if (player.getWeapon() == weapon) {
                 player.equipWeapon(weapons.get(0)); // Re-equip Fists
                 refreshAttackUI();
@@ -2892,7 +2928,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
             detail.dismiss();
-        });
+        }));
 
         detail.findViewById(R.id.btn_close_action).setOnClickListener(v -> detail.dismiss());
         detail.show();
@@ -2925,7 +2961,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         MaterialButton btnSellArmor = detail.findViewById(R.id.btn_remove);
         int armorValue = sellValue(armor);
         btnSellArmor.setText("Sell  +" + armorValue);
-        btnSellArmor.setOnClickListener(v -> {
+        btnSellArmor.setOnClickListener(v -> confirmSell(armor.name, armorValue, () -> {
             // Unequip if currently equipped
             if (equippedArmor.get(armor.slot) == armor) {
                 equippedArmor.remove(armor.slot);
@@ -2937,7 +2973,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
             detail.dismiss();
-        });
+        }));
 
         detail.findViewById(R.id.btn_close_action).setOnClickListener(v -> detail.dismiss());
         detail.show();
@@ -2968,13 +3004,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         MaterialButton btnSellConsumable = detail.findViewById(R.id.btn_remove);
         int potionValue = sellValue(stack);
         btnSellConsumable.setText("Sell one  +" + potionValue);
-        btnSellConsumable.setOnClickListener(v -> {
+        btnSellConsumable.setOnClickListener(v -> confirmSell(stack.item.name, potionValue, () -> {
             if (stack.decrement()) consumableInventory.remove(stack);
             earnGold(potionValue, stack.item.name);
             updatePotionButton();
             populateInventoryList(parentDialog);
             detail.dismiss();
-        });
+        }));
 
         detail.findViewById(R.id.btn_close_action).setOnClickListener(v -> detail.dismiss());
         detail.show();
@@ -3325,6 +3361,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         float gameVol = getSharedPreferences("gameSettings", MODE_PRIVATE)
                 .getFloat("game_music_volume", 0.85f);
         SoundManager.setGameMusicVolume(gameVol);
+
+        // Re-apply the attack direction mode in case it changed in Settings
+        attackFacing = getSharedPreferences(SettingsActivity.PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(SettingsActivity.KEY_ATTACK_FACING, false);
+        aimJoystick.setAimEnabled(!attackFacing);
 
         // CHECK IF WE CAME BACK FROM SETTINGS
         if (showMenuOnResume) {

@@ -26,7 +26,7 @@ import java.util.Random;
 
 /**
  * Settings screen.
- * Allows control over music and SFX volume, vibration,
+ * Allows control over music and SFX volume, vibration, the attack direction
  * and a sign-out button. Can be opened from the main menu or the in-game pause menu.
  */
 public class SettingsActivity extends AppCompatActivity {
@@ -36,6 +36,7 @@ public class SettingsActivity extends AppCompatActivity {
        ============================================================ */
     public static final String PREFS_NAME    = "gameSettings";
     public static final String KEY_VIBRATION = "vibration_enabled";
+    public static final String KEY_ATTACK_FACING = "attack_facing"; // true: attack where the player faces
 
     // True when this screen was opened from the in-game pause menu — music must NOT play
     public static final String EXTRA_FROM_GAME = "from_game";
@@ -46,6 +47,7 @@ public class SettingsActivity extends AppCompatActivity {
        ============================================================ */
     private SwitchCompat switchVibration;
     private TextView txtMiuiWarning;
+    private TextView attackAim, attackFacing;
 
     /**
      * Initialises the settings screen, loads saved preferences and sets up sliders.
@@ -79,6 +81,18 @@ public class SettingsActivity extends AppCompatActivity {
         switchVibration.setOnCheckedChangeListener((buttonView, isChecked) -> {
             prefs.edit().putBoolean(KEY_VIBRATION, isChecked).apply();
             txtMiuiWarning.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+        });
+
+        attackAim    = findViewById(R.id.attack_mode_aim);
+        attackFacing = findViewById(R.id.attack_mode_facing);
+        showAttackMode(prefs.getBoolean(KEY_ATTACK_FACING, false));
+        attackAim.setOnClickListener(v -> {
+            prefs.edit().putBoolean(KEY_ATTACK_FACING, false).apply();
+            showAttackMode(false);
+        });
+        attackFacing.setOnClickListener(v -> {
+            prefs.edit().putBoolean(KEY_ATTACK_FACING, true).apply();
+            showAttackMode(true);
         });
 
         btnBack.setOnClickListener(v -> finish());
@@ -149,6 +163,12 @@ public class SettingsActivity extends AppCompatActivity {
         });
 
         startBouncingParticles();
+    }
+
+    /** Highlights the chosen attack direction, like the tabs on the stats screen. */
+    private void showAttackMode(boolean facing) {
+        attackAim.setTextColor(getColor(facing ? R.color.bone_muted : R.color.gold_bright));
+        attackFacing.setTextColor(getColor(facing ? R.color.gold_bright : R.color.bone_muted));
     }
 
     @Override

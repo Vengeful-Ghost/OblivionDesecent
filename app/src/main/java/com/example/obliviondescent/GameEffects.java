@@ -111,6 +111,27 @@ public class GameEffects {
         }
     }
 
+    /** The player bursting into motes of their colour and puffs of grey smoke, with a white ring. */
+    public synchronized void poof(float x, float y, int color) {
+        long now = System.currentTimeMillis();
+        for (int i = 0; i < 60 && particles.size() < MAX_PARTICLES; i++) {
+            boolean smoke = i % 3 == 0;
+            double angle = rng.nextDouble() * Math.PI * 2;
+            float v = (smoke ? 3f : 9f) * (0.3f + rng.nextFloat() * 0.7f);
+            Particle p = new Particle();
+            p.x = x + (rng.nextFloat() - 0.5f) * 30f;
+            p.y = y + (rng.nextFloat() - 0.5f) * 30f;
+            p.vx = (float) Math.cos(angle) * v;
+            p.vy = (float) Math.sin(angle) * v - (smoke ? 2f : 0f); // smoke drifts up
+            p.size = smoke ? 14f + rng.nextFloat() * 12f : 5f + rng.nextFloat() * 7f;
+            p.color = smoke ? Color.rgb(150, 150, 160) : color;
+            p.born = now;
+            p.life = smoke ? 900 + rng.nextInt(500) : 600 + rng.nextInt(500);
+            particles.add(p);
+        }
+        slash(x, y, 0f, 70f, 180f, Color.WHITE);
+    }
+
     /** Leaves a single slow-fading particle, used for the dash trail. */
     public synchronized void trail(float x, float y, int color) {
         if (particles.size() >= MAX_PARTICLES) return;

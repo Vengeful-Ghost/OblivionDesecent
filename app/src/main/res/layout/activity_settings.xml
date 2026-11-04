@@ -91,7 +91,7 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal">
 
-            <!-- FEEDBACK -->
+            <!-- CONTROLS -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -102,7 +102,7 @@
                     style="@style/OD.Text.Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="FEEDBACK"
+                    android:text="CONTROLS"
                     android:textColor="@color/gold_bright"
                     android:letterSpacing="0.24"
                     android:layout_marginBottom="@dimen/space_sm"
@@ -138,15 +138,6 @@
 
                 </LinearLayout>
 
-                <TextView
-                    style="@style/OD.Text.Caption"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Phone vibrates when you take damage"
-                    android:textSize="@dimen/text_caption"
-                    android:textStyle="italic"
-                    tools:ignore="HardcodedText"/>
-
                 <!-- OEM warning, shown while vibration is on -->
                 <TextView
                     android:id="@+id/txt_miui_warning"
@@ -162,6 +153,52 @@
                     android:drawablePadding="@dimen/space_xs"
                     android:visibility="gone"
                     tools:ignore="HardcodedText"/>
+
+                <TextView
+                    style="@style/OD.Text.Caption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:text="Attack direction"
+                    android:textSize="@dimen/text_caption"
+                    tools:ignore="HardcodedText"/>
+
+                <!-- Aim with the attack stick, or attack where the player faces -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:background="@drawable/dialog_bg"
+                    android:padding="@dimen/space_xs">
+
+                    <TextView
+                        android:id="@+id/attack_mode_aim"
+                        style="@style/OD.Text.Tab"
+                        android:layout_width="0dp"
+                        android:layout_height="@dimen/touch_min"
+                        android:layout_weight="1"
+                        android:paddingStart="@dimen/space_xs"
+                        android:paddingEnd="@dimen/space_xs"
+                        android:text="Aim"
+                        android:textColor="@color/gold_bright"
+                        android:clickable="true"
+                        android:focusable="true"
+                        tools:ignore="HardcodedText"/>
+
+                    <TextView
+                        android:id="@+id/attack_mode_facing"
+                        style="@style/OD.Text.Tab"
+                        android:layout_width="0dp"
+                        android:layout_height="@dimen/touch_min"
+                        android:layout_weight="1"
+                        android:paddingStart="@dimen/space_xs"
+                        android:paddingEnd="@dimen/space_xs"
+                        android:text="Facing"
+                        android:clickable="true"
+                        android:focusable="true"
+                        tools:ignore="HardcodedText"/>
+
+                </LinearLayout>
 
             </LinearLayout>
 
