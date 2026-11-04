@@ -313,6 +313,7 @@ public class LobbyActivity extends AppCompatActivity {
         intent.putExtra(CoopSession.EXTRA_SEED, seed);
         intent.putExtra(CoopSession.EXTRA_HOST, isHost);
         intent.putExtra(CoopSession.EXTRA_SLOT, slot != null ? ((Number) slot).intValue() : 0);
+        intent.putExtra(CoopSession.EXTRA_PARTY, currentPlayers.size());
 
         resetToJoin(); // clears lobbyCode, so onDestroy doesn't leave or close the lobby
         SoundManager.stopMenuMusic();

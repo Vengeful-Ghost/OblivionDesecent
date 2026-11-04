@@ -24,10 +24,12 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * The host simulates enemies and floor progress; every phone owns its own player.
  *
  * meta {host, floor, state}       host        members/{uid}   each player (read access)
- * players/{uid}  player state     each player enemies         host snapshot, ~10x/s
+ * players/{uid}  player state     each player enemies         host snapshot, ~12x/s
  * events/{id}    strikes, shots   host        hits/{id}       damage dealt by guests
  * batches/{rangeStart}  Gemini JSON or "fallback", host
  *
+ * Player states and enemy snapshots carry the sender's clock; remote movement is replayed
+ * PLAYBACK_DELAY behind the newest update, so it stays smooth however unevenly packets arrive.
  * Firebase callbacks arrive on the main thread; the game loop polls the queues and volatile fields.
  */
 public class CoopSession {
@@ -36,6 +38,10 @@ public class CoopSession {
     public static final String EXTRA_SEED = "coop_seed";
     public static final String EXTRA_HOST = "coop_host";
     public static final String EXTRA_SLOT = "coop_slot";
+    public static final String EXTRA_PARTY = "coop_party";
+
+    // Long enough to cover the gap between two updates plus network jitter
+    public static final long PLAYBACK_DELAY = 150;
 
     /** Body colour for each party slot. */
     public static final int[] SLOT_COLORS = {
@@ -66,6 +72,73 @@ public class CoopSession {
         Received(String data) { this.data = data; }
     }
 
+    /** One sender's clock, as seen from this phone: arrival time minus send time, kept near its low end. */
+    public static final class SenderClock {
+        private long offset = Long.MAX_VALUE;
+
+        public synchronized void heard(long sentAt, long arrivedAt) {
+            long gap = arrivedAt - sentAt;
+            // Creeps up a little each time, so it follows a link that got slower
+            offset = offset == Long.MAX_VALUE ? gap : Math.min(offset + 2, gap);
+        }
+
+        /** The sender-clock moment to show now: PLAYBACK_DELAY behind that sender's newest updates. */
+        public synchronized long playbackTime(long now) {
+            return (offset == Long.MAX_VALUE ? now : now - offset) - PLAYBACK_DELAY;
+        }
+    }
+
+    /** Recent positions of one remote body, stamped with its sender's clock. */
+    public static final class Track {
+        private static final int SIZE = 8;
+        private static final long IDLE_GAP = 250, STEP = 100;
+        private final long[] times = new long[SIZE];
+        private final float[] xs = new float[SIZE], ys = new float[SIZE];
+        private int count, newest;
+
+        /** Adds a sample; a long jump (teleport, new floor) restarts the track there. */
+        public synchronized void add(long time, float x, float y) {
+            if (count > 0) {
+                if (time <= times[newest]) return;
+                float dx = x - xs[newest], dy = y - ys[newest];
+                if (dx * dx + dy * dy > 600f * 600f) count = 0;
+                // Unchanged states aren't resent, so after a pause start moving just before this sample
+                else if (time - times[newest] > IDLE_GAP) put(time - STEP, xs[newest], ys[newest]);
+            }
+            put(time, x, y);
+        }
+
+        public synchronized void clear() { count = 0; }
+
+        private void put(long time, float x, float y) {
+            newest = (newest + 1) % SIZE;
+            times[newest] = time;
+            xs[newest] = x;
+            ys[newest] = y;
+            if (count < SIZE) count++;
+        }
+
+        /** Position at a sender time, between the samples around it; runs on at most STEP past the newest. */
+        public synchronized boolean sample(long time, float[] out) {
+            if (count == 0) return false;
+            int i = newest;
+            for (int n = 1; n < count && times[i] > time; n++) i = (i + SIZE - 1) % SIZE;
+            int from = i, to = i;
+            if (times[i] <= time) {
+                if (i != newest) {
+                    to = (i + 1) % SIZE;
+                } else if (count > 1) {
+                    from = (i + SIZE - 1) % SIZE;
+                    time = Math.min(time, times[i] + STEP);
+                }
+            }
+            float f = from == to ? 0f : (float) (time - times[from]) / (times[to] - times[from]);
+            out[0] = xs[from] + (xs[to] - xs[from]) * f;
+            out[1] = ys[from] + (ys[to] - ys[from]) * f;
+            return true;
+        }
+    }
+
     /** Another player in the run, drawn from their latest published state. */
     public static class RemotePlayer {
         public final Player body = new Player();
@@ -74,32 +147,43 @@ public class CoopSession {
         public volatile int color, hp, maxHp = 100, floor, swing, weaponColor;
         public volatile float angle;
         public volatile boolean dead, portal, ranged;
+        // Newest reported position: enemies chase this, while the body is drawn a moment behind it
+        public volatile float newestX, newestY;
         public int shownSwing;
-        private volatile float targetX, targetY;
-        private boolean placed;
+        private final SenderClock clock = new SenderClock();
+        private final Track track = new Track();
+        private final float[] pos = new float[2];
         private int weaponKind = -1;
 
-        /** Parses "x,y,angle,hp,maxHp,flags,swing,floor,slot,weaponColor,name". */
-        void apply(String value) {
-            String[] f = value.split(",", 11);
-            if (f.length < 11) return;
+        /** Parses "x,y,angle,hp,maxHp,flags,swing,floor,slot,weaponColor,time,name". */
+        void apply(String value, long arrivedAt) {
+            String[] f = value.split(",", 12);
+            if (f.length < 12) return;
             try {
-                targetX = Float.parseFloat(f[0]);
-                targetY = Float.parseFloat(f[1]);
+                float x = Float.parseFloat(f[0]);
+                float y = Float.parseFloat(f[1]);
                 angle   = Float.parseFloat(f[2]);
                 hp      = Integer.parseInt(f[3]);
                 maxHp   = Integer.parseInt(f[4]);
                 int flags = Integer.parseInt(f[5]);
                 swing   = Integer.parseInt(f[6]);
-                floor   = Integer.parseInt(f[7]);
+                int newFloor = Integer.parseInt(f[7]);
                 color   = SLOT_COLORS[Integer.parseInt(f[8]) & 3];
                 weaponColor = Integer.parseInt(f[9]);
-                name    = f[10];
+                long sentAt = Long.parseLong(f[10]);
+                name    = f[11];
                 dead    = (flags & FLAG_DEAD) != 0;
                 portal  = (flags & FLAG_PORTAL) != 0;
                 ranged  = (flags & FLAG_RANGED) != 0;
                 body.setColor(color);
                 body.setAimAngle(angle);
+
+                if (newFloor != floor) track.clear();
+                floor = newFloor;
+                clock.heard(sentAt, arrivedAt);
+                track.add(sentAt, x, y);
+                newestX = x;
+                newestY = y;
 
                 int kind = ranged ? 2 : (flags & FLAG_BLADE) != 0 ? 1 : 0;
                 if (kind != weaponKind) {
@@ -112,17 +196,11 @@ public class CoopSession {
             }
         }
 
-        /** Glides toward the latest position; jumps on teleports. Called every game tick. */
-        public void follow() {
-            float dx = targetX - body.x;
-            float dy = targetY - body.y;
-            if (!placed || dx * dx + dy * dy > 600f * 600f) {
-                body.x = targetX;
-                body.y = targetY;
-                placed = true;
-            } else {
-                body.x += dx * 0.25f;
-                body.y += dy * 0.25f;
+        /** Moves the drawn body along the replayed track. Called every game tick. */
+        public void follow(long now) {
+            if (track.sample(clock.playbackTime(now), pos)) {
+                body.x = pos[0];
+                body.y = pos[1];
             }
         }
     }
@@ -136,7 +214,9 @@ public class CoopSession {
     public final Map<String, RemotePlayer> others = new ConcurrentHashMap<>();
     public final ConcurrentLinkedQueue<Received> events = new ConcurrentLinkedQueue<>();
     public final ConcurrentLinkedQueue<String> hits = new ConcurrentLinkedQueue<>();
-    public volatile String enemySnapshot;
+    // Guests: every enemy snapshot in arrival order, "time;floor,kills;enemy;enemy..."
+    public final ConcurrentLinkedQueue<Received> snapshots = new ConcurrentLinkedQueue<>();
+    public final SenderClock hostClock = new SenderClock();
     public volatile int hostFloor = 1;
 
     private final DatabaseReference run;
@@ -243,7 +323,7 @@ public class CoopSession {
                     player = new RemotePlayer();
                     others.put(key, player);
                 }
-                player.apply(value);
+                player.apply(value, System.currentTimeMillis());
             }
 
             @Override
@@ -267,7 +347,11 @@ public class CoopSession {
         listenValue(run.child("enemies"), new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snap) {
-                enemySnapshot = snap.getValue(String.class);
+                String value = snap.getValue(String.class);
+                if (value == null) return;
+                snapshots.add(new Received(value));
+                // A paused game loop doesn't drain the queue; only recent snapshots matter
+                while (snapshots.size() > 20) snapshots.poll();
                 lastHostUpdate = System.currentTimeMillis();
             }
 
@@ -303,18 +387,18 @@ public class CoopSession {
        WRITES
        ============================================================ */
 
-    /** This phone's player: "x,y,angle,hp,maxHp,flags,swing,floor,slot,weaponColor,name". */
+    /** This phone's player: "x,y,angle,hp,maxHp,flags,swing,floor,slot,weaponColor,time,name". */
     public void publishSelf(float x, float y, float angle, int hp, int maxHp, int flags,
                             int swing, int floor, int weaponColor, String name) {
-        String value = (int) x + "," + (int) y + "," + (int) angle + ","
+        String state = (int) x + "," + (int) y + "," + (int) angle + ","
                 + hp + "," + maxHp + "," + flags + "," + swing + "," + floor + ","
-                + slot + "," + weaponColor + "," + name;
+                + slot + "," + weaponColor;
         long now = System.currentTimeMillis();
         // Unchanged state is resent once a second as a heartbeat
-        if (value.equals(lastSelf) && now - lastSelfAt < 1000) return;
-        lastSelf = value;
+        if (state.equals(lastSelf) && now - lastSelfAt < 1000) return;
+        lastSelf = state;
         lastSelfAt = now;
-        write(run.child("players").child(uid), value);
+        write(run.child("players").child(uid), state + "," + now + "," + name);
     }
 
     /** Guests: damage dealt to an enemy, applied by the host. */
@@ -326,7 +410,7 @@ public class CoopSession {
     public void publishEnemies(String snapshot) {
         if (snapshot.equals(lastEnemies)) return;
         lastEnemies = snapshot;
-        write(run.child("enemies"), snapshot);
+        write(run.child("enemies"), System.currentTimeMillis() + ";" + snapshot);
     }
     public void publishEvent(String event)           { write(run.child("events").push(), event); }
     public void clearEvents()                        { write(run.child("events"), null); }

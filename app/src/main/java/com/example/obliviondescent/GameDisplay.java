@@ -62,7 +62,9 @@ public class GameDisplay extends View {
 
     // Co-op session (null in solo): teammates and connection status
     private CoopSession coop;
+    private volatile String spectating;
     private final Paint coopStatusPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint spectatePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint allyNamePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint allyBarBgPaint = new Paint();
     private final Paint allyBarPaint = new Paint();
@@ -236,6 +238,11 @@ public class GameDisplay extends View {
         coopStatusPaint.setTextSize(22f);
         coopStatusPaint.setTextAlign(Paint.Align.RIGHT);
         coopStatusPaint.setShadowLayer(3f, 0f, 1f, Color.BLACK);
+        spectatePaint.setColor(Color.rgb(212, 175, 55));
+        spectatePaint.setTextSize(16f * density);
+        spectatePaint.setTextAlign(Paint.Align.CENTER);
+        spectatePaint.setTypeface(getResources().getFont(R.font.cinzel));
+        spectatePaint.setShadowLayer(4f, 0f, 1f, Color.BLACK);
     }
 
     /** Co-op: teammates to draw and connection status, live from the session. */
@@ -399,6 +406,11 @@ public class GameDisplay extends View {
         drawCoopStatus(canvas);
     }
 
+    /** Co-op: the teammate a fallen player is watching, or null. */
+    public void setSpectating(String name) {
+        this.spectating = name;
+    }
+
     /** One line under the minimap: party size, or what is wrong with the connection. */
     private void drawCoopStatus(Canvas canvas) {
         if (coop == null) return;
@@ -406,6 +418,10 @@ public class GameDisplay extends View {
         coopStatusPaint.setColor(coop.isSyncHealthy(now) ? Color.rgb(170, 220, 170) : Color.rgb(255, 120, 90));
         canvas.drawText(coop.statusLine(now), mapCx + mapRadius, mapCy + mapRadius + 18f * density,
                 coopStatusPaint);
+        String watched = spectating;
+        if (watched != null)
+            canvas.drawText("Spectating " + watched + "  -  you return next floor",
+                    getWidth() / 2f, getHeight() - 24f * density, spectatePaint);
     }
 
     // Helper to visualize the "Infinite" world

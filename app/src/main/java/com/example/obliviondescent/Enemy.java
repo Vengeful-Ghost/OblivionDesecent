@@ -57,8 +57,8 @@ public class Enemy {
     private static int nextId = 1;
     public int id = nextId++;
     public int templateIndex = -1; // AI template in the batch pool, -1 = none
-    private float remoteX, remoteY;
-    private boolean remotePlaced = false;
+    private CoopSession.Track remote; // guest: the host's recent positions
+    private static final float[] REMOTE_POS = new float[2]; // logic thread only
     private long predictedUntil = 0;
 
     private int maxHealth;
@@ -194,28 +194,28 @@ public class Enemy {
                 maxHealth = 25;  speed = 4f;  radius = 40f;
                 bodyPaint = makePaint(Color.rgb(200, 50, 50));
                 weapon = new Weapon("Club", 5, 10f, 800, Weapon.Rarity.COMMON, Color.GRAY, 0.04f);
-                goldDrop = 1 + (int)(Math.random() * 6);
+                goldDrop = 3 + (int)(Math.random() * 6);
                 triggerRadius = 350f + (float)(Math.random() * 100f);
                 break;
             case SPEEDER:
                 maxHealth = 18;  speed = 9f;  radius = 28f;
                 bodyPaint = makePaint(Color.rgb(255, 160, 0));
                 weapon = new Weapon("Shiv", 3, 5f, 400, Weapon.Rarity.COMMON, Color.LTGRAY, 0.01f);
-                goldDrop = 1 + (int)(Math.random() * 4);
+                goldDrop = 3 + (int)(Math.random() * 4);
                 triggerRadius = 480f + (float)(Math.random() * 120f);
                 break;
             case TANK:
                 maxHealth = 120; speed = 2f;  radius = 65f;
                 bodyPaint = makePaint(Color.rgb(120, 0, 180));
                 weapon = new Weapon("Warhammer", 15, 20f, 1400, Weapon.Rarity.RARE, Color.rgb(0, 150, 255), 0.45f);
-                goldDrop = 5 + (int)(Math.random() * 6);
+                goldDrop = 7 + (int)(Math.random() * 6);
                 triggerRadius = 280f + (float)(Math.random() * 80f);
                 break;
             case BRUTE:
                 maxHealth = 65;  speed = 5f;  radius = 52f;
                 bodyPaint = makePaint(Color.rgb(60, 160, 60));
                 weapon = new Weapon("Axe", 9, 15f, 1000, Weapon.Rarity.RARE, Color.rgb(0, 150, 255), 0.2f);
-                goldDrop = 3 + (int)(Math.random() * 6);
+                goldDrop = 5 + (int)(Math.random() * 6);
                 triggerRadius = 400f + (float)(Math.random() * 100f);
                 break;
             case ARCHER:
@@ -223,7 +223,7 @@ public class Enemy {
                 bodyPaint = makePaint(Color.rgb(40, 170, 160));
                 weapon = new Weapon("Bow", 6, 600f, 1800, Weapon.Rarity.COMMON,
                         Color.rgb(255, 110, 70), 0.05f, true);
-                goldDrop = 2 + (int)(Math.random() * 4);
+                goldDrop = 4 + (int)(Math.random() * 4);
                 triggerRadius = 550f + (float)(Math.random() * 100f);
                 break;
             case BOSS:
@@ -231,14 +231,14 @@ public class Enemy {
                 bodyPaint = makePaint(Color.rgb(180, 0, 0));
                 weapon = new Weapon("Void Cleave", 25, 5f, 1000,
                         Weapon.Rarity.LEGENDARY, Color.rgb(255, 215, 0), 0.6f);
-                goldDrop = 25 + (int)(Math.random() * 16);
+                goldDrop = 27 + (int)(Math.random() * 16);
                 triggerRadius = 0f; // Boss is always set awake=true on spawn
                 break;
             default:
                 maxHealth = 50;  speed = 4f;  radius = 40f;
                 bodyPaint = makePaint(Color.RED);
                 weapon = new Weapon("Fists", 3, 5f, 800, Weapon.Rarity.COMMON, Color.WHITE, 0.01f);
-                goldDrop = 2 + (int)(Math.random() * 4);
+                goldDrop = 4 + (int)(Math.random() * 4);
                 triggerRadius = 350f;
         }
         health = maxHealth;
@@ -722,6 +722,12 @@ public class Enemy {
         dmgMultiplier = dmg;
     }
 
+    /** Co-op: more players means more health to chew through. */
+    public void scaleHealth(float factor) {
+        maxHealth = Math.max(1, Math.round(maxHealth * factor));
+        health = maxHealth;
+    }
+
     /* ============================================================
        DRAW (with Health Bar + Label)
        ============================================================ */
@@ -973,15 +979,20 @@ public class Enemy {
                 .append(bossMove.ordinal()).append(',').append(enraged ? 1 : 0);
     }
 
-    /** Guest: copies the host's state from appendState's fields; a reported death plays out locally. */
-    public void applyState(String[] f, long now) {
-        remoteX = Float.parseFloat(f[3]);
-        remoteY = Float.parseFloat(f[4]);
-        if (!remotePlaced) {
-            x = remoteX;
-            y = remoteY;
-            remotePlaced = true;
+    /**
+     * Guest: copies the host's state from appendState's fields; a reported death plays out locally.
+     * @param sentAt host clock when the snapshot was taken
+     * @param arrivedAt this phone's clock when it arrived
+     */
+    public void applyState(String[] f, long sentAt, long arrivedAt) {
+        float hostX = Float.parseFloat(f[3]);
+        float hostY = Float.parseFloat(f[4]);
+        if (remote == null) {
+            remote = new CoopSession.Track();
+            x = hostX;
+            y = hostY;
         }
+        remote.add(sentAt, hostX, hostY);
         int hp = Integer.parseInt(f[5]);
         maxHealth = Integer.parseInt(f[6]);
         if (hp <= 0) {
@@ -991,9 +1002,9 @@ public class Enemy {
             }
             return;
         }
-        health = now < predictedUntil ? Math.min(health, hp) : hp;
+        health = arrivedAt < predictedUntil ? Math.min(health, hp) : hp;
         behaviorState  = BehaviorState.values()[Integer.parseInt(f[7])];
-        stateStartTime = now - Long.parseLong(f[8]);
+        stateStartTime = arrivedAt - Long.parseLong(f[8]);
         stateDuration  = Long.parseLong(f[9]);
         double aim = Math.toRadians(Integer.parseInt(f[10]));
         aimX = (float) Math.cos(aim);
@@ -1004,24 +1015,32 @@ public class Enemy {
         enraged = nowEnraged;
     }
 
-    /** Guest: shows a hit right away (never lethal); the host's snapshots catch up within a moment. */
+    /**
+     * Guest: shows a hit right away. A lethal one plays the death now, since the host's copy has at most
+     * this much health and will die from the same hit a moment later.
+     */
     public void predictHit(int damage) {
-        health = Math.max(1, health - damage);
-        hitFlashUntil = System.currentTimeMillis() + 90;
-        predictedUntil = System.currentTimeMillis() + 500;
+        long now = System.currentTimeMillis();
+        predictedUntil = now + 1500; // covers the trip to the host and back
+        if (damage >= health) {
+            takeDamage(health);
+            return;
+        }
+        health -= damage;
+        hitFlashUntil = now + 90;
     }
 
-    /** Guest: glides toward the host's latest position instead of running the AI. */
-    public void followRemote() {
-        if (isDead) return;
-        float dx = remoteX - x;
-        float dy = remoteY - y;
-        x += dx * 0.3f;
-        y += dy * 0.3f;
+    /** Guest: replays the host's movement a moment behind, instead of running the AI. */
+    public void followRemote(long playbackTime) {
+        if (isDead || remote == null || !remote.sample(playbackTime, REMOTE_POS)) return;
+        float dx = REMOTE_POS[0] - x;
+        float dy = REMOTE_POS[1] - y;
+        x = REMOTE_POS[0];
+        y = REMOTE_POS[1];
         if (behaviorState == BehaviorState.WINDUP) {
             faceX = aimX;
             faceY = aimY;
-        } else if (dx * dx + dy * dy > 1f) {
+        } else if (dx * dx + dy * dy > 0.25f) {
             float d = (float) Math.sqrt(dx * dx + dy * dy);
             faceX = dx / d;
             faceY = dy / d;

@@ -237,8 +237,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private float lookAngle = 0f;
     private boolean portalRequested = false;
     private boolean coopEnded = false;
-    private String appliedSnapshot = null;
-    private final Set<Integer> deadEnemyIds = new HashSet<>(); // guest: deaths already shown this floor
+    private int partySize = 1;
+    // Guest: enemy id -> when its death showed here (predicted or reported), this floor only
+    private final Map<Integer, Long> deadEnemyAt = new java.util.concurrent.ConcurrentHashMap<>();
     private final float[] target = new float[2];
     private Dialog shopDialog;
 
@@ -305,6 +306,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     getIntent().getBooleanExtra(CoopSession.EXTRA_HOST, false),
                     getIntent().getLongExtra(CoopSession.EXTRA_SEED, 0L),
                     getIntent().getIntExtra(CoopSession.EXTRA_SLOT, 0));
+            partySize = Math.max(1, getIntent().getIntExtra(CoopSession.EXTRA_PARTY, 1));
             player.setColor(CoopSession.SLOT_COLORS[coop.slot & 3]);
         }
 
@@ -417,6 +419,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return coop != null && !coop.isHost();
     }
 
+    /** Enemy health multiplier: each extra player adds 60%, so a full party still has to fight. */
+    private float partyHealth() {
+        return 1f + 0.6f * (partySize - 1);
+    }
+
     /** Layout for the current floor; co-op seeds it so every phone builds the same dungeon. */
     private FloorLayout generateLayout() {
         long seed = coop != null ? coop.seed * 31 + floorManager.getCurrentFloor() : System.nanoTime();
@@ -432,7 +439,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void coopTick(long now) {
         int floor = floorManager.getCurrentFloor();
         for (CoopSession.RemotePlayer r : coop.others.values()) {
-            r.follow();
+            r.follow(now);
             if (r.swing != r.shownSwing) {
                 r.shownSwing = r.swing;
                 if (r.floor == floor && !r.dead) showRemoteSwing(r);
@@ -448,14 +455,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 coop.publishState("over");
             }
         } else {
-            applyEnemySnapshot(now);
+            CoopSession.Received snap;
+            while ((snap = coop.snapshots.poll()) != null) applyEnemySnapshot(snap);
             applyCoopEvents(now);
             if (coop.hostFloor > floor && !isTransitioning) startFloorTransition();
         }
 
         coopTicks++;
-        if (coopTicks % 5 == 0) publishSelf(floor);
-        if (coop.isHost() && coopTicks % 6 == 0) publishEnemies(floor, now);
+        if (coopTicks % 4 == 0) publishSelf(floor);
+        if (coop.isHost() && coopTicks % 5 == 0) publishEnemies(floor, now);
     }
 
     private void publishSelf(int floor) {
@@ -479,32 +487,38 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         coop.publishEnemies(sb.toString());
     }
 
-    /** Guest: copies the host's latest enemy snapshot onto local stand-ins. */
-    private void applyEnemySnapshot(long now) {
-        String snap = coop.enemySnapshot;
-        if (snap == null || snap.equals(appliedSnapshot)) return;
-        appliedSnapshot = snap;
+    /** Guest: copies one of the host's enemy snapshots ("time;floor,kills;enemy;...") onto local stand-ins. */
+    private void applyEnemySnapshot(CoopSession.Received snap) {
         try {
-            String[] parts = snap.split(";");
-            String[] head = parts[0].split(",");
+            String[] parts = snap.data.split(";");
+            long sentAt = Long.parseLong(parts[0]);
+            coop.hostClock.heard(sentAt, snap.at);
+            String[] head = parts[1].split(",");
             if (Integer.parseInt(head[0]) != floorManager.getCurrentFloor()) return;
             floorManager.syncKills(Integer.parseInt(head[1]), player.x, player.y);
 
             Set<Integer> seen = new HashSet<>();
             synchronized (enemies) {
-                for (int i = 1; i < parts.length; i++) {
+                for (int i = 2; i < parts.length; i++) {
                     String[] f = parts[i].split(",");
                     int id = Integer.parseInt(f[0]);
+                    int hp = Integer.parseInt(f[5]);
                     seen.add(id);
-                    if (deadEnemyIds.contains(id)) continue;
+                    Long diedAt = deadEnemyAt.get(id);
+                    if (diedAt != null) {
+                        // Still alive on the host well after a predicted kill: the hit was lost, so bring it back
+                        if (hp <= 0 || snap.at - diedAt < 1500) continue;
+                        deadEnemyAt.remove(id);
+                    }
                     Enemy e = findEnemy(id);
+                    if (e != null && e.isDead) continue; // still fading out
                     if (e == null) {
-                        if (Integer.parseInt(f[5]) <= 0) continue; // died before this phone saw it
+                        if (hp <= 0) continue; // died before this phone saw it
                         e = createMirror(id, Enemy.Type.values()[Integer.parseInt(f[1])], Integer.parseInt(f[2]));
                         enemies.add(e);
                     }
-                    e.applyState(f, now);
-                    if (e.isDead) deadEnemyIds.add(id);
+                    e.applyState(f, sentAt, snap.at);
+                    if (e.isDead) deadEnemyAt.put(id, snap.at);
                 }
                 // Removed by the host without dying, e.g. re-spawned once the AI templates arrived
                 enemies.removeIf(e -> !e.isDead && !seen.contains(e.id));
@@ -596,6 +610,16 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
     }
 
+    /** A teammate still standing on this floor for a fallen player to watch; null in solo or if none. */
+    private CoopSession.RemotePlayer livingTeammate() {
+        if (coop == null) return null;
+        int floor = floorManager.getCurrentFloor();
+        for (CoopSession.RemotePlayer r : coop.others.values()) {
+            if (!r.dead && r.floor == floor) return r;
+        }
+        return null;
+    }
+
     /** Puts the closest living player on this floor into target; false when nobody is left standing. */
     private boolean nearestTarget(Enemy e) {
         float best = Float.MAX_VALUE;
@@ -606,14 +630,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
         if (coop == null) return best < Float.MAX_VALUE;
         int floor = floorManager.getCurrentFloor();
+        // Teammates' newest reported spots, not where their bodies are drawn a moment behind
         for (CoopSession.RemotePlayer r : coop.others.values()) {
             if (r.dead || r.floor != floor) continue;
-            float dx = r.body.x - e.x;
-            float dy = r.body.y - e.y;
+            float dx = r.newestX - e.x;
+            float dy = r.newestY - e.y;
             if (dx * dx + dy * dy < best) {
                 best = dx * dx + dy * dy;
-                target[0] = r.body.x;
-                target[1] = r.body.y;
+                target[0] = r.newestX;
+                target[1] = r.newestY;
             }
         }
         return best < Float.MAX_VALUE;
@@ -783,16 +808,20 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             if (currentRoom != null) currentRoom.explored = true;
         }
 
-        // --- 2. Update Camera ---
-        camera.update(player.getX(), player.getY());
+        // --- 2. Update Camera --- (a fallen co-op player watches a teammate until the next floor)
+        CoopSession.RemotePlayer watched = playerHealth <= 0 ? livingTeammate() : null;
+        if (watched != null) camera.update(watched.body.x, watched.body.y);
+        else camera.update(player.getX(), player.getY());
+        gameDisplay.setSpectating(watched != null ? watched.name : null);
 
         if (coop != null) coopTick(now);
 
         // --- 3. Update Enemies (co-op guests only mirror the host's) ---
+        long playback = isGuest() ? coop.hostClock.playbackTime(now) : 0L;
         synchronized (enemies) {
             for (Enemy e : enemies) {
                 if (isGuest()) {
-                    e.followRemote();
+                    e.followRemote(playback);
                     continue;
                 }
                 if (!nearestTarget(e)) continue; // every player is down
@@ -846,7 +875,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void startRenderThread() {
         new Thread(() -> {
             while (threadsRunning) {
-                if (!isGamePaused && layoutReady) {
+                // Death pauses the game, but the poof still has to play
+                if ((!isGamePaused || player.isDying()) && layoutReady) {
                     gameDisplay.postInvalidate();
                 }
                 try { Thread.sleep(16); } catch (Exception ignored) {}
@@ -884,6 +914,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         enemy.templateIndex = (int) (Math.random() * pool.size());
                         enemy.applyTemplate(pool.get(enemy.templateIndex));
                     }
+                    enemy.scaleHealth(partyHealth());
                     enemy.setBehaviorTracker(behaviorTracker);
                     enemy.setLayout(layout);
                     // isAwake = false — enemy waits for player to enter trigger radius
@@ -1281,6 +1312,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         showEnemyHit(e, damage, crit);
         if (isGuest()) {
             e.predictHit(damage);
+            if (e.isDead) deadEnemyAt.put(e.id, System.currentTimeMillis());
             coop.sendHit(e.id + "," + damage + "," + pushX + "," + pushY + "," + (stagger ? 1 : 0));
             return;
         }
@@ -2246,8 +2278,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
             }
             portalRequested = false;
-            appliedSnapshot = null;
-            deadEnemyIds.clear();
+            coop.snapshots.clear();
+            deadEnemyAt.clear();
             if (coop.isHost()) coop.clearEvents();
         }
         // A co-op guest can be pulled to the next floor while shopping
@@ -2379,7 +2411,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         BatchResult bossData = getBossDataForFloor(floorManager.getCurrentFloor());
         int floor = floorManager.getCurrentFloor();
         activeBoss.applyBossScaling(
-                bossData != null ? bossData.bossHpMultiplier : BatchGenerator.bossHpMultiplier(floor),
+                (bossData != null ? bossData.bossHpMultiplier : BatchGenerator.bossHpMultiplier(floor)) * partyHealth(),
                 bossData != null ? bossData.bossDmgMultiplier : BatchGenerator.bossDmgMultiplier(floor));
         activeBoss.setBehaviorTracker(behaviorTracker);
         activeBoss.setLayout(currentLayout);

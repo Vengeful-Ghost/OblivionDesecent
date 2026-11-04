@@ -134,7 +134,7 @@ public class BatchGenerator {
         sb.append("- The run must feel dangerous. Progress is earned through fights, levels and careful shopping,\n");
         sb.append("  never handed out by the shop. Every floor should be a little harder than the one before.\n");
         sb.append("- The player starts with 100 HP and fists dealing 7 damage every 250 ms, and gains +10 HP and\n");
-        sb.append("  +5% damage per level. Gold is scarce: about 30-45 gold per floor.\n");
+        sb.append("  +5% damage per level. Gold is scarce: about 40-55 gold per floor.\n");
         sb.append("- Shop items are modest upgrades, never a power spike. A COMMON is a small step up; a LEGENDARY\n");
         sb.append("  is strong but costs several floors of saved gold. Never exceed the budget below.\n\n");
 
@@ -213,14 +213,14 @@ public class BatchGenerator {
 
     static float weaponBase(int floor) { return 6f + floor * 2.5f; }  // damage at a 600 ms cooldown
     static float armorBase(int floor)  { return 3f + floor * 1.5f; }  // defense per piece
-    static float priceBase(int floor)  { return 15f + floor * 10f; }
+    static float priceBase(int floor)  { return 13f + floor * 8.5f; }
     static float healBase(int floor)   { return 15f + floor * 3f; }
     static float enemyHpMin(int rangeStart)  { return 1.0f + rangeStart * 0.10f; }
     static float enemyHpMax(int rangeStart)  { return 1.6f + rangeStart * 0.15f; }
     static float enemyDmgMin(int rangeStart) { return 1.0f + rangeStart * 0.06f; }
     static float enemyDmgMax(int rangeStart) { return 1.4f + rangeStart * 0.08f; }
-    static float bossHpMultiplier(int floor)  { return 2.1f + floor * 0.13f; }
-    static float bossDmgMultiplier(int floor) { return 1.2f + floor * 0.05f; }
+    static float bossHpMultiplier(int floor)  { return 1.6f + floor * 0.10f; }
+    static float bossDmgMultiplier(int floor) { return 1.0f + floor * 0.04f; }
 
     private static String span(float base, float[] mult) { return span(base, mult[0], mult[1]); }
 
@@ -231,6 +231,8 @@ public class BatchGenerator {
     private static String fmt(float v) { return String.format(java.util.Locale.US, "%.2f", v); }
 
     private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    private static int clampInt(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
 
     private static int tierOf(String rarity) {
         int t = java.util.Arrays.asList(TIERS).indexOf(String.valueOf(rarity).toUpperCase());
@@ -244,9 +246,8 @@ public class BatchGenerator {
         float maxDamage = weaponBase(floor) * maxMult * pace * (item.isProjectile ? 0.8f : 1f);
         item.damage  = Math.max(1, Math.min(item.damage, Math.round(maxDamage)));
         item.defense = Math.max(1, Math.min(item.defense, Math.round(armorBase(floor) * maxMult)));
-        float minPrice = priceBase(floor) * (item.type == ShopItem.ItemType.CONSUMABLE
-                ? CONSUMABLE_PRICE[0] : PRICE_MULT[tierOf(item.rarity)][0]);
-        item.price = Math.max(item.price, Math.round(minPrice));
+        float[] priceMult = item.type == ShopItem.ItemType.CONSUMABLE ? CONSUMABLE_PRICE : PRICE_MULT[tierOf(item.rarity)];
+        item.price = clampInt(item.price, Math.round(priceBase(floor) * priceMult[0]), Math.round(priceBase(floor) * priceMult[1]));
         item.effectValue = Math.min(item.effectValue, "heal".equals(item.effect)
                 ? Math.round(healBase(floor) * STAT_MULT[3][1]) : Math.round(armorBase(floor) * 5f));
     }
