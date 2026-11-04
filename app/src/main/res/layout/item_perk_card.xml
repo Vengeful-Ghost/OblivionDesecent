@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One perk card: the back shows while it grows in, then it flips to the front -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_weight="1"
+    android:layout_marginHorizontal="@dimen/space_md"
+    android:clickable="true"
+    android:focusable="true">
+
+    <FrameLayout
+        android:id="@+id/perk_back"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/rounded_dialog_bg">
+
+        <ImageView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_level"
+            android:alpha="0.45"
+            android:importantForAccessibility="no"/>
+
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/perk_front"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="@dimen/space_lg"
+        android:background="@drawable/rounded_dialog_bg"
+        android:visibility="invisible">
+
+        <ImageView
+            android:id="@+id/perk_icon"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_level"
+            android:importantForAccessibility="no"/>
+
+        <TextView
+            android:id="@+id/perk_name"
+            style="@style/OD.Text.Heading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            android:gravity="center"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:text="Perk"
+            tools:ignore="HardcodedText"/>
+
+        <TextView
+            android:id="@+id/perk_desc"
+            style="@style/OD.Text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_xs"
+            android:gravity="center"
+            android:textColor="@color/bone_dim"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:text="+1% damage"
+            tools:ignore="HardcodedText"/>
+
+        <TextView
+            android:id="@+id/perk_owned"
+            style="@style/OD.Text.Label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            android:text="Owned: 0"
+            tools:ignore="HardcodedText"/>
+
+    </LinearLayout>
+
+</FrameLayout>

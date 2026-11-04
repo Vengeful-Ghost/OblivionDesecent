@@ -135,6 +135,21 @@
 
     </LinearLayout>
 
+    <!-- Level-up badge under the vitals: tap it to choose a perk when it's safe -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_level_up"
+        style="@style/OD.Button"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/touch_min"
+        android:layout_below="@id/top_hud"
+        android:layout_alignParentStart="true"
+        android:layout_marginStart="68dp"
+        android:text="Level up!"
+        android:textSize="@dimen/text_small"
+        app:icon="@drawable/ic_level"
+        android:visibility="gone"
+        tools:ignore="HardcodedText"/>
+
     <!-- Top-centre: floor and kill progress -->
     <LinearLayout
         android:layout_width="wrap_content"

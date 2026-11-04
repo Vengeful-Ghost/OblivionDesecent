@@ -20,6 +20,8 @@ public class BatchResult {
     public int    bossColor;
     /** Boss stat multipliers on top of floor scaling. */
     public float  bossHpMultiplier, bossDmgMultiplier;
+    /** Boss archetype: how it fights and looks. */
+    public Enemy.BossKind bossKind;
 
     /**
      * Creates a new batch result with all generated data.

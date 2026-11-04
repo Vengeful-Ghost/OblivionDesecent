@@ -5,6 +5,10 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.RadialGradient;
+import android.graphics.Shader;
 import android.util.AttributeSet;
 import android.view.View;
 import java.util.List;
@@ -42,8 +46,9 @@ public class GameDisplay extends View {
     // Floor layout rendering
     private FloorLayout floorLayout;
     private final Props props = new Props(); // portals and room decorations, shared with the shop
-    private volatile List<Props.Decor> decor;
     private Paint roomFloorPaint;
+    private final Paint treasureFloorPaint = new Paint();
+    private final Paint minimapTreasurePaint = new Paint();
     private Paint entryFloorPaint;
     private Paint exitFloorPaint;
     private Paint bossFloorPaint;
@@ -54,6 +59,16 @@ public class GameDisplay extends View {
     private Paint tileShadePaint;
     private Paint wallShadowPaint;
     private final Paint vignettePaint = new Paint();
+
+    // Dungeon darkness: everything dims, then lights cut soft holes back out of it
+    private static final int AMBIENT_DARK = Color.argb(150, 6, 5, 12);
+    private final Paint lightHolePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final float[] lightSpot = new float[2];
+
+    // Red edge arrows toward the floor's last enemies
+    private final Paint enemyArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint enemyArrowGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path edgeArrowPath = new Path();
 
     private GameEffects effects;
 
@@ -243,6 +258,21 @@ public class GameDisplay extends View {
         spectatePaint.setTextAlign(Paint.Align.CENTER);
         spectatePaint.setTypeface(getResources().getFont(R.font.cinzel));
         spectatePaint.setShadowLayer(4f, 0f, 1f, Color.BLACK);
+
+        treasureFloorPaint.setColor(Color.rgb(48, 40, 26));
+        minimapTreasurePaint.setColor(Color.argb(200, 212, 175, 55));
+
+        lightHolePaint.setShader(new RadialGradient(0, 0, 1f,
+                new int[]{0xFF000000, 0xC0000000, 0x00000000}, new float[]{0f, 0.5f, 1f},
+                Shader.TileMode.CLAMP));
+        lightHolePaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
+
+        enemyArrowPaint.setColor(Color.rgb(224, 72, 72));
+        enemyArrowGlowPaint.setColor(Color.rgb(224, 72, 72));
+        edgeArrowPath.moveTo(28f, 0f);
+        edgeArrowPath.lineTo(-18f, -18f);
+        edgeArrowPath.lineTo(-18f, 18f);
+        edgeArrowPath.close();
     }
 
     /** Co-op: teammates to draw and connection status, live from the session. */
@@ -394,7 +424,9 @@ public class GameDisplay extends View {
         drawRemotePlayers(canvas);
         player.draw(canvas, camera);
 
+        drawDarkness(canvas);
         if (effects != null) effects.draw(canvas, camera);
+        if (!inShopRoom) drawEnemyArrows(canvas);
 
         if (vignettePaint.getShader() != null)
             canvas.drawRect(0, 0, getWidth(), getHeight(), vignettePaint);
@@ -409,6 +441,93 @@ public class GameDisplay extends View {
     /** Co-op: the teammate a fallen player is watching, or null. */
     public void setSpectating(String name) {
         this.spectating = name;
+    }
+
+    /**
+     * Darkens the dungeon, then lights it back up around the player, teammates, torches, candles,
+     * open portals and closed chests. The shop room keeps its own lighting.
+     */
+    private void drawDarkness(Canvas canvas) {
+        if (floorLayout == null || inShopRoom || (shopRoom != null && shopRoom.isActive)) return;
+        long now = System.currentTimeMillis();
+        float offX = camera.getOffsetX(), offY = camera.getOffsetY();
+        int layer = canvas.saveLayer(0, 0, getWidth(), getHeight(), null);
+        canvas.drawColor(AMBIENT_DARK);
+
+        lightHole(canvas, player.x - offX, player.y - offY, 430f, 1f);
+        if (coop != null && floorManager != null) {
+            for (CoopSession.RemotePlayer r : coop.others.values()) {
+                if (r.dead || r.floor != floorManager.getCurrentFloor()) continue;
+                lightHole(canvas, r.body.x - offX, r.body.y - offY, 340f, 0.9f);
+            }
+        }
+        for (Props.Decor d : floorLayout.decor) {
+            if (d.kind == Props.TORCH) {
+                Props.torchLight(d, lightSpot);
+                float flick = 0.92f + 0.08f * (float) Math.sin(now / 90.0 + d.a * 1.7);
+                lightHole(canvas, lightSpot[0] - offX, lightSpot[1] - offY, 360f * flick, 0.95f);
+            } else if (d.kind == Props.CANDLES) {
+                lightHole(canvas, d.x - offX, d.y - offY, 160f, 0.7f);
+            }
+        }
+        if (floorManager != null) {
+            if (floorManager.isPortalOpen())
+                lightHole(canvas, floorManager.getPortalX() - offX, floorManager.getPortalY() - offY, 300f, 0.9f);
+            if (floorManager.isShopPortalOpen())
+                lightHole(canvas, floorManager.getShopPortalX() - offX, floorManager.getShopPortalY() - offY, 300f, 0.9f);
+        }
+        if (treasureChests != null) {
+            synchronized (treasureChests) {
+                for (TreasureChest chest : treasureChests) {
+                    if (!chest.opened) lightHole(canvas, chest.x - offX, chest.y - offY, 200f, 0.7f);
+                }
+            }
+        }
+        canvas.restoreToCount(layer);
+    }
+
+    /** Erases a soft circle of darkness; strength 1 lights its centre fully. */
+    private void lightHole(Canvas canvas, float sx, float sy, float radius, float strength) {
+        if (sx < -radius || sy < -radius || sx > getWidth() + radius || sy > getHeight() + radius) return;
+        canvas.save();
+        canvas.translate(sx, sy);
+        canvas.scale(radius, radius);
+        lightHolePaint.setAlpha((int) (255 * strength));
+        canvas.drawCircle(0, 0, 1f, lightHolePaint);
+        canvas.restore();
+    }
+
+    /** With two or fewer enemies left, edge arrows point at the ones off screen. */
+    private void drawEnemyArrows(Canvas canvas) {
+        if (enemies == null || floorManager == null || floorManager.isPortalOpen()) return;
+        synchronized (enemies) {
+            int left = 0;
+            for (Enemy e : enemies) if (!e.isDead && !e.summoned && !e.mimic) left++;
+            if (left == 0 || left > 2) return;
+            for (Enemy e : enemies) {
+                if (!e.isDead && !e.summoned && !e.mimic) drawEdgeArrow(canvas, e.x, e.y);
+            }
+        }
+    }
+
+    /** Pulsing red triangle on the screen edge, pointing at an off-screen world point. */
+    private void drawEdgeArrow(Canvas canvas, float worldX, float worldY) {
+        float sx = worldX - camera.getOffsetX(), sy = worldY - camera.getOffsetY();
+        int w = getWidth(), h = getHeight();
+        float margin = 80f;
+        if (sx > margin && sx < w - margin && sy > margin && sy < h - margin) return;
+        float cx = w / 2f, cy = h / 2f;
+        float angle = (float) Math.atan2(sy - cy, sx - cx);
+        float reach = Math.min(cx, cy) - margin;
+        float pulse = (float) (Math.sin(System.currentTimeMillis() / 300.0) * 0.25 + 0.75);
+        canvas.save();
+        canvas.translate(cx + (float) Math.cos(angle) * reach, cy + (float) Math.sin(angle) * reach);
+        canvas.rotate((float) Math.toDegrees(angle));
+        enemyArrowGlowPaint.setAlpha((int) (80 * pulse));
+        canvas.drawCircle(0, 0, 36f, enemyArrowGlowPaint);
+        enemyArrowPaint.setAlpha((int) (255 * pulse));
+        canvas.drawPath(edgeArrowPath, enemyArrowPaint);
+        canvas.restore();
     }
 
     /** One line under the minimap: party size, or what is wrong with the connection. */
@@ -447,7 +566,6 @@ public class GameDisplay extends View {
      * @param layout the current floor layout
      */
     public void setFloorLayout(FloorLayout layout) {
-        decor = layout != null ? Props.decorate(layout) : null;
         this.floorLayout = layout;
     }
 
@@ -496,8 +614,7 @@ public class GameDisplay extends View {
 
     /** Room decorations near the screen, in world space: torchlight first, then the props. */
     private void drawDecor(Canvas canvas) {
-        List<Props.Decor> list = decor;
-        if (list == null) return;
+        List<Props.Decor> list = floorLayout.decor;
         long now = System.currentTimeMillis();
         float offX = camera.getOffsetX(), offY = camera.getOffsetY();
         float left = offX - 400, top = offY - 400;
@@ -551,6 +668,7 @@ public class GameDisplay extends View {
     }
 
     private Paint roomPaintFor(Room r) {
+        if (r == floorLayout.treasureRoom) return treasureFloorPaint;
         switch (r.type) {
             case ENTRY:  return entryFloorPaint;
             case EXIT:   return exitFloorPaint;
@@ -702,6 +820,7 @@ public class GameDisplay extends View {
     }
 
     private Paint minimapPaintFor(Room r) {
+        if (r == floorLayout.treasureRoom) return minimapTreasurePaint;
         switch (r.type) {
             case ENTRY: return minimapEntryPaint;
             case EXIT:  return minimapExitPaint;

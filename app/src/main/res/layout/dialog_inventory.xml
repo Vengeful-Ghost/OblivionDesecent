@@ -301,6 +301,18 @@
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
 
+            <TextView
+                android:id="@+id/filter_perks"
+                style="@style/OD.Text.Tab"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
+                android:paddingTop="14dp"
+                android:drawableTop="@drawable/ic_level"
+                android:contentDescription="Perks"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
             <View
                 android:layout_width="0dp"
                 android:layout_height="1dp"

@@ -164,6 +164,9 @@ public class BatchGenerator {
                 .append(", dmgMultiplier ").append(fmt(enemyDmgMin(rangeStart))).append("-").append(fmt(enemyDmgMax(rangeStart)))
                 .append(". Distinct colours that stand out on a dark stone floor.\n");
         sb.append("BOSS for floor ").append(bossFloor).append(": the hardest fight of the range, with a name and a title.\n");
+        sb.append("  kind: exactly one of BRUTE (armoured horned juggernaut that slams and charges),\n");
+        sb.append("  SUMMONER (hooded necromancer that keeps its distance and raises thralls) or SORCERER\n");
+        sb.append("  (floating arcane crystal that blinks around firing bolts). Pick the kind that fits the name.\n");
         sb.append("  hpMultiplier ").append(fmt(bossHpMultiplier(bossFloor) * 0.9f)).append("-").append(fmt(bossHpMultiplier(bossFloor) * 1.1f))
                 .append(", dmgMultiplier ").append(fmt(bossDmgMultiplier(bossFloor) * 0.9f)).append("-").append(fmt(bossDmgMultiplier(bossFloor) * 1.1f)).append(".\n\n");
 
@@ -193,6 +196,7 @@ public class BatchGenerator {
         sb.append("  \"boss\": {\n");
         sb.append("    \"name\": \"string\",\n");
         sb.append("    \"title\": \"string\",\n");
+        sb.append("    \"kind\": \"BRUTE\",\n");
         sb.append("    \"colorHex\": \"#FF0000\",\n");
         sb.append("    \"hpMultiplier\": 3.0,\n");
         sb.append("    \"dmgMultiplier\": 1.4\n");
@@ -371,6 +375,11 @@ public class BatchGenerator {
         float bossHp = bossHpMultiplier(rangeEnd), bossDmg = bossDmgMultiplier(rangeEnd);
         result.bossHpMultiplier  = clamp((float) bossObj.optDouble("hpMultiplier", bossHp), bossHp * 0.9f, bossHp * 1.1f);
         result.bossDmgMultiplier = clamp((float) bossObj.optDouble("dmgMultiplier", bossDmg), bossDmg * 0.9f, bossDmg * 1.1f);
+        try {
+            result.bossKind = Enemy.BossKind.valueOf(bossObj.optString("kind", "").trim().toUpperCase(java.util.Locale.US));
+        } catch (IllegalArgumentException ignored) {
+            // Missing or unknown: fillGaps picks one
+        }
         // Seeded by the reply, so every co-op phone fills the same gaps the same way
         fillGaps(result, rangeStart, rangeEnd, new java.util.Random(jsonText.hashCode()));
         return result;
@@ -470,6 +479,10 @@ public class BatchGenerator {
         if (result.bossHpMultiplier <= 0) {
             result.bossHpMultiplier  = bossHpMultiplier(rangeEnd);
             result.bossDmgMultiplier = bossDmgMultiplier(rangeEnd);
+        }
+        if (result.bossKind == null) {
+            Enemy.BossKind[] kinds = Enemy.BossKind.values();
+            result.bossKind = kinds[rng.nextInt(kinds.length)];
         }
     }
 

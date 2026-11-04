@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * players/{uid}  player state     each player enemies         host snapshot, ~12x/s
  * events/{id}    strikes, shots   host        hits/{id}       damage dealt by guests
  * batches/{rangeStart}  Gemini JSON or "fallback", host
+ * gifts/{toUid}/{id}    "fromUid,{item json}" from a teammate, removed by the receiver
  *
  * Player states and enemy snapshots carry the sender's clock; remote movement is replayed
  * PLAYBACK_DELAY behind the newest update, so it stays smooth however unevenly packets arrive.
@@ -58,6 +59,8 @@ public class CoopSession {
         void onBatch(int rangeStart, String json);
         /** The run is over for everyone: the host left or the whole party fell. */
         void onRunEnded(String reason);
+        /** A teammate gave this player an item (JSON from GameActivity.giftJson). */
+        void onGift(String fromUid, String json);
     }
 
     public interface OnCreatedListener {
@@ -332,6 +335,17 @@ public class CoopSession {
             }
         });
 
+        // Items teammates hand over: "fromUid,{json}", removed once taken
+        listenChildren(run.child("gifts").child(uid), new Children() {
+            @Override
+            void onChild(DataSnapshot snap) {
+                String value = snap.getValue(String.class);
+                snap.getRef().removeValue();
+                int comma = value != null ? value.indexOf(',') : -1;
+                if (comma > 0 && !ended) listener.onGift(value.substring(0, comma), value.substring(comma + 1));
+            }
+        });
+
         if (host) {
             listenChildren(run.child("hits"), new Children() {
                 @Override
@@ -404,6 +418,11 @@ public class CoopSession {
     /** Guests: damage dealt to an enemy, applied by the host. */
     public void sendHit(String hit) {
         write(run.child("hits").push(), uid + "," + hit);
+    }
+
+    /** Hands an item to a teammate; their phone adds it and deletes the message. */
+    public void sendGift(String toUid, String json) {
+        write(run.child("gifts").child(toUid).push(), uid + "," + json);
     }
 
     // Host only

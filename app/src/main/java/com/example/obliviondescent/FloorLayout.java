@@ -15,10 +15,11 @@ import java.util.Random;
  *
  * Generation strategy:
  * 1. Places an entry room at the world origin.
- * 2. Grows a winding chain of inner rooms (count scales with floor number).
- * 3. On boss floors, appends a large boss room at the end of the chain.
- * 4. Appends a final exit room — force-placed if all normal attempts fail.
- * 5. Distributes enemies across eligible rooms according to the floor quota.
+ * 2. Grows inner rooms (count scales with floor): mostly a winding path, but more and more often a
+ *    branch off an earlier room, so deeper floors sprawl with rooms of up to four doors.
+ * 3. Hangs the boss room (boss floors) and the exit room off the room farthest from the entry.
+ * 4. Sometimes turns an ordinary room into an enemy-free treasure room with a single chest.
+ * 5. Distributes enemies across eligible rooms according to the floor quota, then places decorations.
  */
 public class FloorLayout {
 
@@ -39,6 +40,9 @@ public class FloorLayout {
     public Room entryRoom; // player spawns at its centre
     public Room exitRoom;  // portal(s) spawn here
     public Room bossRoom;  // null on non-boss floors
+    public Room treasureRoom;      // enemy-free room with one chest; null on most floors
+    public boolean treasureMimic;  // that chest is a mimic
+    public List<Props.Decor> decor = new ArrayList<>(); // drawn by GameDisplay; barrels, crates and pillars are solid
 
     // Navigation graph: rooms are nodes 0..R-1, corridors are nodes R..R+C-1
     private List<List<Integer>> neighbours;
@@ -60,8 +64,10 @@ public class FloorLayout {
         Random rng = new Random(seed);
 
         // Inner room count scales with floor, capped so layouts don't get absurd.
-        // floor 1 → 2-3  |  floor 5 → 4-6  |  floor 10 → 7-9  |  floor 20+ → capped 12
-        int innerCount = Math.min(12, Math.max(2, 1 + floor / 2 + rng.nextInt(3)));
+        // floor 1 → 3-4  |  floor 5 → 4-6  |  floor 10 → 7-9  |  floor 20+ → capped 14
+        int innerCount = Math.min(14, Math.max(3, 2 + floor / 2 + rng.nextInt(3)));
+        // Deeper floors branch more often, so the player can take wrong turns
+        float branchChance = Math.min(0.6f, 0.15f + floor * 0.045f);
 
         // ── 1. Entry room ─────────────────────────────────────────────────────
         float es = 4 * Room.TILE;
@@ -77,7 +83,9 @@ public class FloorLayout {
             Room.Type t  = randomRoomType(rng);
             float[]   sz = sizeForType(t, rng);
 
-            Room next = tryGrow(layout, rng, current, preferred, sz[0], sz[1], t);
+            Room next = i > 0 && rng.nextFloat() < branchChance
+                    ? tryGrowFromAny(layout, rng, sz[0], sz[1], t) : null;
+            if (next == null) next = tryGrow(layout, rng, current, preferred, sz[0], sz[1], t);
             if (next == null) next = tryGrowFromAny(layout, rng, sz[0], sz[1], t);
             if (next != null) {
                 current   = next;
@@ -86,34 +94,88 @@ public class FloorLayout {
         }
 
         // ── 3. Boss room (boss floors only) ───────────────────────────────────
+        // The boss and the exit hang off the room farthest from the entry; side paths are detours
+        List<Room> deepest = deepestFirst(layout);
         if (isBossFloor) {
             float bs   = 16 * Room.TILE;
-            Room  boss = tryGrow(layout, rng, current, Room.EAST, bs, bs, Room.Type.BOSS);
-            if (boss == null) boss = tryGrowFromAny(layout, rng, bs, bs, Room.Type.BOSS);
-            if (boss == null) boss = forceGrow(layout, current, bs, bs, Room.Type.BOSS);
+            Room  boss = growAtEnd(layout, rng, deepest, bs, bs, Room.Type.BOSS);
             if (boss != null) {
                 layout.bossRoom = boss;
-                current = boss;
+                deepest.add(0, boss);
             }
         }
 
         // ── 4. Exit room ──────────────────────────────────────────────────────
         float xs   = 4 * Room.TILE;
-        Room  exit = tryGrow(layout, rng, current, Room.EAST, xs, xs, Room.Type.EXIT);
-        if (exit == null) exit = tryGrowFromAny(layout, rng, xs, xs, Room.Type.EXIT);
-        if (exit == null) exit = forceGrow(layout, current, xs, xs, Room.Type.EXIT);
-        layout.exitRoom = exit;
+        layout.exitRoom = growAtEnd(layout, rng, deepest, xs, xs, Room.Type.EXIT);
 
         layout.buildNavigation();
 
+        // Treasure room: an enemy-free room with one chest, likelier on boss floors
+        if (rng.nextFloat() < (isBossFloor ? 0.8f : 0.2f)) pickTreasureRoom(layout, rng);
+
         // ── 5. Enemy distribution ─────────────────────────────────────────────
         distributeEnemies(layout, killCount, rng);
+        layout.decor = Props.decorate(layout);
 
         Log.d(TAG, "Generated floor " + floor + ": " + layout.rooms.size()
                 + " rooms, " + layout.corridors.size() + " corridors, "
                 + killCount + " enemies distributed.");
 
         return layout;
+    }
+
+    /** Rooms ordered by how many doors away from the entry they are, farthest first. */
+    private static List<Room> deepestFirst(FloorLayout layout) {
+        int[] depth = new int[layout.rooms.size()];
+        Arrays.fill(depth, -1);
+        depth[0] = 0; // the entry is room 0
+        ArrayDeque<Integer> queue = new ArrayDeque<>();
+        queue.add(0);
+        while (!queue.isEmpty()) {
+            int room = queue.poll();
+            for (Corridor c : layout.corridors) {
+                int other = c.roomIdA == room ? c.roomIdB : c.roomIdB == room ? c.roomIdA : -1;
+                if (other >= 0 && depth[other] < 0) {
+                    depth[other] = depth[room] + 1;
+                    queue.add(other);
+                }
+            }
+        }
+        List<Room> list = new ArrayList<>(layout.rooms);
+        list.sort((a, b) -> depth[b.id] - depth[a.id]);
+        return list;
+    }
+
+    /** Grows a room off the deepest room with space for it; forced past overlaps as a last resort. */
+    private static Room growAtEnd(FloorLayout layout, Random rng, List<Room> deepest,
+                                  float w, float h, Room.Type type) {
+        for (Room src : deepest) {
+            Room r = tryGrow(layout, rng, src, -1, w, h, type);
+            if (r != null) return r;
+        }
+        for (Room src : deepest) {
+            Room r = forceGrow(layout, src, w, h, type);
+            if (r != null) return r;
+        }
+        return null;
+    }
+
+    /** Turns an ordinary room, preferably a dead end, into the treasure room; keeps rooms for enemies. */
+    private static void pickTreasureRoom(FloorLayout layout, Random rng) {
+        List<Room> candidates = new ArrayList<>(), deadEnds = new ArrayList<>();
+        for (Room r : layout.rooms) {
+            if (r.possibleEnemyCount <= 0) continue; // entry, exit and boss rooms
+            candidates.add(r);
+            int doors = 0;
+            for (boolean used : r.sideUsed) if (used) doors++;
+            if (doors == 1) deadEnds.add(r);
+        }
+        if (candidates.size() < 2) return;
+        List<Room> pool = deadEnds.isEmpty() ? candidates : deadEnds;
+        layout.treasureRoom = pool.get(rng.nextInt(pool.size()));
+        layout.treasureRoom.possibleEnemyCount = 0;
+        layout.treasureMimic = rng.nextFloat() < 0.25f;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -338,12 +400,25 @@ public class FloorLayout {
         return new float[]{oldX, oldY};
     }
 
-    private boolean isOnFloor(float cx, float cy, float r) {
+    /** True when a body of radius r at (cx, cy) is fully on walkable floor. */
+    boolean isOnFloor(float cx, float cy, float r) {
         return isFloor(cx,     cy    )
             && isFloor(cx + r, cy    )
             && isFloor(cx - r, cy    )
             && isFloor(cx,     cy + r)
             && isFloor(cx,     cy - r);
+    }
+
+    /**
+     * Wall collision, then a push out of solid decorations (barrels, crates, pillars)
+     * that is only kept if it doesn't shove the body into a wall.
+     */
+    public float[] resolveCollision(float oldX, float oldY, float newX, float newY, float radius) {
+        float[] p = resolveWallCollision(oldX, oldY, newX, newY, radius);
+        float[] out = new float[2];
+        Props.pushOut(decor, p[0], p[1], radius, out);
+        if (out[0] == p[0] && out[1] == p[1]) return p;
+        return resolveWallCollision(p[0], p[1], out[0], out[1], radius);
     }
 
     // ───────────────────────────────────────────────────────────────────────

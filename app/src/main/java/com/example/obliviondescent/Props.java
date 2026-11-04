@@ -92,6 +92,7 @@ public class Props {
     private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path bannerPath = new Path(), emblemPath = new Path();
     private final RectF rect = new RectF();
+    private final float[] spot = new float[2];
 
     public Props() {
         stroke.setStyle(Paint.Style.STROKE);
@@ -424,9 +425,74 @@ public class Props {
     /** Torchlight first, so props and bodies sit inside it. */
     void drawDecorLight(Canvas canvas, Decor d, long now) {
         if (d.kind != TORCH) return;
-        float px = d.b == Room.WEST ? d.x + 130 : d.b == Room.EAST ? d.x - 130 : d.x;
-        float py = d.b == Room.NORTH ? d.y + 130 : d.y;
-        drawLight(canvas, px, py, now, (int) d.a);
+        torchLight(d, spot);
+        drawLight(canvas, spot[0], spot[1], now, (int) d.a);
+    }
+
+    /** Where a torch's light pool falls: a little into the room from its wall. */
+    static void torchLight(Decor d, float[] out) {
+        out[0] = d.b == Room.WEST ? d.x + 130 : d.b == Room.EAST ? d.x - 130 : d.x;
+        out[1] = d.b == Room.NORTH ? d.y + 130 : d.y;
+    }
+
+    /* ============================================================
+       COLLISION — barrels, crates and pillars are solid
+       ============================================================ */
+
+    private static boolean solid(Decor d) {
+        return d.kind == BARREL || d.kind == CRATE || d.kind == PILLAR;
+    }
+
+    /** Pushes a body of radius r out of every solid prop it overlaps; the result goes to out. */
+    static void pushOut(List<Decor> decor, float x, float y, float r, float[] out) {
+        for (Decor d : decor) {
+            if (!solid(d)) continue;
+            if (d.kind == CRATE) {
+                float nx = Math.max(d.x - d.a, Math.min(d.x + d.a, x));
+                float ny = Math.max(d.y - d.a, Math.min(d.y + d.a, y));
+                float dx = x - nx, dy = y - ny, d2 = dx * dx + dy * dy;
+                if (d2 >= r * r) continue;
+                if (d2 > 0.0001f) {
+                    float dist = (float) Math.sqrt(d2);
+                    x = nx + dx / dist * r;
+                    y = ny + dy / dist * r;
+                } else {
+                    // Centre inside the crate: leave through the nearest side
+                    float left = x - (d.x - d.a), right = d.x + d.a - x;
+                    float up = y - (d.y - d.a), down = d.y + d.a - y;
+                    float min = Math.min(Math.min(left, right), Math.min(up, down));
+                    if (min == left) x = d.x - d.a - r;
+                    else if (min == right) x = d.x + d.a + r;
+                    else if (min == up) y = d.y - d.a - r;
+                    else y = d.y + d.a + r;
+                }
+            } else {
+                float dx = x - d.x, dy = y - d.y, min = r + d.a;
+                float d2 = dx * dx + dy * dy;
+                if (d2 >= min * min) continue;
+                float dist = (float) Math.sqrt(d2);
+                if (dist < 0.01f) {
+                    x = d.x + min;
+                    continue;
+                }
+                x = d.x + dx / dist * min;
+                y = d.y + dy / dist * min;
+            }
+        }
+        out[0] = x;
+        out[1] = y;
+    }
+
+    /** True when a point is inside a solid prop, e.g. a shot hitting a barrel. */
+    static boolean blocks(List<Decor> decor, float x, float y) {
+        for (Decor d : decor) {
+            if (!solid(d)) continue;
+            boolean inside = d.kind == CRATE
+                    ? Math.abs(x - d.x) < d.a && Math.abs(y - d.y) < d.a
+                    : (x - d.x) * (x - d.x) + (y - d.y) * (y - d.y) < d.a * d.a;
+            if (inside) return true;
+        }
+        return false;
     }
 
     void drawDecor(Canvas canvas, Decor d, long now) {
@@ -464,6 +530,7 @@ public class Props {
 
             // Floor pieces first, so everything else sits on top
             if (r.type == Room.Type.ENTRY) list.add(new Decor(RUG, r.centerX(), r.centerY(), 130, 95));
+            if (r == layout.treasureRoom) list.add(new Decor(RUG, r.centerX(), r.centerY(), 110, 80));
             if (r.type == Room.Type.BOSS)
                 list.add(new Decor(SIGIL, r.centerX(), r.centerY(), Math.min(r.width, r.height) * 0.28f, 0));
 

@@ -57,6 +57,8 @@ public class Enemy {
     private static int nextId = 1;
     public int id = nextId++;
     public int templateIndex = -1; // AI template in the batch pool, -1 = none
+    // Special kinds, synced to guests: elites hit twice as hard, mimics and thralls come from GameActivity
+    public boolean elite, mimic, summoned;
     private CoopSession.Track remote; // guest: the host's recent positions
     private static final float[] REMOTE_POS = new float[2]; // logic thread only
     private long predictedUntil = 0;
@@ -115,7 +117,14 @@ public class Enemy {
     private static final float STRIKE_ARC = 60f;  // melee cone half-angle
 
     // Boss move set
-    private enum BossMove { SLAM, CHARGE, BURST }
+    private enum BossMove { SLAM, CHARGE, BURST, SUMMON, FAN, BLINK, SPIRAL, WHIRL }
+    /** Boss archetype, chosen by the AI for each range; each one moves, attacks and looks different. */
+    public enum BossKind { BRUTE, SUMMONER, SORCERER }
+    private BossKind bossKind = BossKind.BRUTE;
+    public int pendingSummons = 0;     // summoner: thralls GameActivity raises, then resets
+    public boolean justBlinked = false;
+    private long lastCastBeat = 0;
+    private float castAngle = 0f;
     private static final float BOSS_SLAM_RADIUS = 260f;
     private BossMove bossMove = BossMove.SLAM;
     private boolean enraged = false;
@@ -134,6 +143,13 @@ public class Enemy {
     private static final Paint BOW_PAINT      = stroke(Color.rgb(200, 240, 230), 4f);
     private static final Paint STUN_PAINT     = solid(Color.rgb(255, 220, 90));
     private static final Paint ALERT_PAINT    = solid(Color.rgb(255, 70, 50));
+    private static final Paint DETAIL_PAINT   = solid(Color.WHITE);
+    private static final Paint GLOW_PAINT     = solid(Color.WHITE);
+    private static final Paint RUNE_PAINT     = stroke(Color.WHITE, 5f);
+    private static final Paint RAGE_PAINT     = stroke(Color.RED, 6f);
+    private static final Paint ELITE_GLOW     = solid(Color.rgb(244, 215, 122));
+    private static final Paint ELITE_RING     = stroke(Color.rgb(244, 215, 122), 4f);
+    private static final Paint MIMIC_PAINT    = solid(Color.BLACK);
     static {
         ALERT_PAINT.setTextSize(48f);
         ALERT_PAINT.setTextAlign(Paint.Align.CENTER);
@@ -150,7 +166,8 @@ public class Enemy {
         CHARGE,     // Full sprint ignoring normal logic
         STRAFE,     // Circling to cut off dodge direction
         RUSH,       // Boss charge attack
-        STUNNED     // Wind-up interrupted by a heavy hit
+        STUNNED,    // Wind-up interrupted by a heavy hit
+        CAST        // Boss channelling a phase-two move (spiral, whirl)
     }
 
     private BehaviorState behaviorState = BehaviorState.APPROACH;
@@ -618,9 +635,9 @@ public class Enemy {
     }
 
     /**
-     * Boss move set: walk toward the player, then pick a telegraphed move.
-     * Close: SLAM (area hit) or BURST (ring of projectiles). Far: CHARGE (rush along a line) or BURST.
-     * Below half health it becomes enraged: shorter wind-ups and denser bursts.
+     * Boss move set by archetype. Brute: slams and charges. Summoner: keeps its distance, raises thralls
+     * and fires bursts. Sorcerer: blinks beside you and fires aimed fans. Below half health each one
+     * gains a new move (whirl, volley, spiral) and its wind-ups get shorter.
      */
     private void updateBoss(long now, float dx, float dy, float dist, float playerRadius, float[] waypoint) {
         if (!enraged && health <= maxHealth / 2) {
@@ -631,31 +648,14 @@ public class Enemy {
 
         switch (behaviorState) {
             case WINDUP: {
-                // Charges and bursts keep tracking until just before release
+                // Everything but the slam keeps tracking until just before release
                 if (bossMove != BossMove.SLAM && now - stateStartTime < stateDuration - 200 && dist > 0.01f) {
                     aimX = dx / dist;
                     aimY = dy / dist;
                 }
                 if (now - stateStartTime < stateDuration) break;
-
                 lastAttackTime = now;
-                if (bossMove == BossMove.SLAM) {
-                    strike((int) (getDamage() * 1.3f), BOSS_SLAM_RADIUS, 180f);
-                    enterState(BehaviorState.APPROACH, 0);
-                } else if (bossMove == BossMove.BURST) {
-                    int count = enraged ? 16 : 10;
-                    int damage = Math.max(1, (int) (getDamage() * 0.6f));
-                    double start = Math.atan2(aimY, aimX);
-                    for (int i = 0; i < count; i++) {
-                        double angle = start + i * Math.PI * 2 / count;
-                        pendingShots.add(new Shot((float) Math.cos(angle), (float) Math.sin(angle),
-                                8f, 1100f, 16f, damage));
-                    }
-                    enterState(BehaviorState.APPROACH, 0);
-                } else {
-                    rushHit = false;
-                    enterState(BehaviorState.RUSH, 900);
-                }
+                releaseBossMove(dx, dy);
                 break;
             }
 
@@ -670,26 +670,185 @@ public class Enemy {
                 break;
             }
 
+            case CAST: {
+                if (bossMove == BossMove.SPIRAL) {
+                    // Two arms of bolts sweeping round
+                    if (now - lastCastBeat >= 110) {
+                        lastCastBeat = now;
+                        castAngle += 0.45f;
+                        int damage = Math.max(1, (int) (getDamage() * 0.45f));
+                        for (int arm = 0; arm < 2; arm++) {
+                            double a = castAngle + arm * Math.PI;
+                            pendingShots.add(new Shot((float) Math.cos(a), (float) Math.sin(a), 7f, 1000f, 14f, damage));
+                        }
+                    }
+                } else {
+                    // Whirl: spins toward the target, hitting all around every beat
+                    if (dist > playerRadius + radius && dist > 0.01f) {
+                        x += dx / dist * speed * 1.6f;
+                        y += dy / dist * speed * 1.6f;
+                    }
+                    if (now - lastCastBeat >= 350) {
+                        lastCastBeat = now;
+                        strike(Math.max(1, (int) (getDamage() * 0.6f)), radius + 60f, 180f);
+                    }
+                }
+                if (now - stateStartTime >= stateDuration) enterState(BehaviorState.APPROACH, 0);
+                break;
+            }
+
             default: {
                 if (waypoint != null) {
                     moveToward(waypoint[0], waypoint[1], speed);
                     break;
                 }
-                if (dist > playerRadius + radius) {
+                if (bossKind == BossKind.BRUTE) {
+                    if (dist > playerRadius + radius) {
+                        x += (dx / dist) * speed;
+                        y += (dy / dist) * speed;
+                    }
+                } else if (dist > 460f) {
+                    // Casters hold a middle distance
                     x += (dx / dist) * speed;
                     y += (dy / dist) * speed;
+                } else if (dist < 300f && dist > 0.01f) {
+                    x -= (dx / dist) * speed * 0.7f;
+                    y -= (dy / dist) * speed * 0.7f;
                 }
                 if (now - lastAttackTime >= (long) (1800 * pace) && dist > 0.01f) {
-                    boolean close = dist < BOSS_SLAM_RADIUS + 60f;
-                    if (close) bossMove = Math.random() < 0.6 ? BossMove.SLAM : BossMove.BURST;
-                    else       bossMove = Math.random() < 0.6 ? BossMove.CHARGE : BossMove.BURST;
+                    bossMove = pickBossMove(dist);
                     aimX = dx / dist;
                     aimY = dy / dist;
-                    long windup = bossMove == BossMove.SLAM ? windupDuration : 700;
+                    long windup = bossMove == BossMove.SLAM ? windupDuration
+                            : bossMove == BossMove.SUMMON || bossMove == BossMove.SPIRAL ? 900 : 700;
                     enterState(BehaviorState.WINDUP, (long) (windup * pace));
                 }
             }
         }
+    }
+
+    /** Next attack for this archetype; the phase-two move only joins in below half health. */
+    private BossMove pickBossMove(float dist) {
+        boolean phaseTwo = enraged && Math.random() < 0.35;
+        double roll = Math.random();
+        switch (bossKind) {
+            case SUMMONER:
+                if (phaseTwo) return BossMove.FAN;
+                return roll < 0.5 ? BossMove.SUMMON : BossMove.BURST;
+            case SORCERER:
+                if (phaseTwo) return BossMove.SPIRAL;
+                if (dist < 260f || roll < 0.25) return BossMove.BLINK;
+                return roll < 0.7 ? BossMove.FAN : BossMove.BURST;
+            default:
+                if (phaseTwo) return BossMove.WHIRL;
+                if (dist < BOSS_SLAM_RADIUS + 60f) return roll < 0.6 ? BossMove.SLAM : BossMove.BURST;
+                return roll < 0.6 ? BossMove.CHARGE : BossMove.BURST;
+        }
+    }
+
+    private void releaseBossMove(float dx, float dy) {
+        int damage = getDamage();
+        int shot = Math.max(1, (int) (damage * 0.6f));
+        switch (bossMove) {
+            case SLAM:
+                strike((int) (damage * 1.3f), BOSS_SLAM_RADIUS, 180f);
+                break;
+            case BURST:
+                ring(enraged ? 16 : 10, shot);
+                break;
+            case FAN:
+                fan(enraged ? 7 : 5, shot);
+                break;
+            case SUMMON:
+                pendingSummons = enraged ? 3 : 2;
+                break;
+            case BLINK:
+                blink(x + dx, y + dy);
+                fan(3, shot);
+                break;
+            case CHARGE:
+                rushHit = false;
+                enterState(BehaviorState.RUSH, 900);
+                return;
+            default: // SPIRAL and WHIRL channel for a while
+                lastCastBeat = 0;
+                enterState(BehaviorState.CAST, bossMove == BossMove.WHIRL ? 1500 : 1800);
+                return;
+        }
+        enterState(BehaviorState.APPROACH, 0);
+    }
+
+    /** Bolts in every direction, starting from the aim. */
+    private void ring(int count, int damage) {
+        double start = Math.atan2(aimY, aimX);
+        for (int i = 0; i < count; i++) {
+            double angle = start + i * Math.PI * 2 / count;
+            pendingShots.add(new Shot((float) Math.cos(angle), (float) Math.sin(angle), 8f, 1100f, 16f, damage));
+        }
+    }
+
+    /** Aimed spread of bolts, 10 degrees apart. */
+    private void fan(int count, int damage) {
+        double step = Math.toRadians(10);
+        double start = Math.atan2(aimY, aimX) - step * (count - 1) / 2.0;
+        for (int i = 0; i < count; i++) {
+            double angle = start + step * i;
+            pendingShots.add(new Shot((float) Math.cos(angle), (float) Math.sin(angle), 10f, 1000f, 14f, damage));
+        }
+    }
+
+    /** Sorcerer: vanishes and reappears beside the target on open floor, then faces it. */
+    private void blink(float targetX, float targetY) {
+        for (int i = 0; i < 8; i++) {
+            double a = Math.random() * Math.PI * 2;
+            float nx = targetX + (float) Math.cos(a) * 280f;
+            float ny = targetY + (float) Math.sin(a) * 280f;
+            if (layout == null || layout.isOnFloor(nx, ny, radius)) {
+                x = nx;
+                y = ny;
+                justBlinked = true;
+                break;
+            }
+        }
+        float ax = targetX - x, ay = targetY - y;
+        float d = (float) Math.sqrt(ax * ax + ay * ay);
+        if (d > 0.01f) {
+            aimX = ax / d;
+            aimY = ay / d;
+        }
+    }
+
+    /** Sets the archetype and its body colour. */
+    public void setBossKind(BossKind kind) {
+        bossKind = kind;
+        bodyPaint.setColor(kind == BossKind.SUMMONER ? Color.rgb(46, 26, 58)
+                : kind == BossKind.SORCERER ? Color.rgb(64, 92, 190) : Color.rgb(180, 0, 0));
+    }
+
+    /** Elite: twice the health and damage, three times the gold. */
+    public void makeElite() {
+        elite = true;
+        maxHealth *= 2;
+        health = maxHealth;
+        dmgMultiplier *= 2f;
+        goldDrop *= 3;
+    }
+
+    /** A summoner's thrall: drops nothing and doesn't count toward the floor. */
+    public void makeThrall() {
+        summoned = true;
+        noGoldDrop = true;
+        displayName = "Thrall";
+        displayColor = Color.rgb(181, 140, 224);
+        bodyPaint.setColor(Color.rgb(90, 60, 120));
+    }
+
+    /** A treasure-room chest that bites; it doesn't count toward the floor. */
+    public void makeMimic() {
+        mimic = true;
+        displayName = "Mimic";
+        displayColor = Color.rgb(244, 215, 122);
+        bodyPaint.setColor(Color.rgb(120, 84, 48));
     }
 
     /**
@@ -762,12 +921,22 @@ public class Enemy {
 
         drawTelegraph(canvas, drawX, drawY, now);
 
+        if (elite) {
+            // A gold aura marks an elite
+            float pulse = 0.85f + 0.15f * (float) Math.sin(now / 220.0);
+            ELITE_GLOW.setAlpha((int) (70 * pulse));
+            canvas.drawCircle(drawX, drawY, radius * 1.6f * pulse, ELITE_GLOW);
+            ELITE_RING.setAlpha((int) (220 * pulse));
+            canvas.drawCircle(drawX, drawY, radius * 1.3f, ELITE_RING);
+        }
+
         // --- NORMAL DRAW ---
         drawShape(canvas, drawX + 6f, drawY + 10f, radius, SHADOW_PAINT);
         bodyPaint.setAlpha(255); // Reset alpha in case it was changed
         drawShape(canvas, drawX, drawY, radius, bodyPaint);
         drawShape(canvas, drawX, drawY, radius, OUTLINE_PAINT);
         if (now < hitFlashUntil) drawShape(canvas, drawX, drawY, radius, FLASH_PAINT);
+        if (mimic) drawMimicFace(canvas, drawX, drawY, now);
 
         // Stars circling the head while stunned
         if (behaviorState == BehaviorState.STUNNED) {
@@ -784,15 +953,8 @@ public class Enemy {
             canvas.drawArc(drawX - r, drawY - r, drawX + r, drawY + r, face - 50f, 100f, false, BOW_PAINT);
         }
 
-        // Boss gets a pulsing outer ring; faster and orange once enraged
         if (type == Type.BOSS) {
-            float pulse = (float)(Math.sin(now / (enraged ? 120.0 : 300.0)) * 0.15 + 0.85);
-            Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            ringPaint.setColor(enraged ? Color.rgb(255, 140, 0) : Color.rgb(255, 50, 50));
-            ringPaint.setStyle(Paint.Style.STROKE);
-            ringPaint.setStrokeWidth(6f);
-            ringPaint.setAlpha((int)(200 * pulse));
-            canvas.drawCircle(drawX, drawY, radius * 1.4f * pulse, ringPaint);
+            drawBossDetails(canvas, drawX, drawY, now);
 
             // "BOSS" label is larger and red
             labelPaint.setColor(Color.rgb(255, 80, 80));
@@ -823,6 +985,10 @@ public class Enemy {
 
         String label = (displayName != null) ? displayName : type.name();
         if (displayName != null) labelPaint.setColor(displayColor);
+        if (elite) {
+            label = "Elite " + label;
+            labelPaint.setColor(Color.rgb(244, 215, 122));
+        }
         canvas.drawText(label, drawX, barTop - 6f, labelPaint);
 
         // Reset label paint to defaults for non-boss enemies
@@ -853,9 +1019,27 @@ public class Enemy {
             AIM_PAINT.setStrokeWidth(4f);
             return;
         }
-        if (type == Type.BOSS && bossMove == BossMove.BURST) {
+        if (type == Type.BOSS && (bossMove == BossMove.BURST || bossMove == BossMove.SUMMON
+                || bossMove == BossMove.SPIRAL || bossMove == BossMove.WHIRL)) {
             TELEGRAPH_RING.setAlpha((int) (80 + 150 * progress));
             canvas.drawCircle(drawX, drawY, radius * (1.1f + 0.5f * progress), TELEGRAPH_RING);
+            return;
+        }
+        if (type == Type.BOSS && (bossMove == BossMove.FAN || bossMove == BossMove.BLINK)) {
+            // The lanes of the coming bolts; a blink also shrinks in before it vanishes
+            int lines = bossMove == BossMove.BLINK ? 3 : enraged ? 7 : 5;
+            double step = Math.toRadians(10);
+            double start = Math.atan2(aimY, aimX) - step * (lines - 1) / 2.0;
+            AIM_PAINT.setAlpha((int) (60 + 160 * progress));
+            for (int i = 0; i < lines; i++) {
+                double a = start + step * i;
+                canvas.drawLine(drawX, drawY, drawX + (float) Math.cos(a) * 500f,
+                        drawY + (float) Math.sin(a) * 500f, AIM_PAINT);
+            }
+            if (bossMove == BossMove.BLINK) {
+                TELEGRAPH_RING.setAlpha(200);
+                canvas.drawCircle(drawX, drawY, radius * (1.8f - 0.8f * progress), TELEGRAPH_RING);
+            }
             return;
         }
         if (weapon.isProjectile) {
@@ -884,14 +1068,143 @@ public class Enemy {
 
     private void drawShape(Canvas canvas, float cx, float cy, float r, Paint paint) {
         float face = (float) Math.atan2(faceY, faceX);
+        if (mimic) {
+            drawPolygon(canvas, cx, cy, r * 1.25f, 4, (float) (Math.PI / 4), paint);
+            return;
+        }
         switch (type) {
             case SPEEDER: drawPolygon(canvas, cx, cy, r * 1.3f, 3, face, paint); break;
             case TANK:    drawPolygon(canvas, cx, cy, r * 1.25f, 4, (float) (Math.PI / 4), paint); break;
             case BRUTE:   drawPolygon(canvas, cx, cy, r * 1.12f, 6, 0f, paint); break;
             case ARCHER:  drawPolygon(canvas, cx, cy, r * 1.2f, 4, 0f, paint); break;
-            case BOSS:    drawStar(canvas, cx, cy, r * 1.25f, r, 10, System.currentTimeMillis() / 2000f, paint); break;
+            case BOSS:
+                if (bossKind == BossKind.SUMMONER) drawRobe(canvas, cx, cy, r, paint);
+                else if (bossKind == BossKind.SORCERER) drawCrystal(canvas, cx, cy, r, paint);
+                else drawStar(canvas, cx, cy, r * 1.25f, r, 10, System.currentTimeMillis() / 2000f, paint);
+                break;
             default:      canvas.drawCircle(cx, cy, r, paint);
         }
+    }
+
+    /** Summoner: a hooded robe that flares into a ragged hem. */
+    private void drawRobe(Canvas canvas, float cx, float cy, float r, Paint paint) {
+        shapePath.reset();
+        shapePath.moveTo(cx, cy - r * 1.25f);
+        shapePath.quadTo(cx + r * 0.75f, cy - r * 1.1f, cx + r * 0.6f, cy - r * 0.3f);
+        shapePath.lineTo(cx + r * 1.05f, cy + r);
+        shapePath.lineTo(cx + r * 0.55f, cy + r * 0.8f);
+        shapePath.lineTo(cx + r * 0.2f, cy + r * 1.05f);
+        shapePath.lineTo(cx - r * 0.2f, cy + r * 0.8f);
+        shapePath.lineTo(cx - r * 0.55f, cy + r * 1.05f);
+        shapePath.lineTo(cx - r * 1.05f, cy + r);
+        shapePath.lineTo(cx - r * 0.6f, cy - r * 0.3f);
+        shapePath.quadTo(cx - r * 0.75f, cy - r * 1.1f, cx, cy - r * 1.25f);
+        shapePath.close();
+        canvas.drawPath(shapePath, paint);
+    }
+
+    /** Sorcerer: a tall crystal bobbing in the air. */
+    private void drawCrystal(Canvas canvas, float cx, float cy, float r, Paint paint) {
+        float bob = (float) Math.sin(System.currentTimeMillis() / 400.0) * 8f;
+        shapePath.reset();
+        shapePath.moveTo(cx, cy - r * 1.5f + bob);
+        shapePath.lineTo(cx + r * 0.8f, cy - r * 0.2f + bob);
+        shapePath.lineTo(cx, cy + r * 1.2f + bob);
+        shapePath.lineTo(cx - r * 0.8f, cy - r * 0.2f + bob);
+        shapePath.close();
+        canvas.drawPath(shapePath, paint);
+    }
+
+    /** Archetype details on top of the body, so each boss reads at a glance. Phase two turns them red. */
+    private void drawBossDetails(Canvas canvas, float cx, float cy, long now) {
+        float r = radius;
+        switch (bossKind) {
+            case SUMMONER: {
+                // Glowing eyes in the hood and three soul flames circling
+                int soul = enraged ? Color.rgb(255, 110, 90) : Color.rgb(140, 255, 170);
+                DETAIL_PAINT.setColor(soul);
+                canvas.drawCircle(cx - r * 0.18f, cy - r * 0.7f, r * 0.08f, DETAIL_PAINT);
+                canvas.drawCircle(cx + r * 0.18f, cy - r * 0.7f, r * 0.08f, DETAIL_PAINT);
+                for (int i = 0; i < 3; i++) {
+                    double a = now / 600.0 + i * Math.PI * 2 / 3;
+                    float sx = cx + (float) Math.cos(a) * r * 1.6f;
+                    float sy = cy + (float) Math.sin(a) * r * 1.6f;
+                    GLOW_PAINT.setColor(soul);
+                    GLOW_PAINT.setAlpha(90);
+                    canvas.drawCircle(sx, sy, r * 0.28f, GLOW_PAINT);
+                    canvas.drawCircle(sx, sy, r * 0.12f, DETAIL_PAINT);
+                }
+                break;
+            }
+            case SORCERER: {
+                // Pulsing core and two rune rings turning opposite ways
+                float bob = (float) Math.sin(now / 400.0) * 8f;
+                float pulse = 0.8f + 0.2f * (float) Math.sin(now / 180.0);
+                int rune = enraged ? Color.rgb(255, 120, 120) : Color.rgb(140, 190, 255);
+                GLOW_PAINT.setColor(rune);
+                GLOW_PAINT.setAlpha(120);
+                canvas.drawCircle(cx, cy - r * 0.2f + bob, r * 0.55f * pulse, GLOW_PAINT);
+                DETAIL_PAINT.setColor(Color.rgb(235, 245, 255));
+                canvas.drawCircle(cx, cy - r * 0.2f + bob, r * 0.22f * pulse, DETAIL_PAINT);
+                RUNE_PAINT.setColor(rune);
+                float spin = (now % 6000) / 6000f * 360f;
+                arcRect.set(cx - r * 1.7f, cy - r * 1.7f, cx + r * 1.7f, cy + r * 1.7f);
+                for (int i = 0; i < 6; i++) canvas.drawArc(arcRect, spin + i * 60f, 32f, false, RUNE_PAINT);
+                arcRect.set(cx - r * 1.35f, cy - r * 1.35f, cx + r * 1.35f, cy + r * 1.35f);
+                for (int i = 0; i < 4; i++) canvas.drawArc(arcRect, -spin * 1.5f + i * 90f, 50f, false, RUNE_PAINT);
+                break;
+            }
+            default: {
+                // Brute: bone horns and a pulsing rage ring, faster and orange once enraged
+                float pulse = (float) (Math.sin(now / (enraged ? 120.0 : 300.0)) * 0.15 + 0.85);
+                RAGE_PAINT.setColor(enraged ? Color.rgb(255, 140, 0) : Color.rgb(255, 50, 50));
+                RAGE_PAINT.setAlpha((int) (200 * pulse));
+                canvas.drawCircle(cx, cy, r * 1.4f * pulse, RAGE_PAINT);
+                DETAIL_PAINT.setColor(Color.rgb(230, 220, 195));
+                for (int side = -1; side <= 1; side += 2) {
+                    shapePath.reset();
+                    shapePath.moveTo(cx + side * r * 0.35f, cy - r * 0.75f);
+                    shapePath.quadTo(cx + side * r * 1.1f, cy - r * 1.0f, cx + side * r * 0.85f, cy - r * 1.5f);
+                    shapePath.quadTo(cx + side * r * 0.7f, cy - r * 1.0f, cx + side * r * 0.1f, cy - r * 0.95f);
+                    shapePath.close();
+                    canvas.drawPath(shapePath, DETAIL_PAINT);
+                }
+            }
+        }
+        if (behaviorState == BehaviorState.CAST && bossMove == BossMove.WHIRL) {
+            // Blades sweeping round while it spins
+            float spin = (now % 400) / 400f * 360f;
+            arcRect.set(cx - r - 60f, cy - r - 60f, cx + r + 60f, cy + r + 60f);
+            TELEGRAPH_RING.setAlpha(220);
+            for (int i = 0; i < 3; i++) canvas.drawArc(arcRect, spin + i * 120f, 50f, false, TELEGRAPH_RING);
+        }
+    }
+
+    /** Mimic: a chattering jaw full of teeth, red eyes on the lid and a gold lock. */
+    private void drawMimicFace(Canvas canvas, float cx, float cy, long now) {
+        float w = radius * 0.88f;
+        float jaw = 5f + 7f * (float) Math.abs(Math.sin(now / 140.0));
+        MIMIC_PAINT.setColor(Color.rgb(24, 8, 6));
+        canvas.drawRect(cx - w, cy - jaw, cx + w, cy + jaw, MIMIC_PAINT);
+        MIMIC_PAINT.setColor(Color.rgb(234, 224, 202));
+        float tooth = w / 3f;
+        shapePath.reset();
+        for (float tx = cx - w; tx < cx + w - 1f; tx += tooth) {
+            shapePath.moveTo(tx, cy - jaw);
+            shapePath.lineTo(tx + tooth, cy - jaw);
+            shapePath.lineTo(tx + tooth / 2f, cy - jaw + 10f);
+            shapePath.close();
+            shapePath.moveTo(tx, cy + jaw);
+            shapePath.lineTo(tx + tooth, cy + jaw);
+            shapePath.lineTo(tx + tooth / 2f, cy + jaw - 10f);
+            shapePath.close();
+        }
+        canvas.drawPath(shapePath, MIMIC_PAINT);
+        MIMIC_PAINT.setColor(Color.rgb(255, 60, 40));
+        canvas.drawCircle(cx - w * 0.45f, cy - w * 0.55f, 6f, MIMIC_PAINT);
+        canvas.drawCircle(cx + w * 0.45f, cy - w * 0.55f, 6f, MIMIC_PAINT);
+        MIMIC_PAINT.setColor(Color.rgb(212, 175, 55));
+        canvas.drawRect(cx - 7f, cy + w * 0.45f, cx + 7f, cy + w * 0.75f, MIMIC_PAINT);
     }
 
     private void drawPolygon(Canvas canvas, float cx, float cy, float r, int sides, float rotation, Paint paint) {
@@ -964,7 +1277,8 @@ public class Enemy {
        ============================================================ */
 
     /**
-     * Host: appends "id,type,template,x,y,hp,maxHp,state,elapsed,duration,aim,bossMove,enraged".
+     * Host: appends "id,type,template,x,y,hp,maxHp,state,elapsed,duration,aim,bossMove,enraged,kinds"
+     * (kinds: 1 elite, 2 mimic, 4 thrall).
      * hp 0 means it died, -1 that it died without dropping loot.
      */
     public void appendState(StringBuilder sb, long now) {
@@ -976,7 +1290,8 @@ public class Enemy {
                 .append(behaviorState == BehaviorState.WINDUP ? now - stateStartTime : 0).append(',')
                 .append(stateDuration).append(',')
                 .append((int) Math.toDegrees(Math.atan2(aimY, aimX))).append(',')
-                .append(bossMove.ordinal()).append(',').append(enraged ? 1 : 0);
+                .append(bossMove.ordinal()).append(',').append(enraged ? 1 : 0).append(',')
+                .append((elite ? 1 : 0) | (mimic ? 2 : 0) | (summoned ? 4 : 0));
     }
 
     /**
@@ -987,6 +1302,13 @@ public class Enemy {
     public void applyState(String[] f, long sentAt, long arrivedAt) {
         float hostX = Float.parseFloat(f[3]);
         float hostY = Float.parseFloat(f[4]);
+        int kinds = Integer.parseInt(f[13]);
+        if ((kinds & 1) != 0 && !elite) {
+            elite = true;
+            goldDrop *= 3;
+        }
+        if ((kinds & 2) != 0 && !mimic) makeMimic();
+        if ((kinds & 4) != 0 && !summoned) makeThrall();
         if (remote == null) {
             remote = new CoopSession.Track();
             x = hostX;

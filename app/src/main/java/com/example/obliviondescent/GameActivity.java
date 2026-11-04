@@ -89,6 +89,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private int maxHealth = 100;
     private int playerLevel = 1;
     private int playerXp = 0;
+    // Level-up perks: stacks per Perk, and level-ups still waiting for a pick
+    private final int[] perks = new int[Perk.values().length];
+    private int pendingPerks = 0;
+    private boolean perkDialogOpen = false;
+    private MaterialButton btnLevelUp;
+    private ObjectAnimator levelBadgePulse;
     private int playerArmor = 100;
     private int oldHealth = 0;
     private int oldArmor = 0;
@@ -214,6 +220,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private String currentBossName  = null;
     private String currentBossTitle = null;
     private int    currentBossColor = android.graphics.Color.RED;
+    private Enemy.BossKind currentBossKind = Enemy.BossKind.BRUTE;
 
     private PlayerBehaviorTracker behaviorTracker = new PlayerBehaviorTracker();
 
@@ -330,6 +337,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     currentLayout.exitRoom.centerY());
         }
         spawnEnemiesForLayout(currentLayout);
+        spawnRoomChest();
         Log.d("FloorLayout", "Floor 1 layout ready: "
                 + currentLayout.rooms.size() + " rooms");
 
@@ -388,11 +396,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         btnAttack.setOnClickListener(v -> attack());
         btnDash.setOnClickListener(v -> dash());
         findViewById(R.id.btn_spin).setOnClickListener(v -> {
-            if (System.currentTimeMillis() - lastSpinTime >= SPIN_COOLDOWN) spinQueued = true;
+            if (System.currentTimeMillis() - lastSpinTime >= spinCooldown()) spinQueued = true;
         });
         btnPotion.setOnClickListener(v -> quickHeal());
         menuBtn.setOnClickListener(v -> showMenuDialog());
         btnInventory.setOnClickListener(v -> showInventoryDialog());
+        btnLevelUp = findViewById(R.id.btn_level_up);
+        btnLevelUp.setOnClickListener(v -> showPerkDialog());
 
         // Held down = keep attacking; polled by the logic thread in tick()
         aimJoystick = findViewById(R.id.aim_joystick);
@@ -512,12 +522,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     }
                     Enemy e = findEnemy(id);
                     if (e != null && e.isDead) continue; // still fading out
-                    if (e == null) {
+                    boolean created = e == null;
+                    if (created) {
                         if (hp <= 0) continue; // died before this phone saw it
                         e = createMirror(id, Enemy.Type.values()[Integer.parseInt(f[1])], Integer.parseInt(f[2]));
                         enemies.add(e);
                     }
                     e.applyState(f, sentAt, snap.at);
+                    // The host's treasure chest just woke up as a mimic
+                    if (created && e.mimic) mimicAwoke(e.x, e.y);
                     if (e.isDead) deadEnemyAt.put(id, snap.at);
                 }
                 // Removed by the host without dying, e.g. re-spawned once the AI templates arrived
@@ -537,6 +550,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (template >= 0 && template < pool.size()) e.applyTemplate(pool.get(template));
         if (type == Enemy.Type.BOSS) {
             loadBossIdentity();
+            e.setBossKind(currentBossKind);
             e.displayName  = currentBossName;
             e.displayColor = currentBossColor;
             activeBoss = e;
@@ -659,6 +673,47 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         batchCache.put(rangeStart, result);
     }
 
+    /** A teammate handed over an item; it goes straight into the inventory. */
+    @Override
+    public void onGift(String fromUid, String json) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(json);
+            String name = o.getString("name");
+            switch (o.getString("kind")) {
+                case "W":
+                    weapons.add(new Weapon(name, o.getInt("damage"), (float) o.getDouble("range"),
+                            o.getLong("cooldown"), Weapon.Rarity.valueOf(o.getString("rarity")),
+                            o.getInt("color"), (float) o.getDouble("knockback"), o.getBoolean("projectile")));
+                    break;
+                case "A":
+                    Armor armor = new Armor(name, o.getInt("defense"), (float) o.getDouble("maxDurability"),
+                            Armor.Rarity.valueOf(o.getString("rarity")), o.getInt("color"),
+                            Armor.Slot.valueOf(o.getString("slot")));
+                    armor.durability = (float) o.getDouble("durability");
+                    armor.worn = o.getBoolean("worn");
+                    inventoryArmors.add(armor);
+                    break;
+                default:
+                    ShopItem potion = new ShopItem();
+                    potion.type = ShopItem.ItemType.CONSUMABLE;
+                    potion.name = name;
+                    potion.effect = o.getString("effect");
+                    potion.effectValue = o.getInt("effectValue");
+                    potion.rarity = o.optString("rarity", "COMMON");
+                    potion.color = o.getInt("color");
+                    potion.price = o.getInt("price");
+                    potion.description = o.optString("description", "");
+                    purchaseItem(potion); // stacks with matching potions
+            }
+            CoopSession.RemotePlayer from = coop.others.get(fromUid);
+            Toast.makeText(this, (from != null ? from.name : "A teammate") + " gave you " + name,
+                    Toast.LENGTH_SHORT).show();
+            soundManager.playCoinPickup();
+        } catch (org.json.JSONException | IllegalArgumentException e) {
+            Log.e("Coop", "Bad gift: " + json, e);
+        }
+    }
+
     /** The host left or the whole party fell: end the run on this phone. */
     @Override
     public void onRunEnded(String reason) {
@@ -735,7 +790,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             player.update(joystick.getDX(), joystick.getDY());
         }
         if (currentLayout != null && !inShopRoom) {
-            float[] resolved = currentLayout.resolveWallCollision(
+            float[] resolved = currentLayout.resolveCollision(
                     prevPlayerX, prevPlayerY, player.x, player.y, player.radius);
             player.x = resolved[0];
             player.y = resolved[1];
@@ -743,8 +798,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         player.setInvulnerable(now < invulnerableUntil);
 
         // Update dash and spin cooldown arcs, only when they visibly change
-        float dashProgress = Math.min(1f, (float) (now - lastDashTime) / DASH_COOLDOWN);
-        float spinProgress = Math.min(1f, (float) (now - lastSpinTime) / SPIN_COOLDOWN);
+        float dashProgress = Math.min(1f, (float) (now - lastDashTime) / dashCooldown());
+        float spinProgress = Math.min(1f, (float) (now - lastSpinTime) / spinCooldown());
         int dashStep = (int) (dashProgress * 50);
         int spinStep = (int) (spinProgress * 50);
         if (dashStep != dashStepShown || spinStep != spinStepShown) {
@@ -832,7 +887,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 float prevEX = e.x, prevEY = e.y;
                 e.update(target[0], target[1], player.radius);
                 if (currentLayout != null && !inShopRoom) {
-                    float[] resolved = currentLayout.resolveWallCollision(
+                    float[] resolved = currentLayout.resolveCollision(
                             prevEX, prevEY, e.x, e.y, e.radius);
                     e.x = resolved[0];
                     e.y = resolved[1];
@@ -898,6 +953,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         int floor = floorManager.getCurrentFloor();
         List<EnemyTemplate> pool = getEnemyPoolForFloor(floor);
         float margin = 80f;
+        int elites = 0;
+        float[] spot = new float[2];
 
         synchronized (enemies) {
             for (Room r : layout.rooms) {
@@ -908,6 +965,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
                     Enemy.Type type = pickEnemyType(floor);
                     Enemy enemy = new Enemy(spawnX, spawnY, type);
+                    Props.pushOut(layout.decor, spawnX, spawnY, enemy.radius, spot);
+                    enemy.x = spot[0];
+                    enemy.y = spot[1];
                     enemy.applyFloorScaling(floor);
 
                     if (!pool.isEmpty()) {
@@ -915,6 +975,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         enemy.applyTemplate(pool.get(enemy.templateIndex));
                     }
                     enemy.scaleHealth(partyHealth());
+                    // Rare elites from floor 6, at most two a floor
+                    if (floor >= 6 && elites < 2 && Math.random() < 0.05) {
+                        enemy.makeElite();
+                        elites++;
+                    }
                     enemy.setBehaviorTracker(behaviorTracker);
                     enemy.setLayout(layout);
                     // isAwake = false — enemy waits for player to enter trigger radius
@@ -974,7 +1039,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
                 // Each enemy can only be hit once per swing AND must respect weapon cooldown
                 if (hitThisSwing.contains(e)) continue;
-                if (now - e.lastHitTime < w.cooldown) continue;
+                if (now - e.lastHitTime < attackCooldown(w)) continue;
 
                 float dist = getDistance(player.x, player.y, e.x, e.y);
                 if (dist > attackRange + e.radius) continue;
@@ -990,7 +1055,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 behaviorTracker.recordAttack(dist);
 
                 boolean finisher = comboStep == 3;
-                boolean crit = Math.random() < CRIT_CHANCE;
+                boolean crit = Math.random() < critChance();
                 int damage = Math.round(w.damage * damageMultiplier()
                         * (finisher ? 1.5f : 1f) * (crit ? 2f : 1f));
                 e.lastHitTime = now;
@@ -1193,11 +1258,20 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * @param now current time in milliseconds
      */
     private void resolveEnemyAttacks(long now) {
+        List<Enemy> raised = new ArrayList<>();
         synchronized (enemies) {
             for (Enemy e : enemies) {
                 if (e.justEnraged) {
                     e.justEnraged = false;
                     effects.banner(e.x, e.y - e.radius - 60f, "ENRAGED", Color.rgb(255, 90, 40));
+                }
+                if (e.justBlinked) {
+                    e.justBlinked = false;
+                    effects.burst(e.x, e.y, Color.rgb(140, 190, 255), 26, 10f);
+                }
+                if (e.pendingSummons > 0) {
+                    raiseThralls(e, e.pendingSummons, raised);
+                    e.pendingSummons = 0;
                 }
 
                 int floor = floorManager.getCurrentFloor();
@@ -1221,6 +1295,32 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     e.strikeDamage = 0;
                 }
             }
+            enemies.addAll(raised);
+        }
+    }
+
+    /** Summoner boss: raises thralls around itself, at most five alive at once. */
+    private void raiseThralls(Enemy boss, int count, List<Enemy> out) {
+        int alive = 0;
+        for (Enemy e : enemies) if (e.summoned && !e.isDead) alive++;
+        int floor = floorManager.getCurrentFloor();
+        for (int i = 0; i < count && alive + i < 5; i++) {
+            double a = Math.random() * Math.PI * 2;
+            float sx = boss.x + (float) Math.cos(a) * (boss.radius + 80f);
+            float sy = boss.y + (float) Math.sin(a) * (boss.radius + 80f);
+            if (currentLayout != null && !currentLayout.isFloor(sx, sy)) {
+                sx = boss.x;
+                sy = boss.y;
+            }
+            Enemy thrall = new Enemy(sx, sy, i % 2 == 0 ? Enemy.Type.GRUNT : Enemy.Type.SPEEDER);
+            thrall.applyFloorScaling(floor);
+            thrall.scaleHealth(partyHealth());
+            thrall.makeThrall();
+            thrall.isAwake = true;
+            thrall.setBehaviorTracker(behaviorTracker);
+            thrall.setLayout(currentLayout);
+            out.add(thrall);
+            effects.burst(sx, sy, Color.rgb(139, 95, 191), 18, 8f);
         }
     }
 
@@ -1261,6 +1361,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      */
     private void hitPlayer(int damage, float fromX, float fromY, float knockback, long now) {
         if (now < invulnerableUntil || playerHealth <= 0) return;
+        damage = Math.max(1, Math.round(damage * (1f - 0.005f * perks[Perk.IRON_SKIN.ordinal()])));
         invulnerableUntil = now + HIT_INVULNERABILITY;
         player.flashUntil = now + 150;
         damagePlayer(damage);
@@ -1480,6 +1581,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         playerArmor = Math.min(checkpointArmor, maxArmor);
 
         spawnEnemiesForLayout(currentLayout);
+        spawnRoomChest();
         effects.clear();
         invulnerableUntil = 0;
 
@@ -1505,12 +1607,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             for (Enemy e : enemies) {
                 if (e.isDead && !e.counted) {
                     e.counted = true;
-                    if (!isGuest()) floorManager.onEnemyKilled(player.x, player.y); // guests copy the host's count
+                    // Guests copy the host's count; mimics and thralls don't count at all
+                    if (!isGuest() && !e.mimic && !e.summoned) floorManager.onEnemyKilled(player.x, player.y);
                     statsManager.onEnemyKilled();
                     effects.burst(e.x, e.y, e.getColor(), e.type == Enemy.Type.BOSS ? 60 : 16, 9f);
+                    if (e.mimic) dropLootChest(e.x, e.y);
                     if (!e.noGoldDrop)
                     {
-                        spawnGoldCoins(e.x, e.y, e.getGoldDrop());
+                        spawnGoldCoins(e.x, e.y, withGreed(e.getGoldDrop()));
                         int xp = e.getXpReward();
                         runOnUiThread(() -> gainXp(xp));
                     }
@@ -1558,7 +1662,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      */
     private void tryAttack(long now) {
         Weapon w = player.getWeapon();
-        if (now - lastAttackTime < w.cooldown) return;
+        if (now - lastAttackTime < attackCooldown(w)) return;
 
         if (aimJoystick.isAiming()) {
             aimDX = aimJoystick.getAimX();
@@ -1584,7 +1688,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             fireProjectile(aimDX, aimDY);
             return;
         }
-        comboStep = now - lastAttackTime <= w.cooldown + COMBO_WINDOW ? comboStep % 3 + 1 : 1;
+        comboStep = now - lastAttackTime <= attackCooldown(w) + COMBO_WINDOW ? comboStep % 3 + 1 : 1;
         boolean finisher = comboStep == 3;
         swingArc = finisher ? 80f : 55f;
         lastAttackTime = now;
@@ -1661,7 +1765,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void dash() {
         long now = System.currentTimeMillis();
         if (isDashing || playerHealth <= 0) return;
-        if (now - lastDashTime < DASH_COOLDOWN) return;
+        if (now - lastDashTime < dashCooldown()) return;
 
         float joyX = joystick.getDX();
         float joyY = joystick.getDY();
@@ -1720,7 +1824,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      */
     private void fireProjectile(float dirX, float dirY) {
         long now = System.currentTimeMillis();
-        if (now - lastAttackTime < player.getWeapon().cooldown) return;
+        if (now - lastAttackTime < attackCooldown(player.getWeapon())) return;
         lastAttackTime = now;
 
         Weapon w = player.getWeapon();
@@ -1745,7 +1849,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         synchronized (projectiles) {
             for (Projectile p : projectiles) {
                 p.update();
-                if (currentLayout != null && !inShopRoom && !currentLayout.isFloor(p.x, p.y)) p.isDead = true;
+                if (currentLayout != null && !inShopRoom && (!currentLayout.isFloor(p.x, p.y)
+                        || Props.blocks(currentLayout.decor, p.x, p.y))) p.isDead = true;
             }
             projectiles.removeIf(p -> p.isDead);
         }
@@ -1777,7 +1882,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
                         float dist = getDistance(p.x, p.y, e.x, e.y);
                         if (dist < p.getRadius() + e.radius) {
-                            boolean crit = Math.random() < CRIT_CHANCE;
+                            boolean crit = Math.random() < critChance();
                             behaviorTracker.recordAttack(getDistance(player.x, player.y, e.x, e.y));
                             float dx = e.x - p.x;
                             float dy = e.y - p.y;
@@ -2314,6 +2419,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     currentLayout.exitRoom.centerY());
         }
         spawnEnemiesForLayout(currentLayout);
+        spawnRoomChest();
         // This floor's batch should be cached already; start the next range two floors early
         ensureBatchFor(floorManager.getCurrentFloor());
         ensureBatchFor(floorManager.getCurrentFloor() + 2);
@@ -2367,10 +2473,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             currentBossName  = bossData.bossName;
             currentBossTitle = bossData.bossTitle;
             currentBossColor = bossData.bossColor;
+            currentBossKind  = bossData.bossKind != null ? bossData.bossKind : Enemy.BossKind.BRUTE;
         } else {
             currentBossName  = "THE ANCIENT ONE";
             currentBossTitle = "Ruler of the Void";
             currentBossColor = android.graphics.Color.RED;
+            currentBossKind  = Enemy.BossKind.BRUTE;
         }
     }
 
@@ -2406,6 +2514,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
 
         activeBoss = new Enemy(spawnX, spawnY, Enemy.Type.BOSS);
+        activeBoss.setBossKind(currentBossKind);
         activeBoss.isAwake = true; // Boss is always immediately active
         activeBoss.applyFloorScaling(floorManager.getCurrentFloor());
         BatchResult bossData = getBossDataForFloor(floorManager.getCurrentFloor());
@@ -2491,12 +2600,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Spawns 3 chests at 120° intervals around the boss death position on walkable floor. */
     private void spawnTreasureChests(float bossX, float bossY) {
-        int floor = floorManager.getCurrentFloor();
-        List<ShopItem> pool = getChestItemPool(floor);
         long launch = System.currentTimeMillis() + 250; // the boss starts to fall first
 
         synchronized (treasureChests) {
-            treasureChests.clear();
             for (int i = 0; i < 3; i++) {
                 float angle = (float)(i * Math.PI * 2.0 / 3.0 + Math.random() * 0.4);
                 float cx = bossX, cy = bossY;
@@ -2519,15 +2625,75 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 }
 
                 TreasureChest chest = new TreasureChest(cx, cy, bossX, bossY, launch + i * 180L);
-                if (!pool.isEmpty()) {
-                    ShopItem reward = pool.get((int)(Math.random() * pool.size()));
-                    chest.rewardItem      = reward;
-                    chest.rewardItemName  = reward.name;
-                    chest.rewardItemColor = getRarityColor(reward.rarity);
-                }
+                pickChestReward(chest);
                 treasureChests.add(chest);
             }
         }
+    }
+
+    /** A random item from this floor range's shop pool; left empty until the AI content arrives. */
+    private void pickChestReward(TreasureChest chest) {
+        List<ShopItem> pool = getChestItemPool(floorManager.getCurrentFloor());
+        if (pool.isEmpty()) return;
+        ShopItem reward = pool.get((int) (Math.random() * pool.size()));
+        chest.rewardItem      = reward;
+        chest.rewardItemName  = reward.name;
+        chest.rewardItemColor = getRarityColor(reward.rarity);
+    }
+
+    /** The treasure room's chest, if this floor has one; every phone gets its own. */
+    private void spawnRoomChest() {
+        synchronized (treasureChests) {
+            treasureChests.clear();
+            Room room = currentLayout.treasureRoom;
+            if (room == null) return;
+            TreasureChest chest = new TreasureChest(room.centerX(), room.centerY(),
+                    room.centerX(), room.centerY(), 0L);
+            chest.landed = true; // already sitting there, no landing burst
+            chest.mimic = currentLayout.treasureMimic;
+            pickChestReward(chest);
+            treasureChests.add(chest);
+        }
+    }
+
+    /** A slain mimic coughs up a real chest with loot. */
+    private void dropLootChest(float x, float y) {
+        TreasureChest chest = new TreasureChest(x, y, x, y, System.currentTimeMillis());
+        pickChestReward(chest);
+        synchronized (treasureChests) { treasureChests.add(chest); }
+    }
+
+    /** True when a living player on this floor (this phone's or a teammate) is within range. */
+    private boolean anyoneNear(float x, float y, float range) {
+        if (playerHealth > 0 && getDistance(player.x, player.y, x, y) < range) return true;
+        if (coop == null) return false;
+        int floor = floorManager.getCurrentFloor();
+        for (CoopSession.RemotePlayer r : coop.others.values()) {
+            if (!r.dead && r.floor == floor && getDistance(r.newestX, r.newestY, x, y) < range) return true;
+        }
+        return false;
+    }
+
+    /** Host: the treasure chest was a mimic, and it springs to life where it stood. */
+    private void awakenMimic(TreasureChest chest) {
+        Enemy mimic = new Enemy(chest.x, chest.y, Enemy.Type.BRUTE);
+        mimic.applyFloorScaling(floorManager.getCurrentFloor());
+        mimic.scaleHealth(1.5f * partyHealth());
+        mimic.makeMimic();
+        mimic.isAwake = true;
+        mimic.setBehaviorTracker(behaviorTracker);
+        mimic.setLayout(currentLayout);
+        synchronized (enemies) { enemies.add(mimic); }
+        mimicAwoke(chest.x, chest.y);
+    }
+
+    /** Removes the sleeping mimic chest and makes a show of it waking. */
+    private void mimicAwoke(float x, float y) {
+        synchronized (treasureChests) { treasureChests.removeIf(c -> c.mimic); }
+        effects.burst(x, y, Color.rgb(120, 84, 48), 30, 12f);
+        effects.banner(x, y - 90f, "MIMIC!", Color.rgb(224, 72, 72));
+        if (camera != null) camera.startShake(250, 12f);
+        soundManager.playChestOpen();
     }
 
     /** Returns all shop items for the 5-floor range that contains the given floor. */
@@ -2547,6 +2713,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void checkChestInteraction() {
         long now = System.currentTimeMillis();
         int gold = Color.rgb(244, 215, 122);
+        TreasureChest woke = null;
         synchronized (treasureChests) {
             for (TreasureChest chest : treasureChests) {
                 if (!chest.landed) {
@@ -2559,9 +2726,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     soundManager.playCoinPickup();
                 }
                 if (chest.opened) continue;
+                if (chest.mimic) {
+                    // The host wakes it when anyone comes close; guests see it arrive as an enemy
+                    if (!isGuest() && woke == null && anyoneNear(chest.x, chest.y, 170f)) woke = chest;
+                    continue;
+                }
                 float dist = getDistance(player.x, player.y, chest.x, chest.y);
                 if (dist < player.radius + TreasureChest.OPEN_RADIUS) {
                     chest.opened = true;
+                    if (chest.rewardItem == null) pickChestReward(chest);
                     soundManager.playChestOpen();
                     effects.burst(chest.x, chest.y - 10, chest.rewardItemColor, 28, 11f);
                     effects.burst(chest.x, chest.y - 10, gold, 14, 7f);
@@ -2573,6 +2746,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 }
             }
         }
+        if (woke != null) awakenMimic(woke);
     }
 
     // ─── DIALOGS ──────────────────────────────────────────────────────────────
@@ -2624,8 +2798,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             inventoryPage = 0;
 
             int[] ids = {R.id.filter_all, R.id.filter_weapons,
-                    R.id.filter_armor, R.id.filter_consumables};
-            String[] filters = {"ALL", "WEAPONS", "ARMOR", "CONSUMABLES"};
+                    R.id.filter_armor, R.id.filter_consumables, R.id.filter_perks};
+            String[] filters = {"ALL", "WEAPONS", "ARMOR", "CONSUMABLES", "PERKS"};
 
             for (int i = 0; i < ids.length; i++) {
                 TextView t = dialog.findViewById(ids[i]);
@@ -2685,10 +2859,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (f.equals("ALL") || f.equals("WEAPONS")) items.addAll(weapons);
         if (f.equals("ALL") || f.equals("ARMOR")) items.addAll(inventoryArmors);
         if (f.equals("ALL") || f.equals("CONSUMABLES")) items.addAll(consumableInventory);
-        // Stable sorts, so ties keep the weapons / armor / consumables order
-        if (inventorySort.equals("Name"))
+        boolean perkTab = f.equals("PERKS");
+        if (perkTab) {
+            for (Perk p : Perk.values()) if (stacks(p) > 0) items.add(p);
+        }
+        // Stable sorts, so ties keep the weapons / armor / consumables order; perks keep theirs
+        if (!perkTab && inventorySort.equals("Name"))
             items.sort((a, b) -> itemName(a).compareToIgnoreCase(itemName(b)));
-        else if (!inventorySort.equals("Type"))
+        else if (!perkTab && !inventorySort.equals("Type"))
             items.sort((a, b) -> Float.compare(sortValue(b), sortValue(a)));
 
         // As many square cells as fit: rows of at least 80dp, at least 4 per row
@@ -2710,6 +2888,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             Object item = items.get(i);
             if (item instanceof Weapon) addWeaponRow(row, dialog, (Weapon) item);
             else if (item instanceof Armor) addArmorRow(row, dialog, (Armor) item);
+            else if (item instanceof Perk) addPerkCell(row, (Perk) item);
             else addConsumableRow(row, dialog, (ConsumableStack) item);
         }
 
@@ -2723,7 +2902,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         if (items.isEmpty()) {
             TextView empty = new TextView(this);
-            empty.setText("Nothing here...");
+            empty.setText(perkTab ? "No blessings yet. Level up to earn one." : "Nothing here...");
             empty.setTextColor(ContextCompat.getColor(this, R.color.bone_muted));
             empty.setTextSize(16f);
             empty.setGravity(android.view.Gravity.CENTER);
@@ -2772,6 +2951,61 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         updateGoldHUD();
         soundManager.playCoinPickup();
         Toast.makeText(this, "Sold " + itemName + " for " + amount + " gold", Toast.LENGTH_SHORT).show();
+    }
+
+    /** Co-op: a Gift button that hands the item (one, for a potion stack) to a teammate picked from a list. */
+    private void setupGiftButton(Dialog detail, Object item, String name, Runnable removeItem) {
+        if (coop == null || coop.others.isEmpty()) return;
+        MaterialButton gift = detail.findViewById(R.id.btn_gift);
+        gift.setVisibility(View.VISIBLE);
+        gift.setOnClickListener(v -> {
+            List<String> ids = new ArrayList<>(coop.others.keySet());
+            String[] names = new String[ids.size()];
+            for (int i = 0; i < names.length; i++) {
+                CoopSession.RemotePlayer r = coop.others.get(ids.get(i));
+                names[i] = r != null ? r.name : "Teammate";
+            }
+            android.app.AlertDialog picker = new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
+                    .setTitle("Gift " + name + " to...")
+                    .setItems(names, (d, which) -> {
+                        String json = giftJson(item);
+                        if (json == null) return;
+                        coop.sendGift(ids.get(which), json);
+                        removeItem.run();
+                        Toast.makeText(this, "Gave " + name + " to " + names[which], Toast.LENGTH_SHORT).show();
+                    })
+                    .create();
+            picker.show();
+            hideSystemUIOnWindow(picker.getWindow());
+        });
+    }
+
+    /** The item as JSON for a teammate's phone; null if it can't be written. */
+    private String giftJson(Object item) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            if (item instanceof Weapon) {
+                Weapon w = (Weapon) item;
+                o.put("kind", "W").put("name", w.name).put("damage", w.damage).put("range", w.range)
+                        .put("cooldown", w.cooldown).put("rarity", w.rarity.name()).put("color", w.color)
+                        .put("knockback", w.knockback).put("projectile", w.isProjectile);
+            } else if (item instanceof Armor) {
+                Armor a = (Armor) item;
+                o.put("kind", "A").put("name", a.name).put("defense", a.defense)
+                        .put("maxDurability", a.maxDurability).put("durability", a.durability)
+                        .put("rarity", a.rarity.name()).put("color", a.color).put("slot", a.slot.name())
+                        .put("worn", a.worn);
+            } else {
+                ShopItem s = ((ConsumableStack) item).item;
+                o.put("kind", "C").put("name", s.name).put("effect", s.effect).put("effectValue", s.effectValue)
+                        .put("rarity", s.rarity).put("color", s.color).put("price", s.price)
+                        .put("description", s.description);
+            }
+            return o.toString();
+        } catch (org.json.JSONException e) {
+            Log.e("Coop", "Gift not sent", e);
+            return null;
+        }
     }
 
     /** Asks before selling, since a sold item is gone for good. */
@@ -2836,6 +3070,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         setupFilterTab(dialog, R.id.filter_weapons,      "WEAPONS");
         setupFilterTab(dialog, R.id.filter_armor,        "ARMOR");
         setupFilterTab(dialog, R.id.filter_consumables,  "CONSUMABLES");
+        setupFilterTab(dialog, R.id.filter_perks,        "PERKS");
 
         updateEquippedDisplay(dialog);
         populateInventoryList(dialog);
@@ -2910,6 +3145,23 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         addCell(row, cell);
     }
 
+    /** One owned perk: its stacks and their combined effect, in the perk's colour. */
+    private void addPerkCell(LinearLayout row, Perk perk) {
+        View cell = getLayoutInflater().inflate(R.layout.dialog_inventory_item, row, false);
+        android.widget.ImageView icon = cell.findViewById(R.id.inv_item_icon);
+        icon.setImageResource(perk.icon);
+        icon.setImageTintList(android.content.res.ColorStateList.valueOf(perk.color));
+        TextView nameView = cell.findViewById(R.id.inv_item_name);
+        nameView.setText(perk.title);
+        nameView.setTextColor(perk.color);
+        ((TextView) cell.findViewById(R.id.inv_item_subtitle)).setText(perk.describe(stacks(perk)));
+        TextView quantityView = cell.findViewById(R.id.inv_item_quantity);
+        quantityView.setVisibility(View.VISIBLE);
+        quantityView.setText("x" + stacks(perk));
+        applyRarityBorder(cell, perk.color);
+        addCell(row, cell);
+    }
+
     private void addCell(LinearLayout row, View cell) {
         int gap = Math.round(4 * getResources().getDisplayMetrics().density);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -2949,18 +3201,22 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         int weaponValue = sellValue(weapon);
         btnSellWeapon.setText("Sell  +" + weaponValue);
         btnSellWeapon.setVisibility(isFists ? View.GONE : View.VISIBLE);
-        btnSellWeapon.setOnClickListener(v -> confirmSell(weapon.name, weaponValue, () -> {
+        Runnable removeWeapon = () -> {
             if (player.getWeapon() == weapon) {
                 player.equipWeapon(weapons.get(0)); // Re-equip Fists
                 refreshAttackUI();
             }
             weapons.remove(weapon);
             inventoryWeaponIds.remove(weaponFirestoreIds.remove(weapon));
-            earnGold(weaponValue, weapon.name);
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
             detail.dismiss();
+        };
+        btnSellWeapon.setOnClickListener(v -> confirmSell(weapon.name, weaponValue, () -> {
+            removeWeapon.run();
+            earnGold(weaponValue, weapon.name);
         }));
+        if (!isFists) setupGiftButton(detail, weapon, weapon.name, removeWeapon);
 
         detail.findViewById(R.id.btn_close_action).setOnClickListener(v -> detail.dismiss());
         detail.show();
@@ -2993,7 +3249,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         MaterialButton btnSellArmor = detail.findViewById(R.id.btn_remove);
         int armorValue = sellValue(armor);
         btnSellArmor.setText("Sell  +" + armorValue);
-        btnSellArmor.setOnClickListener(v -> confirmSell(armor.name, armorValue, () -> {
+        Runnable removeArmor = () -> {
             // Unequip if currently equipped
             if (equippedArmor.get(armor.slot) == armor) {
                 equippedArmor.remove(armor.slot);
@@ -3001,11 +3257,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
             inventoryArmors.remove(armor);
             inventoryArmorIds.remove(armorFirestoreIds.remove(armor));
-            earnGold(armorValue, armor.name);
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
             detail.dismiss();
+        };
+        btnSellArmor.setOnClickListener(v -> confirmSell(armor.name, armorValue, () -> {
+            removeArmor.run();
+            earnGold(armorValue, armor.name);
         }));
+        setupGiftButton(detail, armor, armor.name, removeArmor);
 
         detail.findViewById(R.id.btn_close_action).setOnClickListener(v -> detail.dismiss());
         detail.show();
@@ -3036,13 +3296,17 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         MaterialButton btnSellConsumable = detail.findViewById(R.id.btn_remove);
         int potionValue = sellValue(stack);
         btnSellConsumable.setText("Sell one  +" + potionValue);
-        btnSellConsumable.setOnClickListener(v -> confirmSell(stack.item.name, potionValue, () -> {
+        Runnable removeOne = () -> {
             if (stack.decrement()) consumableInventory.remove(stack);
-            earnGold(potionValue, stack.item.name);
             updatePotionButton();
             populateInventoryList(parentDialog);
             detail.dismiss();
+        };
+        btnSellConsumable.setOnClickListener(v -> confirmSell(stack.item.name, potionValue, () -> {
+            removeOne.run();
+            earnGold(potionValue, stack.item.name);
         }));
+        setupGiftButton(detail, stack, stack.item.name, removeOne);
 
         detail.findViewById(R.id.btn_close_action).setOnClickListener(v -> detail.dismiss());
         detail.show();
@@ -3238,41 +3502,215 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** XP needed to go from the current level to the next. */
     private int xpForNextLevel() {
-        return 20 + (playerLevel - 1) * 15;
+        return 30 + (playerLevel - 1) * 20;
     }
 
-    /** Player damage multiplier: +5% per level above 1. */
+    /** Level-up blessings: small on purpose, they add up over a long run. The stat word shows in its colour. */
+    private enum Perk {
+        MIGHT("Might", 1f, "%", "damage", 0xFFE04848, R.drawable.ic_crossed_swords),
+        VIGOR("Vigor", 5f, "", "max HP", 0xFF7AB85C, R.drawable.ic_heart),
+        SWIFTNESS("Swiftness", 1f, "%", "move speed", 0xFF4F8FFF, R.drawable.ic_boots),
+        KEEN_EYE("Keen Eye", 0.5f, "%", "crit chance", 0xFFFF9A3C, R.drawable.ic_target),
+        QUICK_HANDS("Quick Hands", 1f, "%", "attack speed", 0xFFE86AD0, R.drawable.ic_hourglass),
+        WHIRLWIND("Whirlwind", 1f, "%", "Spin recharge", 0xFF4FD8E0, R.drawable.ic_knockback),
+        SHADOW_STEP("Shadow Step", 1f, "%", "Dash recharge", 0xFFA070E8, R.drawable.ic_range),
+        IRON_SKIN("Iron Skin", 0.5f, "%", "damage resist", 0xFFB4BEC8, R.drawable.ic_shield),
+        GREED("Greed", 1f, "%", "gold", 0xFFF4D77A, R.drawable.ic_coin);
+
+        final String title, unit, stat;
+        final float step;
+        final int color, icon;
+
+        Perk(String title, float step, String unit, String stat, int color, int icon) {
+            this.title = title;
+            this.step = step;
+            this.unit = unit;
+            this.stat = stat;
+            this.color = color;
+            this.icon = icon;
+        }
+
+        /** "+3% damage" for that many stacks, with the stat in its colour. */
+        CharSequence describe(int stacks) {
+            float total = step * stacks;
+            String amount = "+" + (total == (int) total ? String.valueOf((int) total)
+                    : String.format(java.util.Locale.US, "%.1f", total)) + unit + " ";
+            android.text.SpannableString text = new android.text.SpannableString(amount + stat);
+            text.setSpan(new android.text.style.ForegroundColorSpan(color), amount.length(), text.length(),
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            return text;
+        }
+    }
+
+    private int stacks(Perk p) {
+        return perks[p.ordinal()];
+    }
+
+    /** Player damage multiplier: +5% per level above 1, +1% per Might. */
     private float damageMultiplier() {
-        return 1f + (playerLevel - 1) * 0.05f;
+        return 1f + (playerLevel - 1) * 0.05f + 0.01f * stacks(Perk.MIGHT);
     }
 
-    /** Max HP for a level: 100 at level 1, +10 per level. */
-    private static int maxHealthForLevel(int level) {
-        return 100 + (level - 1) * 10;
+    /** Max HP: 100 at level 1, +10 per level, +5 per Vigor. */
+    private int computeMaxHealth() {
+        return 100 + (playerLevel - 1) * 10 + 5 * stacks(Perk.VIGOR);
+    }
+
+    private float critChance() {
+        return CRIT_CHANCE + 0.005f * stacks(Perk.KEEN_EYE);
+    }
+
+    private long attackCooldown(Weapon w) {
+        return (long) (w.cooldown / (1f + 0.01f * stacks(Perk.QUICK_HANDS)));
+    }
+
+    private long spinCooldown() {
+        return (long) (SPIN_COOLDOWN / (1f + 0.01f * stacks(Perk.WHIRLWIND)));
+    }
+
+    private long dashCooldown() {
+        return (long) (DASH_COOLDOWN / (1f + 0.01f * stacks(Perk.SHADOW_STEP)));
+    }
+
+    /** Gold after Greed; the fraction becomes a chance at one more coin. */
+    private int withGreed(int gold) {
+        float total = gold * (1f + 0.01f * stacks(Perk.GREED));
+        int whole = (int) total;
+        return whole + (Math.random() < total - whole ? 1 : 0);
+    }
+
+    private void applySpeedPerk() {
+        player.speed = 10f * (1f + 0.01f * stacks(Perk.SWIFTNESS));
     }
 
     /**
      * Adds XP and handles level-ups (+10 max HP, +20 HP, +5% damage per level).
+     * Each level-up also earns a perk pick, waiting behind the badge.
      * Must run on the UI thread, like every other change to playerHealth.
      */
     private void gainXp(int amount) {
         playerXp += amount;
-        boolean leveledUp = false;
+        int gained = 0;
         while (playerXp >= xpForNextLevel()) {
             playerXp -= xpForNextLevel();
             playerLevel++;
-            leveledUp = true;
+            gained++;
         }
-        if (leveledUp) {
-            maxHealth = maxHealthForLevel(playerLevel);
+        if (gained > 0) {
+            maxHealth = computeMaxHealth();
             playerHealth = Math.min(maxHealth, playerHealth + 20);
             playerHealthBar.setMax(maxHealth);
             animateHealthBar(playerHealthBar.getProgress(), playerHealth);
             effects.banner(player.x, player.y - player.radius - 50f, "LEVEL " + playerLevel,
                     Color.rgb(255, 215, 0));
             effects.burst(player.x, player.y, Color.rgb(255, 215, 0), 30, 10f);
+            pendingPerks += gained;
+            updateLevelBadge();
         }
         updateLevelHUD();
+    }
+
+    /** The pulsing "Level up!" badge, shown while perk picks are waiting. */
+    private void updateLevelBadge() {
+        if (pendingPerks <= 0) {
+            btnLevelUp.setVisibility(View.GONE);
+            if (levelBadgePulse != null) levelBadgePulse.cancel();
+            return;
+        }
+        btnLevelUp.setText(pendingPerks > 1 ? "Level up! x" + pendingPerks : "Level up!");
+        if (btnLevelUp.getVisibility() == View.VISIBLE) return;
+        btnLevelUp.setVisibility(View.VISIBLE);
+        levelBadgePulse = ObjectAnimator.ofPropertyValuesHolder(btnLevelUp,
+                android.animation.PropertyValuesHolder.ofFloat("scaleX", 1f, 1.08f),
+                android.animation.PropertyValuesHolder.ofFloat("scaleY", 1f, 1.08f));
+        levelBadgePulse.setDuration(550);
+        levelBadgePulse.setRepeatCount(ObjectAnimator.INFINITE);
+        levelBadgePulse.setRepeatMode(ObjectAnimator.REVERSE);
+        levelBadgePulse.start();
+    }
+
+    /**
+     * Level-up cards: three random perks grow in face down, flip one by one from left to right,
+     * and only then can one be picked. Solo pauses while choosing; co-op keeps running.
+     */
+    private void showPerkDialog() {
+        if (pendingPerks <= 0 || perkDialogOpen) return;
+        perkDialogOpen = true;
+        if (coop == null) isGamePaused = true;
+
+        Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dialog.setContentView(R.layout.dialog_level_up);
+        dialog.setCancelable(false);
+        if (dialog.getWindow() != null)
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        ((TextView) dialog.findViewById(R.id.txt_perk_title)).setText("Level " + playerLevel);
+
+        List<Perk> offer = new ArrayList<>(java.util.Arrays.asList(Perk.values()));
+        Collections.shuffle(offer);
+        LinearLayout row = dialog.findViewById(R.id.perk_cards);
+        boolean[] ready = {false};
+        float cameraDistance = 8000f * getResources().getDisplayMetrics().density;
+        for (int i = 0; i < 3; i++) {
+            Perk perk = offer.get(i);
+            boolean last = i == 2;
+            View card = getLayoutInflater().inflate(R.layout.item_perk_card, row, false);
+            bindPerkCard(card, perk);
+            card.setCameraDistance(cameraDistance);
+            card.setScaleX(0f);
+            card.setScaleY(0f);
+            card.setOnClickListener(v -> { if (ready[0]) choosePerk(dialog, perk); });
+            row.addView(card);
+            card.animate().scaleX(1f).scaleY(1f).setStartDelay(i * 90L).setDuration(320)
+                    .setInterpolator(new android.view.animation.OvershootInterpolator(1.2f)).start();
+            card.postDelayed(() -> flipCard(card, () -> { if (last) ready[0] = true; }), 650 + i * 380L);
+        }
+        dialog.show();
+        hideSystemUIOnWindow(dialog.getWindow());
+    }
+
+    private void bindPerkCard(View card, Perk perk) {
+        android.widget.ImageView icon = card.findViewById(R.id.perk_icon);
+        icon.setImageResource(perk.icon);
+        icon.setImageTintList(android.content.res.ColorStateList.valueOf(perk.color));
+        ((TextView) card.findViewById(R.id.perk_name)).setText(perk.title);
+        ((TextView) card.findViewById(R.id.perk_desc)).setText(perk.describe(1));
+        ((TextView) card.findViewById(R.id.perk_owned)).setText("Owned: " + stacks(perk));
+    }
+
+    /** Turns a card edge-on, swaps its back for its front, then turns it face up. */
+    private void flipCard(View card, Runnable done) {
+        soundManager.playSwingMelee();
+        card.animate().rotationY(90f).setStartDelay(0).setDuration(170)
+                .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                .withEndAction(() -> {
+                    card.findViewById(R.id.perk_back).setVisibility(View.INVISIBLE);
+                    card.findViewById(R.id.perk_front).setVisibility(View.VISIBLE);
+                    card.setRotationY(-90f);
+                    card.animate().rotationY(0f).setStartDelay(0).setDuration(170)
+                            .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                            .withEndAction(done).start();
+                }).start();
+    }
+
+    /** Applies the picked perk; the badge stays while more picks are waiting. */
+    private void choosePerk(Dialog dialog, Perk perk) {
+        dialog.dismiss();
+        perkDialogOpen = false;
+        pendingPerks--;
+        perks[perk.ordinal()]++;
+        if (perk == Perk.VIGOR) {
+            maxHealth = computeMaxHealth();
+            int old = playerHealth;
+            playerHealth = Math.min(maxHealth, playerHealth + 5);
+            playerHealthBar.setMax(maxHealth);
+            animateHealthBar(old, playerHealth);
+        }
+        applySpeedPerk();
+        updateLevelBadge();
+        effects.banner(player.x, player.y - player.radius - 50f, perk.title, perk.color);
+        soundManager.playCoinPickup();
+        if (coop == null) isGamePaused = false;
+        hideSystemUI();
     }
 
     private void updateLevelHUD() {
@@ -3587,6 +4025,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         save.put("playtimeSeconds",      playtime);
         save.put("level",                playerLevel);
         save.put("xp",                   playerXp);
+        List<Integer> perkStacks = new ArrayList<>();
+        for (int stack : perks) perkStacks.add(stack);
+        save.put("perks",                perkStacks);
+        save.put("pendingPerks",         pendingPerks);
         dbManager.updateGameSave(gameId, save);
     }
 
@@ -3628,6 +4070,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                             currentLayout.exitRoom.centerY());
                 }
                 spawnEnemiesForLayout(currentLayout);
+                spawnRoomChest();
 
                 // Restore health / armor / gold
                 playerHealth = data.get("health") != null
@@ -3640,7 +4083,18 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         ? ((Number) data.get("level")).intValue() : 1;
                 playerXp = data.get("xp") != null
                         ? ((Number) data.get("xp")).intValue() : 0;
-                maxHealth = maxHealthForLevel(playerLevel);
+                // Perk stacks by Perk order; older saves have none
+                Object savedPerks = data.get("perks");
+                if (savedPerks instanceof List) {
+                    List<?> list = (List<?>) savedPerks;
+                    for (int i = 0; i < Math.min(list.size(), perks.length); i++)
+                        perks[i] = ((Number) list.get(i)).intValue();
+                }
+                pendingPerks = data.get("pendingPerks") != null
+                        ? ((Number) data.get("pendingPerks")).intValue() : 0;
+                applySpeedPerk();
+                updateLevelBadge();
+                maxHealth = computeMaxHealth();
 
                 if (data.get("playtimeSeconds") != null)
                     gameStartTime -= ((Number) data.get("playtimeSeconds")).longValue() * 1000L;

@@ -149,6 +149,19 @@
             app:icon="@drawable/ic_coin"
             tools:ignore="HardcodedText"/>
 
+        <!-- Co-op only: hand this item to a teammate -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_gift"
+            style="@style/OD.Button.Secondary"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/touch_min"
+            android:layout_marginTop="@dimen/space_sm"
+            android:text="Gift to a teammate"
+            android:textSize="@dimen/text_small"
+            app:icon="@drawable/ic_trophy"
+            android:visibility="gone"
+            tools:ignore="HardcodedText"/>
+
         </LinearLayout>
 
         <View
