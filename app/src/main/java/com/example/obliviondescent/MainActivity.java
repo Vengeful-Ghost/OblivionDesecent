@@ -14,7 +14,6 @@ import android.view.ViewTreeObserver;
 import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -128,7 +127,7 @@ public class MainActivity extends AppCompatActivity {
             db.checkUsername(user, exists -> {
                 if (!exists) {
                     hideLoading();
-                    Toast.makeText(MainActivity.this, "Username not found", Toast.LENGTH_SHORT).show();
+                    usernameLayout.setError("Username not found");
                     return;
                 }
 
@@ -147,7 +146,7 @@ public class MainActivity extends AppCompatActivity {
                         startActivity(intent);
                         finish();
                     } else {
-                        Toast.makeText(MainActivity.this, "Incorrect password", Toast.LENGTH_SHORT).show();
+                        passwordLayout.setError("Incorrect password");
                     }
                 });
             });

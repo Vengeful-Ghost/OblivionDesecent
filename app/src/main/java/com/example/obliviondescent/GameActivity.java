@@ -13,7 +13,6 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.HashMap;
@@ -157,6 +156,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private float dashDX = 0f;
     private float dashDY = 0f;
 
+    // Perfect dodge: an attack meets the player early in a dash
+    private long lastPerfectDodge = 0;
+    private volatile long perfectCritUntil = 0; // hits are sure crits until then
+
+    // Hit-stop freezes the world for a few frames; slow-mo runs it at a fraction of real speed
+    private volatile long hitStopUntil = 0, slowMoUntil = 0;
+    private volatile float slowMoScale = 1f;
+
     // Stats
     private StatsManager statsManager;
     private DBManager dbManager;
@@ -170,6 +177,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private List<GoldCoin> goldCoins = Collections.synchronizedList(new ArrayList<>());
 
     private TextView txtGold;
+
+    // Keys open vault gates
+    private int keys = 0;
+    private TextView txtKeys;
+    private long lastLockedHint = 0;
 
     private Enemy activeBoss = null;
     private boolean bossSpawnHandled = false;
@@ -294,6 +306,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         menuBtn = findViewById(R.id.btn_menu);
         btnDash = findViewById(R.id.btn_dash);
         txtGold = findViewById(R.id.txt_gold);
+        txtKeys = findViewById(R.id.txt_keys);
         dashCooldownView = findViewById(R.id.dash_cooldown_view);
         spinCooldownView = findViewById(R.id.spin_cooldown_view);
         btnPotion = findViewById(R.id.btn_potion);
@@ -706,8 +719,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     purchaseItem(potion); // stacks with matching potions
             }
             CoopSession.RemotePlayer from = coop.others.get(fromUid);
-            Toast.makeText(this, (from != null ? from.name : "A teammate") + " gave you " + name,
-                    Toast.LENGTH_SHORT).show();
+            effects.banner(player.x, player.y - player.radius - 50f,
+                    "GIFT FROM " + (from != null ? from.name : "A TEAMMATE").toUpperCase(), Color.rgb(244, 215, 122));
+            effects.number(player.x, player.y - player.radius - 10f, name, Color.WHITE);
             soundManager.playCoinPickup();
         } catch (org.json.JSONException | IllegalArgumentException e) {
             Log.e("Coop", "Bad gift: " + json, e);
@@ -720,17 +734,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (isFinishing()) return;
         coopEnded = true;
         isGamePaused = true;
-        new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
-                .setTitle("Run over")
-                .setMessage(reason)
-                .setCancelable(false)
-                .setPositiveButton("Main Menu", (dialog, which) -> {
-                    leaveCoop();
-                    SoundManager.stopGameMusic();
-                    startActivity(new Intent(this, MenuActivity.class));
-                    finish();
-                })
-                .show();
+        showGameOverDialog(reason);
     }
 
     /** Leaves the run once; the host also deletes the lobby it started from. */
@@ -752,7 +756,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             long backlog = 0;
             while (threadsRunning) {
                 long current = System.nanoTime();
-                backlog += current - previous;
+                backlog += (long) ((current - previous) * timeScale());
                 previous = current;
 
                 // Boss death detection runs even while paused to avoid missing kills
@@ -771,6 +775,24 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 try { Thread.sleep(sleepMs); } catch (InterruptedException ignored) {}
             }
         }).start();
+    }
+
+    private float timeScale() {
+        long now = System.currentTimeMillis();
+        if (now < hitStopUntil) return 0f;
+        return now < slowMoUntil ? slowMoScale : 1f;
+    }
+
+    /** Freezes the world for a moment so a heavy hit lands with weight. */
+    private void hitStop(long ms) {
+        hitStopUntil = Math.max(hitStopUntil, System.currentTimeMillis() + ms);
+    }
+
+    /** Solo only: in co-op the world is shared, so it can't slow down for one player. */
+    private void slowMo(long ms, float scale) {
+        if (coop != null) return;
+        slowMoScale = scale;
+        slowMoUntil = System.currentTimeMillis() + ms;
     }
 
     /**
@@ -897,6 +919,17 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         resolveCollisions();
 
+        // Dynamic music: awake enemies close by push the soundtrack up, a boss maxes it
+        float fight = 0f;
+        synchronized (enemies) {
+            for (Enemy e : enemies) {
+                if (e.isDead || !e.isAwake) continue;
+                if (e.type == Enemy.Type.BOSS) fight += 3f;
+                else if (getDistance(player.x, player.y, e.x, e.y) < 900f) fight += 1f;
+            }
+        }
+        SoundManager.setGameIntensity(inShopRoom ? 0f : Math.min(1f, fight / 3f));
+
         // --- 4. Enemy strikes and shots that finished their wind-up ---
         resolveEnemyAttacks(now);
 
@@ -911,6 +944,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         checkGoldCollection();
         checkChestInteraction();
+        checkVault(now);
 
         cleanupDeadEnemies();
         checkPortalCollision();
@@ -1213,8 +1247,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     batchesInFlight.remove(rangeStart);
                     if (coop != null) coop.publishBatch(rangeStart, "fallback");
                     runOnUiThread(() -> {
-                        Toast.makeText(GameActivity.this, "AI content unavailable (" + error
-                                + ") — using classic content", Toast.LENGTH_LONG).show();
+                        Log.w("Batch", "AI content unavailable (" + error + "), using classic content");
+                        effects.banner(player.x, player.y - player.radius - 50f, "CLASSIC CONTENT",
+                                Color.rgb(184, 172, 145));
                         applyBatchToCurrentFloorIfReady(rangeStart);
                     });
                     return;
@@ -1360,9 +1395,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * Adds a damage number, screen shake, vibration and knockback away from the source.
      */
     private void hitPlayer(int damage, float fromX, float fromY, float knockback, long now) {
-        if (now < invulnerableUntil || playerHealth <= 0) return;
+        if (playerHealth <= 0) return;
+        if (now < invulnerableUntil) {
+            checkPerfectDodge(now);
+            return;
+        }
         damage = Math.max(1, Math.round(damage * (1f - 0.005f * perks[Perk.IRON_SKIN.ordinal()])));
         invulnerableUntil = now + HIT_INVULNERABILITY;
+        hitStop(60);
         player.flashUntil = now + 150;
         damagePlayer(damage);
         effects.number(player.x, player.y - player.radius, "-" + damage, Color.rgb(255, 80, 80));
@@ -1404,6 +1444,25 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /**
+     * An attack met the player in the first moments of a dash: time slows, the dash recharges
+     * and the next hits are sure crits.
+     */
+    private void checkPerfectDodge(long now) {
+        if (now - dashStartTime > DASH_DURATION + 80 || now - lastPerfectDodge < 1000) return;
+        lastPerfectDodge = now;
+        lastDashTime = 0;
+        perfectCritUntil = now + 1500;
+        // Slow-mo must not leave the player standing in the attack once the dash ends
+        invulnerableUntil = Math.max(invulnerableUntil, now + 900);
+        int blue = Color.rgb(120, 200, 255);
+        effects.banner(player.x, player.y - player.radius - 50f, "PERFECT", blue);
+        effects.burst(player.x, player.y, blue, 24, 9f);
+        effects.slash(player.x, player.y, 0f, player.radius + 90f, 180f, blue);
+        soundManager.playDash();
+        slowMo(600, 0.35f);
+    }
+
+    /**
      * Deals the player's damage to an enemy. A co-op guest only shows the hit and reports it;
      * the host applies it to the real enemy.
      */
@@ -1411,6 +1470,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         soundManager.playHitEnemy();
         statsManager.onDamageGiven(damage);
         showEnemyHit(e, damage, crit);
+        if (crit || stagger) hitStop(crit ? 70 : 45);
         if (isGuest()) {
             e.predictHit(damage);
             if (e.isDead) deadEnemyAt.put(e.id, System.currentTimeMillis());
@@ -1492,8 +1552,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 player.startDeathAnimation();
                 effects.poof(player.x, player.y, player.getColor());
                 statsManager.onPlayerDied();
-                Toast.makeText(this, "You fell! You'll revive when your party reaches the next floor.",
-                        Toast.LENGTH_LONG).show();
+                effects.banner(player.x, player.y - player.radius - 50f, "YOU FELL", Color.rgb(224, 72, 72));
+                effects.number(player.x, player.y - player.radius - 10f, "Revive on the next floor", Color.WHITE);
             } else if (playerHealth <= 0) {
                 isGamePaused = true;
                 player.startDeathAnimation();
@@ -1501,7 +1561,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 statsManager.onPlayerDied();
                 statsManager.flush();
                 new android.os.Handler().postDelayed(
-                        this::showGameOverDialog, player.getDeathDuration());
+                        () -> showGameOverDialog(null), player.getDeathDuration());
             }
         });
     }
@@ -1584,6 +1644,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         spawnRoomChest();
         effects.clear();
         invulnerableUntil = 0;
+        statsManager.startRun();
 
         runOnUiThread(() -> {
             playerHealthBar.setProgress(playerHealth);
@@ -1611,7 +1672,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     if (!isGuest() && !e.mimic && !e.summoned) floorManager.onEnemyKilled(player.x, player.y);
                     statsManager.onEnemyKilled();
                     effects.burst(e.x, e.y, e.getColor(), e.type == Enemy.Type.BOSS ? 60 : 16, 9f);
+                    hitStop(50);
                     if (e.mimic) dropLootChest(e.x, e.y);
+                    // Keys: elites, mimics and bosses always drop one, others now and then
+                    if (e.elite || e.mimic || e.type == Enemy.Type.BOSS || (!e.summoned && Math.random() < 0.04))
+                        gainKey(e.x, e.y);
                     if (!e.noGoldDrop)
                     {
                         spawnGoldCoins(e.x, e.y, withGreed(e.getGoldDrop()));
@@ -1868,10 +1933,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 if (p.isDead) continue;
 
                 if (p.hostile) {
-                    if (now >= invulnerableUntil
-                            && getDistance(p.x, p.y, player.x, player.y) < p.getRadius() + player.radius) {
-                        p.isDead = true;
-                        hitPlayer(p.damage, p.x, p.y, p.knockback, now);
+                    if (getDistance(p.x, p.y, player.x, player.y) < p.getRadius() + player.radius) {
+                        if (now < invulnerableUntil) {
+                            checkPerfectDodge(now); // dashing through it
+                        } else {
+                            p.isDead = true;
+                            hitPlayer(p.damage, p.x, p.y, p.knockback, now);
+                        }
                     }
                     continue;
                 }
@@ -2495,6 +2563,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         soundManager.playBossDeath();
         statsManager.onBossKilled();
         behaviorTracker.onBossKilled();
+        // The killing blow lingers: slow motion (solo) and a camera punch-in
+        slowMo(1300, 0.25f);
+        gameDisplay.punchZoom(1300, 0.18f);
+        if (camera != null) camera.startShake(400, 16f);
         spawnTreasureChests(activeBoss.x, activeBoss.y);
     }
 
@@ -2634,6 +2706,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     /** A random item from this floor range's shop pool; left empty until the AI content arrives. */
     private void pickChestReward(TreasureChest chest) {
         List<ShopItem> pool = getChestItemPool(floorManager.getCurrentFloor());
+        if (chest.vault) {
+            // Vault: only the rarest items on offer
+            List<String> order = java.util.Arrays.asList("COMMON", "RARE", "EPIC", "LEGENDARY");
+            int best = -1;
+            for (ShopItem s : pool) best = Math.max(best, order.indexOf(String.valueOf(s.rarity).toUpperCase()));
+            List<ShopItem> top = new ArrayList<>();
+            for (ShopItem s : pool) if (order.indexOf(String.valueOf(s.rarity).toUpperCase()) == best) top.add(s);
+            pool = top;
+        }
         if (pool.isEmpty()) return;
         ShopItem reward = pool.get((int) (Math.random() * pool.size()));
         chest.rewardItem      = reward;
@@ -2641,18 +2722,20 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         chest.rewardItemColor = getRarityColor(reward.rarity);
     }
 
-    /** The treasure room's chest, if this floor has one; every phone gets its own. */
+    /** The treasure room's and the vault's chests, if this floor has them; every phone gets its own. */
     private void spawnRoomChest() {
         synchronized (treasureChests) {
             treasureChests.clear();
-            Room room = currentLayout.treasureRoom;
-            if (room == null) return;
-            TreasureChest chest = new TreasureChest(room.centerX(), room.centerY(),
-                    room.centerX(), room.centerY(), 0L);
-            chest.landed = true; // already sitting there, no landing burst
-            chest.mimic = currentLayout.treasureMimic;
-            pickChestReward(chest);
-            treasureChests.add(chest);
+            for (Room room : new Room[]{currentLayout.treasureRoom, currentLayout.vaultRoom}) {
+                if (room == null) continue;
+                TreasureChest chest = new TreasureChest(room.centerX(), room.centerY(),
+                        room.centerX(), room.centerY(), 0L);
+                chest.landed = true; // already sitting there, no landing burst
+                chest.vault = room == currentLayout.vaultRoom;
+                chest.mimic = !chest.vault && currentLayout.treasureMimic;
+                pickChestReward(chest);
+                treasureChests.add(chest);
+            }
         }
     }
 
@@ -2739,6 +2822,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     effects.burst(chest.x, chest.y - 10, chest.rewardItemColor, 28, 11f);
                     effects.burst(chest.x, chest.y - 10, gold, 14, 7f);
                     effects.slash(chest.x, chest.y, 0f, 80f, 180f, chest.rewardItemColor);
+                    if (chest.vault) spawnGoldCoins(chest.x, chest.y + 60f, withGreed(8 + floorManager.getCurrentFloor()));
                     if (chest.rewardItem != null) {
                         final ShopItem reward = chest.rewardItem;
                         runOnUiThread(() -> purchaseItem(reward));
@@ -2747,6 +2831,45 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
         }
         if (woke != null) awakenMimic(woke);
+    }
+
+    /** A key for vault gates; every phone gets its own. */
+    private void gainKey(float x, float y) {
+        keys++;
+        effects.banner(x, y - 70f, "+1 KEY", Color.rgb(244, 215, 122));
+        updateKeysHUD();
+    }
+
+    private void updateKeysHUD() {
+        int count = keys;
+        runOnUiThread(() -> {
+            txtKeys.setText(String.valueOf(count));
+            txtKeys.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+        });
+    }
+
+    /** Opens the floor's vault gate when the player walks up to it holding a key. */
+    private void checkVault(long now) {
+        FloorLayout layout = currentLayout;
+        if (layout == null || inShopRoom || !layout.vaultLocked || playerHealth <= 0) return;
+        float[] g = layout.vaultGate;
+        float gx = (g[0] + g[2]) / 2f, gy = (g[1] + g[3]) / 2f;
+        if (getDistance(player.x, player.y, gx, gy) > player.radius + 120f) return;
+        int gold = Color.rgb(244, 215, 122);
+        if (keys <= 0) {
+            if (now - lastLockedHint > 2500) {
+                lastLockedHint = now;
+                effects.banner(gx, gy - 60f, "NEEDS A KEY", Color.rgb(184, 172, 145));
+            }
+            return;
+        }
+        keys--;
+        updateKeysHUD();
+        layout.vaultLocked = false;
+        effects.burst(gx, gy, gold, 30, 10f);
+        effects.banner(gx, gy - 60f, "VAULT OPEN", gold);
+        if (camera != null) camera.startShake(200, 8f);
+        soundManager.playChestOpen();
     }
 
     // ─── DIALOGS ──────────────────────────────────────────────────────────────
@@ -2946,11 +3069,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return Math.max(1, Math.round((5 + a.defense * 2) * SELL_RARITY[a.rarity.ordinal()] * wear));
     }
 
-    private void earnGold(int amount, String itemName) {
+    private void earnGold(int amount) {
         playerGold += amount;
         updateGoldHUD();
         soundManager.playCoinPickup();
-        Toast.makeText(this, "Sold " + itemName + " for " + amount + " gold", Toast.LENGTH_SHORT).show();
     }
 
     /** Co-op: a Gift button that hands the item (one, for a potion stack) to a teammate picked from a list. */
@@ -2965,18 +3087,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 CoopSession.RemotePlayer r = coop.others.get(ids.get(i));
                 names[i] = r != null ? r.name : "Teammate";
             }
-            android.app.AlertDialog picker = new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
-                    .setTitle("Gift " + name + " to...")
-                    .setItems(names, (d, which) -> {
-                        String json = giftJson(item);
-                        if (json == null) return;
-                        coop.sendGift(ids.get(which), json);
-                        removeItem.run();
-                        Toast.makeText(this, "Gave " + name + " to " + names[which], Toast.LENGTH_SHORT).show();
-                    })
-                    .create();
-            picker.show();
-            hideSystemUIOnWindow(picker.getWindow());
+            showChoice("Gift " + name + " to...", names, -1, which -> {
+                String json = giftJson(item);
+                if (json == null) return;
+                coop.sendGift(ids.get(which), json);
+                removeItem.run();
+            });
         });
     }
 
@@ -3010,30 +3126,76 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Asks before selling, since a sold item is gone for good. */
     private void confirmSell(String itemName, int amount, Runnable sell) {
-        android.app.AlertDialog confirm = new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
-                .setTitle("Sell " + itemName + " for " + amount + " gold?")
-                .setMessage("Are you sure? You will lose this item when you sell it.")
-                .setPositiveButton("Sell", (d, which) -> sell.run())
-                .setNegativeButton("Keep", null)
-                .create();
+        Dialog confirm = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        confirm.setContentView(R.layout.dialog_confirm);
+        if (confirm.getWindow() != null)
+            confirm.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        ((android.widget.ImageView) confirm.findViewById(R.id.confirm_icon)).setImageResource(R.drawable.ic_coin);
+        ((TextView) confirm.findViewById(R.id.confirm_title)).setText("Sell " + itemName + "?");
+        ((TextView) confirm.findViewById(R.id.confirm_message)).setText(
+                "You'll get " + amount + " gold, but the item is gone for good.");
+        confirm.findViewById(R.id.btn_confirm_no).setOnClickListener(v -> confirm.dismiss());
+        confirm.findViewById(R.id.btn_confirm_yes).setOnClickListener(v -> {
+            confirm.dismiss();
+            sell.run();
+        });
         confirm.show();
         hideSystemUIOnWindow(confirm.getWindow());
     }
 
-    private void showSortPicker(Dialog dialog, MaterialButton sortBtn) {
-        android.app.AlertDialog picker = new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
-                .setTitle("Sort by")
-                .setSingleChoiceItems(SORT_KEYS, java.util.Arrays.asList(SORT_KEYS).indexOf(inventorySort),
-                        (d, which) -> {
-                            inventorySort = SORT_KEYS[which];
-                            inventoryPage = 0;
-                            sortBtn.setText("Sort: " + inventorySort);
-                            populateInventoryList(dialog);
-                            d.dismiss();
-                        })
-                .create();
+    /** Pick-one card: options in rows of four, the current one (if any) lit gold. */
+    private void showChoice(String title, String[] options, int selected, java.util.function.IntConsumer onPick) {
+        Dialog picker = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        picker.setContentView(R.layout.dialog_choice);
+        if (picker.getWindow() != null)
+            picker.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        ((TextView) picker.findViewById(R.id.choice_title)).setText(title);
+        picker.findViewById(R.id.btn_close_choice).setOnClickListener(v -> picker.dismiss());
+
+        LinearLayout list = picker.findViewById(R.id.choice_options);
+        int gap = getResources().getDimensionPixelSize(R.dimen.space_sm);
+        LinearLayout row = null;
+        for (int i = 0; i < options.length; i++) {
+            if (i % 4 == 0) {
+                row = new LinearLayout(this);
+                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                if (i > 0) rowLp.topMargin = gap;
+                list.addView(row, rowLp);
+            }
+            TextView option = new TextView(this, null, 0, R.style.OD_Text_Tab);
+            option.setText(options[i]);
+            option.setMaxLines(1);
+            option.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            option.setBackgroundResource(i == selected ? R.drawable.btn_login : R.drawable.btn_gothic_secondary);
+            option.setTextColor(ContextCompat.getColor(this, i == selected ? R.color.gold_glow : R.color.gold_bright));
+            int which = i;
+            option.setOnClickListener(v -> {
+                picker.dismiss();
+                onPick.accept(which);
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
+                    getResources().getDimensionPixelSize(R.dimen.touch_min), 1f);
+            if (i % 4 > 0) lp.leftMargin = gap;
+            row.addView(option, lp);
+        }
+        // Pad the last row so its options keep the same width
+        for (int i = options.length; i % 4 != 0; i++) {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, 1, 1f);
+            lp.leftMargin = gap;
+            row.addView(new View(this), lp);
+        }
         picker.show();
         hideSystemUIOnWindow(picker.getWindow());
+    }
+
+    private void showSortPicker(Dialog dialog, MaterialButton sortBtn) {
+        showChoice("Sort by", SORT_KEYS, java.util.Arrays.asList(SORT_KEYS).indexOf(inventorySort), which -> {
+            inventorySort = SORT_KEYS[which];
+            inventoryPage = 0;
+            sortBtn.setText("Sort: " + inventorySort);
+            populateInventoryList(dialog);
+        });
     }
 
     private void showInventoryDialog() {
@@ -3193,7 +3355,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
             detail.dismiss();
-            Toast.makeText(this, "Equipped: " + weapon.name, Toast.LENGTH_SHORT).show();
         });
 
         MaterialButton btnSellWeapon = detail.findViewById(R.id.btn_remove);
@@ -3214,7 +3375,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         };
         btnSellWeapon.setOnClickListener(v -> confirmSell(weapon.name, weaponValue, () -> {
             removeWeapon.run();
-            earnGold(weaponValue, weapon.name);
+            earnGold(weaponValue);
         }));
         if (!isFists) setupGiftButton(detail, weapon, weapon.name, removeWeapon);
 
@@ -3263,7 +3424,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         };
         btnSellArmor.setOnClickListener(v -> confirmSell(armor.name, armorValue, () -> {
             removeArmor.run();
-            earnGold(armorValue, armor.name);
+            earnGold(armorValue);
         }));
         setupGiftButton(detail, armor, armor.name, removeArmor);
 
@@ -3304,7 +3465,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         };
         btnSellConsumable.setOnClickListener(v -> confirmSell(stack.item.name, potionValue, () -> {
             removeOne.run();
-            earnGold(potionValue, stack.item.name);
+            earnGold(potionValue);
         }));
         setupGiftButton(detail, stack, stack.item.name, removeOne);
 
@@ -3438,9 +3599,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /**
-     * Shows the Game Over dialog with options: respawn from checkpoint, or return to menu.
+     * Shows the Game Over card with the run summary: respawn from checkpoint, or return to menu.
+     * In co-op (a reason given) the whole run is over, so it only offers the menu.
      */
-    private void showGameOverDialog() {
+    private void showGameOverDialog(String coopReason) {
         final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         dialog.setContentView(R.layout.dialog_game_over);
         dialog.setCancelable(false);
@@ -3450,6 +3612,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         TextView txtCheckpoint = dialog.findViewById(R.id.txt_checkpoint);
         txtCheckpoint.setText("Last checkpoint: Floor " + checkpointFloor);
+        fillRunSummary(dialog.findViewById(R.id.summary_grid));
 
         MaterialButton btnRespawn = dialog.findViewById(R.id.btn_respawn);
         btnRespawn.setOnClickListener(v -> {
@@ -3459,6 +3622,23 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         });
 
         MaterialButton btnMenu = dialog.findViewById(R.id.btn_game_over_menu);
+        if (coopReason != null) {
+            // Co-op: the run is over for the whole party, there is no respawn
+            ((TextView) dialog.findViewById(R.id.txt_over_title)).setText("RUN OVER");
+            ((TextView) dialog.findViewById(R.id.txt_over_message)).setText(coopReason);
+            txtCheckpoint.setVisibility(View.GONE);
+            btnRespawn.setVisibility(View.GONE);
+            btnMenu.setOnClickListener(v -> {
+                dialog.dismiss();
+                leaveCoop();
+                SoundManager.stopGameMusic();
+                startActivity(new Intent(this, MenuActivity.class));
+                finish();
+            });
+            dialog.show();
+            hideSystemUIOnWindow(dialog.getWindow());
+            return;
+        }
         btnMenu.setOnClickListener(v -> {
             dialog.dismiss();
             if (gameId != null && userId != null) {
@@ -3476,6 +3656,43 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         dialog.show();
         hideSystemUIOnWindow(dialog.getWindow());
+    }
+
+    /** Run summary: eight stat cards, two per row, for this life. */
+    private void fillRunSummary(LinearLayout grid) {
+        long secs = statsManager.getRunSeconds();
+        int perkCount = 0;
+        for (int s : perks) perkCount += s;
+        int[] icons = {R.drawable.ic_stairs, R.drawable.ic_level, R.drawable.ic_skull, R.drawable.ic_trophy,
+                R.drawable.ic_crossed_swords, R.drawable.ic_broken_heart, R.drawable.ic_coin, R.drawable.ic_hourglass};
+        String[] labels = {"Floor reached", "Level", "Kills", "Bosses slain",
+                "Damage dealt", "Damage taken", "Gold collected", "Time"};
+        String[] values = {
+                String.valueOf(floorManager.getCurrentFloor()),
+                playerLevel + (perkCount > 0 ? "  \u00b7  " + perkCount + " perks" : ""),
+                String.format(java.util.Locale.US, "%,d", statsManager.getRunKills()),
+                String.valueOf(statsManager.getRunBosses()),
+                String.format(java.util.Locale.US, "%,d", statsManager.getRunDamageGiven()),
+                String.format(java.util.Locale.US, "%,d", statsManager.getRunDamageTaken()),
+                String.format(java.util.Locale.US, "%,d", statsManager.getRunCoins()),
+                String.format(java.util.Locale.US, "%d:%02d", secs / 60, secs % 60)};
+        float dp = getResources().getDisplayMetrics().density;
+        int gap = Math.round(3 * dp);
+        LinearLayout row = null;
+        for (int i = 0; i < icons.length; i++) {
+            if (i % 2 == 0) {
+                row = new LinearLayout(this);
+                grid.addView(row, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, Math.round(46 * dp)));
+            }
+            View cell = getLayoutInflater().inflate(R.layout.item_stat_cell, row, false);
+            ((android.widget.ImageView) cell.findViewById(R.id.stat_icon)).setImageResource(icons[i]);
+            ((TextView) cell.findViewById(R.id.stat_label)).setText(labels[i]);
+            ((TextView) cell.findViewById(R.id.stat_value)).setText(values[i]);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+            lp.setMargins(gap, gap, gap, gap);
+            row.addView(cell, lp);
+        }
     }
 
     /**
@@ -3557,6 +3774,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     private float critChance() {
+        if (System.currentTimeMillis() < perfectCritUntil) return 1f;
         return CRIT_CHANCE + 0.005f * stacks(Perk.KEEN_EYE);
     }
 
@@ -4029,6 +4247,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         for (int stack : perks) perkStacks.add(stack);
         save.put("perks",                perkStacks);
         save.put("pendingPerks",         pendingPerks);
+        save.put("keys",                 keys);
         dbManager.updateGameSave(gameId, save);
     }
 
@@ -4092,6 +4311,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 }
                 pendingPerks = data.get("pendingPerks") != null
                         ? ((Number) data.get("pendingPerks")).intValue() : 0;
+                keys = data.get("keys") != null ? ((Number) data.get("keys")).intValue() : 0;
+                updateKeysHUD();
                 applySpeedPerk();
                 updateLevelBadge();
                 maxHealth = computeMaxHealth();

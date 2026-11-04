@@ -25,6 +25,12 @@ public class StatsManager {
     private long sessionStartMs = System.currentTimeMillis();
 
     /* ============================================================
+       RUN TOTALS — this life, for the run summary; flush() leaves them alone
+       ============================================================ */
+    private int runFloors, runKills, runBosses, runCoins, runDamageGiven, runDamageTaken;
+    private long runStartMs = System.currentTimeMillis();
+
+    /* ============================================================
        DEPENDENCIES
        ============================================================ */
     private final DBManager db;
@@ -53,16 +59,23 @@ public class StatsManager {
      */
     public void onFloorCleared(int newFloor) {
         floorsCleared++;
+        runFloors++;
         db.updateHighestFloor(userId, newFloor);
     }
 
-    public void onEnemyKilled()            { enemiesKilled++; }
-    public void onBossKilled()             { bossesKilled++; enemiesKilled++; }
+    public void onEnemyKilled()            { enemiesKilled++; runKills++; }
+    public void onBossKilled()             { bossesKilled++; enemiesKilled++; runBosses++; }
     public void onPlayerDied()             { timesDied++; }
-    public void onCoinCollected()          { coinsCollected++; }
+    public void onCoinCollected()          { coinsCollected++; runCoins++; }
     public void onCoinsSpent(int amount)   { coinsSpent += amount; }
-    public void onDamageGiven(int amount)  { damageGiven += amount; }
-    public void onDamageTaken(int amount)  { damageTaken += amount; }
+    public void onDamageGiven(int amount)  { damageGiven += amount; runDamageGiven += amount; }
+    public void onDamageTaken(int amount)  { damageTaken += amount; runDamageTaken += amount; }
+
+    /** Starts a fresh run summary, e.g. after a respawn. */
+    public void startRun() {
+        runFloors = runKills = runBosses = runCoins = runDamageGiven = runDamageTaken = 0;
+        runStartMs = System.currentTimeMillis();
+    }
 
     /* ============================================================
        GETTERS
@@ -76,6 +89,14 @@ public class StatsManager {
     public int  getCoinsSpent()     { return coinsSpent; }
     public int  getDamageGiven()    { return damageGiven; }
     public int  getDamageTaken()    { return damageTaken; }
+
+    public int  getRunFloors()       { return runFloors; }
+    public int  getRunKills()        { return runKills; }
+    public int  getRunBosses()       { return runBosses; }
+    public int  getRunCoins()        { return runCoins; }
+    public int  getRunDamageGiven()  { return runDamageGiven; }
+    public int  getRunDamageTaken()  { return runDamageTaken; }
+    public long getRunSeconds()      { return (System.currentTimeMillis() - runStartMs) / 1000; }
 
     public long getSessionPlaytimeSeconds() {
         return (System.currentTimeMillis() - sessionStartMs) / 1000;

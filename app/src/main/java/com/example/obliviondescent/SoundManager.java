@@ -108,6 +108,9 @@ public class SoundManager {
     private static MediaPlayer gamePlayer   = null;
     private static int         gameRefCount = 0;
     private static float       gameMusicVolume = 0.85f;
+    // Dynamic music: 0 calm .. 1 full fight; the track swells and quickens with it
+    private static float       gameIntensity = 0f;
+    private static int         volumeStep = -1, speedStep = -1;
 
     /** Increments the reference count and starts/resumes the in-game background music. */
     public static synchronized void registerGameMusic(Context context) {
@@ -117,7 +120,8 @@ public class SoundManager {
                     context.getApplicationContext(), R.raw.game_music);
             if (gamePlayer != null) {
                 gamePlayer.setLooping(true);
-                gamePlayer.setVolume(gameMusicVolume, gameMusicVolume);
+                gamePlayer.setVolume(gameVolume(), gameVolume());
+                speedStep = -1; // a fresh player plays at normal speed
             }
         }
         if (gamePlayer != null && !gamePlayer.isPlaying()) {
@@ -152,9 +156,36 @@ public class SoundManager {
     public static synchronized void setGameMusicVolume(float vol) {
         gameMusicVolume = Math.max(0f, Math.min(1f, vol));
         if (gamePlayer != null) {
-            try { gamePlayer.setVolume(gameMusicVolume, gameMusicVolume); }
+            try { gamePlayer.setVolume(gameVolume(), gameVolume()); }
             catch (Exception ignored) {}
         }
+    }
+
+    // The volume setting, softened while things are calm
+    private static float gameVolume() {
+        return gameMusicVolume * (0.6f + 0.4f * gameIntensity);
+    }
+
+    /**
+     * Eases the music toward a fight intensity (0 calm .. 1 boss); called every logic tick.
+     * The player is only touched when the volume or speed visibly changes.
+     */
+    public static synchronized void setGameIntensity(float target) {
+        gameIntensity += (target - gameIntensity) * 0.02f;
+        if (gamePlayer == null) return;
+        try {
+            int volume = Math.round(gameIntensity * 40);
+            if (volume != volumeStep) {
+                volumeStep = volume;
+                gamePlayer.setVolume(gameVolume(), gameVolume());
+            }
+            // Up to 6% faster in a fight; setting the speed on a paused player would start it
+            int speed = Math.round(gameIntensity * 6);
+            if (speed != speedStep && gamePlayer.isPlaying()) {
+                speedStep = speed;
+                gamePlayer.setPlaybackParams(gamePlayer.getPlaybackParams().setSpeed(1f + speed / 100f).setPitch(1f));
+            }
+        } catch (Exception ignored) {}
     }
 
     private SoundPool soundPool;

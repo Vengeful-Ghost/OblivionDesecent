@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Key: an original drawing (ring bow, shaft, two teeth) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512"
+    android:tint="@color/gold_bright">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,256 a110,110 0 1,1 220,0 a110,110 0 1,1 -220,0 z M100,256 a50,50 0 1,0 100,0 a50,50 0 1,0 -100,0 z M250,234 h220 v44 h-220 z M410,270 h44 v78 h-44 z M338,270 h40 v56 h-40 z"/>
+</vector>

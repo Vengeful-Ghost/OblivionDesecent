@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- How-to-play card: one page at a time, Back / Next flip it in place -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_overlay"
+    android:clickable="true"
+    android:focusable="true"
+    android:padding="@dimen/space_md">
+
+    <!-- Only scrolls if the card is taller than the screen -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:overScrollMode="ifContentScrolls">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+    <LinearLayout
+        style="@style/OD.Card"
+        android:layout_width="@dimen/card_width_lg"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:animation="@anim/dialog_open">
+
+        <!-- Header: close, icon + title, page number -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/space_xs">
+
+            <ImageButton
+                android:id="@+id/btn_close_tutorial"
+                style="@style/OD.CloseButton"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
+                android:layout_gravity="start|center_vertical"
+                android:contentDescription="Close"
+                tools:ignore="HardcodedText"/>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:id="@+id/tutorial_icon"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginEnd="@dimen/space_sm"
+                    android:importantForAccessibility="no"/>
+
+                <TextView
+                    android:id="@+id/tutorial_title"
+                    style="@style/OD.Text.Title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Move &amp; Dash"
+                    android:textSize="@dimen/text_heading"
+                    android:shadowColor="@color/gold_glow"
+                    android:shadowDx="0"
+                    android:shadowDy="0"
+                    android:shadowRadius="10"
+                    android:maxLines="1"
+                    tools:ignore="HardcodedText"/>
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tutorial_page"
+                style="@style/OD.Text.Label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="@dimen/space_sm"
+                android:text="1 / 6"
+                android:textColor="@color/bone_muted"
+                tools:ignore="HardcodedText"/>
+
+        </FrameLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@drawable/divider_gold"
+            android:layout_marginBottom="@dimen/space_md"/>
+
+        <TextView
+            android:id="@+id/tutorial_body"
+            style="@style/OD.Text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minLines="5"
+            android:lineSpacingExtra="2dp"
+            android:layout_marginBottom="@dimen/space_lg"/>
+
+        <!-- Back | page dots | Next -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_tutorial_back"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="120dp"
+                android:layout_height="@dimen/touch_min"
+                android:text="Back"
+                tools:ignore="HardcodedText"/>
+
+            <LinearLayout
+                android:id="@+id/tutorial_dots"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_tutorial_next"
+                style="@style/OD.Button"
+                android:layout_width="120dp"
+                android:layout_height="@dimen/touch_min"
+                android:text="Next"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    </FrameLayout>
+
+    </ScrollView>
+
+</FrameLayout>

@@ -18,7 +18,8 @@ import java.util.Random;
  * 2. Grows inner rooms (count scales with floor): mostly a winding path, but more and more often a
  *    branch off an earlier room, so deeper floors sprawl with rooms of up to four doors.
  * 3. Hangs the boss room (boss floors) and the exit room off the room farthest from the entry.
- * 4. Sometimes turns an ordinary room into an enemy-free treasure room with a single chest.
+ * 4. Sometimes turns an ordinary room into an enemy-free treasure room with a single chest,
+ *    and from floor 2 may seal a dead end as a vault that needs a key.
  * 5. Distributes enemies across eligible rooms according to the floor quota, then places decorations.
  */
 public class FloorLayout {
@@ -42,6 +43,10 @@ public class FloorLayout {
     public Room bossRoom;  // null on non-boss floors
     public Room treasureRoom;      // enemy-free room with one chest; null on most floors
     public boolean treasureMimic;  // that chest is a mimic
+    public Room vaultRoom;         // enemy-free dead end behind a gate a key opens; null on most floors
+    public Corridor vaultCorridor; // the corridor the gate seals
+    public float[] vaultGate;      // gate line across that corridor's open end: {x1, y1, x2, y2}
+    public volatile boolean vaultLocked; // per phone: the gate blocks the corridor until a key opens it
     public List<Props.Decor> decor = new ArrayList<>(); // drawn by GameDisplay; barrels, crates and pillars are solid
 
     // Navigation graph: rooms are nodes 0..R-1, corridors are nodes R..R+C-1
@@ -113,6 +118,8 @@ public class FloorLayout {
 
         // Treasure room: an enemy-free room with one chest, likelier on boss floors
         if (rng.nextFloat() < (isBossFloor ? 0.8f : 0.2f)) pickTreasureRoom(layout, rng);
+        // Vault: a locked dead end with better loot, from floor 2
+        if (floor >= 2 && rng.nextFloat() < 0.35f) pickVault(layout, rng);
 
         // ── 5. Enemy distribution ─────────────────────────────────────────────
         distributeEnemies(layout, killCount, rng);
@@ -176,6 +183,37 @@ public class FloorLayout {
         layout.treasureRoom = pool.get(rng.nextInt(pool.size()));
         layout.treasureRoom.possibleEnemyCount = 0;
         layout.treasureMimic = rng.nextFloat() < 0.25f;
+    }
+
+    /** Seals an ordinary dead end behind a gate; it keeps no enemies and enough rooms stay for them. */
+    private static void pickVault(FloorLayout layout, Random rng) {
+        List<Room> deadEnds = new ArrayList<>();
+        int fighting = 0;
+        for (Room r : layout.rooms) {
+            if (r.possibleEnemyCount <= 0) continue; // entry, exit, boss and treasure rooms
+            fighting++;
+            int doors = 0;
+            for (boolean used : r.sideUsed) if (used) doors++;
+            if (doors == 1) deadEnds.add(r);
+        }
+        if (deadEnds.isEmpty() || fighting < 3) return;
+        Room vault = deadEnds.get(rng.nextInt(deadEnds.size()));
+        for (Corridor c : layout.corridors) {
+            if (c.roomIdA != vault.id && c.roomIdB != vault.id) continue;
+            // The gate stands at the corridor's far end from the vault
+            if (c.width >= c.height) {
+                float x = vault.x > c.x ? c.x : c.x + c.width;
+                layout.vaultGate = new float[]{x, c.y, x, c.y + c.height};
+            } else {
+                float y = vault.y > c.y ? c.y : c.y + c.height;
+                layout.vaultGate = new float[]{c.x, y, c.x + c.width, y};
+            }
+            layout.vaultCorridor = c;
+            layout.vaultRoom = vault;
+            layout.vaultLocked = true;
+            vault.possibleEnemyCount = 0;
+            return;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -376,7 +414,7 @@ public class FloorLayout {
      */
     public boolean isFloor(float px, float py) {
         for (Room r     : rooms)     if (r.contains(px, py)) return true;
-        for (Corridor c : corridors) if (c.contains(px, py)) return true;
+        for (Corridor c : corridors) if (c.contains(px, py) && !(vaultLocked && c == vaultCorridor)) return true;
         return false;
     }
 

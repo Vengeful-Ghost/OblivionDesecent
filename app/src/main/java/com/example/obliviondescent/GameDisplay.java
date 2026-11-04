@@ -3,13 +3,16 @@ package com.example.obliviondescent;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RadialGradient;
+import android.graphics.RectF;
 import android.graphics.Shader;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
 import android.view.View;
 import java.util.List;
 
@@ -107,6 +110,27 @@ public class GameDisplay extends View {
     private Paint minimapShopPaint;
     private Paint minimapNorthPaint;
 
+    // Map ink: room outlines, rooms only seen through a door, icons, the full-floor view
+    private final Paint mapStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mapHerePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mapUnknownPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mapIconPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mapGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mapEnemyPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mapTickPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mapLetterPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mapTitlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mapHintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF mapRect = new RectF(), iconRect = new RectF();
+    private volatile boolean mapExpanded = false; // tap the minimap for the whole floor
+
+    // Locked vault gate
+    private final Paint gatePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    // Camera punch-in, e.g. on a boss kill; render-only, so it is safe in co-op
+    private volatile long zoomStart = 0, zoomUntil = 0;
+    private volatile float zoomAmount = 0f;
+
     public GameDisplay(Context context, AttributeSet attrs) {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
@@ -199,8 +223,8 @@ public class GameDisplay extends View {
         minimapHighlightPaint.setStyle(Paint.Style.STROKE);
         minimapHighlightPaint.setStrokeWidth(density);
 
-        minimapRoomPaint = new Paint();
-        minimapRoomPaint.setColor(Color.rgb(58, 49, 40));
+        minimapRoomPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        minimapRoomPaint.setColor(Color.rgb(74, 62, 48));
         minimapRoomPaint.setStyle(Paint.Style.FILL);
 
         minimapEntryPaint = new Paint();
@@ -216,7 +240,7 @@ public class GameDisplay extends View {
         minimapBossRoomPaint.setStyle(Paint.Style.FILL);
 
         minimapCorridorPaint = new Paint();
-        minimapCorridorPaint.setColor(Color.rgb(42, 33, 26));
+        minimapCorridorPaint.setColor(Color.rgb(62, 52, 40));
         minimapCorridorPaint.setStyle(Paint.Style.FILL);
 
         minimapPlayerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -235,6 +259,38 @@ public class GameDisplay extends View {
         minimapNorthPaint.setTextAlign(Paint.Align.CENTER);
         minimapNorthPaint.setTypeface(getResources().getFont(R.font.cinzel_bold));
         minimapNorthPaint.setShadowLayer(2f * density, 0f, 0f, Color.BLACK);
+
+        mapStrokePaint.setStyle(Paint.Style.STROKE);
+        mapStrokePaint.setStrokeWidth(density);
+        mapStrokePaint.setColor(Color.argb(200, 139, 111, 44));
+        mapHerePaint.setStyle(Paint.Style.STROKE);
+        mapHerePaint.setStrokeWidth(1.6f * density);
+        mapHerePaint.setColor(Color.rgb(244, 215, 122));
+        mapHerePaint.setShadowLayer(3f * density, 0f, 0f, Color.rgb(212, 175, 55));
+        mapUnknownPaint.setStyle(Paint.Style.STROKE);
+        mapUnknownPaint.setStrokeWidth(density);
+        mapUnknownPaint.setColor(Color.rgb(122, 112, 96));
+        mapUnknownPaint.setPathEffect(new DashPathEffect(new float[]{2f * density, 2f * density}, 0f));
+        mapGlowPaint.setColor(Color.argb(70, 244, 215, 122));
+        mapEnemyPaint.setColor(Color.rgb(224, 72, 72));
+        mapTickPaint.setStyle(Paint.Style.STROKE);
+        mapTickPaint.setStrokeCap(Paint.Cap.ROUND);
+        mapTickPaint.setColor(Color.rgb(212, 175, 55));
+        mapLetterPaint.setColor(Color.rgb(184, 172, 145));
+        mapLetterPaint.setTextSize(7f * density);
+        mapLetterPaint.setTextAlign(Paint.Align.CENTER);
+        mapLetterPaint.setTypeface(getResources().getFont(R.font.cinzel_bold));
+        mapLetterPaint.setShadowLayer(2f * density, 0f, 0f, Color.BLACK);
+        mapTitlePaint.setColor(Color.rgb(212, 175, 55));
+        mapTitlePaint.setTextSize(20f * density);
+        mapTitlePaint.setTextAlign(Paint.Align.CENTER);
+        mapTitlePaint.setLetterSpacing(0.12f);
+        mapTitlePaint.setTypeface(getResources().getFont(R.font.cinzel_bold));
+        mapTitlePaint.setShadowLayer(8f * density, 0f, 0f, Color.rgb(92, 69, 23));
+        mapHintPaint.setColor(Color.rgb(122, 112, 96));
+        mapHintPaint.setTextSize(11f * density);
+        mapHintPaint.setTextAlign(Paint.Align.CENTER);
+        mapHintPaint.setTypeface(getResources().getFont(R.font.cinzel));
 
         // Player arrow pointing along +x; rotated to the facing angle when drawn
         minimapArrow.moveTo(6f * density, 0f);
@@ -305,6 +361,35 @@ public class GameDisplay extends View {
 
     public void setInShopRoom(boolean inShopRoom) {
         this.inShopRoom = inShopRoom;
+        if (inShopRoom) mapExpanded = false;
+    }
+
+    /** Briefly zooms the view in and back out; amount 0.2 peaks at 120%. */
+    public void punchZoom(long ms, float amount) {
+        zoomAmount = amount;
+        zoomStart = System.currentTimeMillis();
+        zoomUntil = zoomStart + ms;
+    }
+
+    /** Tapping the minimap opens the whole-floor map; any tap closes it. */
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() != MotionEvent.ACTION_DOWN) return mapExpanded;
+        if (mapExpanded) {
+            mapExpanded = false;
+        } else {
+            float dx = event.getX() - mapCx, dy = event.getY() - mapCy;
+            if (inShopRoom || floorLayout == null || dx * dx + dy * dy > mapRadius * mapRadius) return false;
+            mapExpanded = true;
+        }
+        performClick();
+        invalidate();
+        return true;
+    }
+
+    @Override
+    public boolean performClick() {
+        return super.performClick();
     }
 
     public void setEffects(GameEffects effects) {
@@ -324,6 +409,8 @@ public class GameDisplay extends View {
         mapRadius = MINIMAP_DIAMETER_DP * 0.5f * density;
         mapCx = width - safeRight - margin - mapRadius;
         mapCy = safeTop + margin + mapRadius;
+        minimapBgPaint.setShader(new RadialGradient(mapCx, mapCy, mapRadius,
+                Color.argb(220, 36, 30, 23), Color.argb(235, 10, 8, 7), Shader.TileMode.CLAMP));
         // Clip edge sits under the bronze band, hiding any aliasing
         minimapClip.reset();
         minimapClip.addCircle(mapCx, mapCy, mapRadius - 2f * density, Path.Direction.CW);
@@ -346,6 +433,14 @@ public class GameDisplay extends View {
 
         if (player == null || camera == null) return;
 
+        // World layers sit inside the zoom; the vignette and HUD layers don't
+        int world = canvas.save();
+        long nowMs = System.currentTimeMillis();
+        if (nowMs < zoomUntil) {
+            float t = (float) (nowMs - zoomStart) / Math.max(1L, zoomUntil - zoomStart);
+            float z = 1f + zoomAmount * (float) Math.sin(Math.PI * t);
+            canvas.scale(z, z, getWidth() / 2f, getHeight() / 2f);
+        }
         if (shopRoom != null && shopRoom.isActive) {
             shopRoom.draw(canvas, camera);
             if (inShopRoom) {
@@ -427,13 +522,15 @@ public class GameDisplay extends View {
         drawDarkness(canvas);
         if (effects != null) effects.draw(canvas, camera);
         if (!inShopRoom) drawEnemyArrows(canvas);
+        canvas.restoreToCount(world);
 
         if (vignettePaint.getShader() != null)
             canvas.drawRect(0, 0, getWidth(), getHeight(), vignettePaint);
 
-        // 4. Minimap HUD overlay (always on top, hidden in shop)
+        // 4. Minimap HUD overlay (always on top, hidden in shop), or the whole floor when tapped
         if (!inShopRoom) {
-            drawMinimap(canvas);
+            if (mapExpanded && floorLayout != null) drawFullMap(canvas);
+            else drawMinimap(canvas);
         }
         drawCoopStatus(canvas);
     }
@@ -483,6 +580,9 @@ public class GameDisplay extends View {
                 }
             }
         }
+        float[] gate = floorLayout.vaultGate;
+        if (gate != null && floorLayout.vaultLocked)
+            lightHole(canvas, (gate[0] + gate[2]) / 2f - offX, (gate[1] + gate[3]) / 2f - offY, 220f, 0.8f);
         canvas.restoreToCount(layer);
     }
 
@@ -609,7 +709,38 @@ public class GameDisplay extends View {
                 wall(canvas, right, top, right, bottom);
             }
         }
+        drawVaultGate(canvas, offX, offY);
         drawDecor(canvas);
+    }
+
+    /** Locked vault: an iron beam with gold bar tops and a lock plate across the corridor mouth. */
+    private void drawVaultGate(Canvas canvas, float offX, float offY) {
+        float[] g = floorLayout.vaultGate;
+        if (g == null || !floorLayout.vaultLocked) return;
+        float x1 = g[0] - offX, y1 = g[1] - offY, x2 = g[2] - offX, y2 = g[3] - offY;
+        float cx = (x1 + x2) / 2f, cy = (y1 + y2) / 2f;
+        float pulse = 0.75f + 0.25f * (float) Math.sin(System.currentTimeMillis() / 300.0);
+        gatePaint.setStyle(Paint.Style.FILL);
+        gatePaint.setColor(Color.argb((int) (60 * pulse), 244, 215, 122));
+        canvas.drawCircle(cx, cy, 70f, gatePaint);
+        gatePaint.setStyle(Paint.Style.STROKE);
+        gatePaint.setStrokeCap(Paint.Cap.ROUND);
+        gatePaint.setStrokeWidth(26f);
+        gatePaint.setColor(Color.rgb(28, 24, 22));
+        canvas.drawLine(x1, y1, x2, y2, gatePaint);
+        gatePaint.setStrokeWidth(4f);
+        gatePaint.setColor(Color.rgb(139, 111, 44));
+        canvas.drawLine(x1, y1, x2, y2, gatePaint);
+        gatePaint.setStyle(Paint.Style.FILL);
+        gatePaint.setColor(Color.rgb(212, 175, 55));
+        for (int i = 1; i < 8; i++) {
+            float t = i / 8f;
+            canvas.drawCircle(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, 7f, gatePaint);
+        }
+        canvas.drawRoundRect(cx - 22f, cy - 26f, cx + 22f, cy + 26f, 7f, 7f, gatePaint);
+        gatePaint.setColor(Color.rgb(28, 24, 22));
+        canvas.drawCircle(cx, cy - 6f, 7f, gatePaint);
+        canvas.drawRect(cx - 3f, cy - 4f, cx + 3f, cy + 12f, gatePaint);
     }
 
     /** Room decorations near the screen, in world space: torchlight first, then the props. */
@@ -668,7 +799,7 @@ public class GameDisplay extends View {
     }
 
     private Paint roomPaintFor(Room r) {
-        if (r == floorLayout.treasureRoom) return treasureFloorPaint;
+        if (r == floorLayout.treasureRoom || r == floorLayout.vaultRoom) return treasureFloorPaint;
         switch (r.type) {
             case ENTRY:  return entryFloorPaint;
             case EXIT:   return exitFloorPaint;
@@ -721,7 +852,7 @@ public class GameDisplay extends View {
         }
     }
 
-    /** Circular, player-centred, north-up minimap inside a gold frame. */
+    /** Circular, player-centred, north-up minimap in a compass frame; tap it for the whole floor. */
     private void drawMinimap(Canvas canvas) {
         if (floorLayout == null || player == null) return;
 
@@ -733,23 +864,7 @@ public class GameDisplay extends View {
         canvas.save();
         canvas.clipPath(minimapClip);
         canvas.drawCircle(mapCx, mapCy, mapRadius, minimapBgPaint);
-
-        // Corridors — visible when at least one endpoint room is explored
-        for (Corridor c : floorLayout.corridors) {
-            Room rA = minimapRoom(c.roomIdA);
-            Room rB = minimapRoom(c.roomIdB);
-            if ((rA != null && rA.explored) || (rB != null && rB.explored)) {
-                canvas.drawRect(ox + c.x * scale, oy + c.y * scale,
-                        ox + (c.x + c.width) * scale, oy + (c.y + c.height) * scale, minimapCorridorPaint);
-            }
-        }
-
-        // Rooms — only explored ones
-        for (Room r : floorLayout.rooms) {
-            if (!r.explored) continue;
-            canvas.drawRect(ox + r.x * scale, oy + r.y * scale,
-                    ox + (r.x + r.width) * scale, oy + (r.y + r.height) * scale, minimapPaintFor(r));
-        }
+        drawMapRooms(canvas, ox, oy, scale, 4f * density);
 
         // Open portals, same positions as drawPortal() / drawShopPortal()
         if (floorManager != null) {
@@ -764,27 +879,182 @@ public class GameDisplay extends View {
             }
         }
 
-        // Teammates on this floor (ones in the shop fall outside the clip)
-        if (coop != null && floorManager != null) {
-            for (CoopSession.RemotePlayer r : coop.others.values()) {
-                if (r.dead || r.floor != floorManager.getCurrentFloor()) continue;
-                allyDotPaint.setColor(r.color);
-                canvas.drawCircle(ox + r.body.x * scale, oy + r.body.y * scale, 3f * density, allyDotPaint);
-            }
-        }
-
-        // Player arrow along the facing angle; restore() drops the rotation and the clip
-        canvas.translate(mapCx, mapCy);
-        canvas.rotate(player.getFacingAngle());
-        canvas.drawPath(minimapArrow, minimapPlayerPaint);
+        // Teammates and the last enemies (ones in the shop fall outside the clip)
+        drawMapUnits(canvas, ox, oy, scale, 3f * density);
+        drawMapPlayer(canvas, mapCx, mapCy, 1f);
         canvas.restore();
 
-        // Frame on top: bronze band with a gold line, inner highlight, "N" at the top
+        // Compass frame: bronze band with a gold line, ticks every 30 degrees, N E S W
         float band = mapRadius - 2f * density;
         canvas.drawCircle(mapCx, mapCy, band, minimapRimPaint);
         canvas.drawCircle(mapCx, mapCy, band, minimapBorderPaint);
         canvas.drawCircle(mapCx, mapCy, mapRadius - 4.5f * density, minimapHighlightPaint);
-        canvas.drawText("N", mapCx, mapCy - mapRadius + 14f * density, minimapNorthPaint);
+        for (int i = 0; i < 12; i++) {
+            double a = Math.toRadians(i * 30);
+            float cos = (float) Math.cos(a), sin = (float) Math.sin(a);
+            float inner = mapRadius - (i % 3 == 0 ? 9f : 7f) * density;
+            mapTickPaint.setStrokeWidth((i % 3 == 0 ? 1.6f : 1f) * density);
+            canvas.drawLine(mapCx + cos * inner, mapCy + sin * inner,
+                    mapCx + cos * (mapRadius - 5f * density), mapCy + sin * (mapRadius - 5f * density), mapTickPaint);
+        }
+        float letter = mapRadius - 15f * density, lift = 2.5f * density;
+        canvas.drawText("N", mapCx, mapCy - letter + 3f * density, minimapNorthPaint);
+        canvas.drawText("S", mapCx, mapCy + letter + lift, mapLetterPaint);
+        canvas.drawText("E", mapCx + letter, mapCy + lift, mapLetterPaint);
+        canvas.drawText("W", mapCx - letter, mapCy + lift, mapLetterPaint);
+    }
+
+    /** Whole floor on one screen: every room seen so far, fitted and centred. Any tap closes it. */
+    private void drawFullMap(Canvas canvas) {
+        canvas.drawColor(Color.argb(225, 8, 6, 5));
+        float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
+        for (Room r : floorLayout.rooms) {
+            if (!r.explored && !nextToExplored(r)) continue;
+            minX = Math.min(minX, r.x);
+            minY = Math.min(minY, r.y);
+            maxX = Math.max(maxX, r.x + r.width);
+            maxY = Math.max(maxY, r.y + r.height);
+        }
+        float w = getWidth(), h = getHeight();
+        float top = 64f * density, pad = 24f * density;
+        if (floorManager != null)
+            canvas.drawText("FLOOR " + floorManager.getCurrentFloor(), w / 2f, 30f * density, mapTitlePaint);
+        canvas.drawText("Tap anywhere to close", w / 2f, 48f * density, mapHintPaint);
+        if (minX > maxX) return;
+
+        // Fit the seen rooms, but don't blow a small map up past a readable size
+        float scale = Math.min(0.1f * density, Math.min((w - 2f * pad) / (maxX - minX), (h - top - pad) / (maxY - minY)));
+        float ox = w / 2f - (minX + maxX) / 2f * scale;
+        float oy = top + (h - top - pad) / 2f - (minY + maxY) / 2f * scale;
+        drawMapRooms(canvas, ox, oy, scale, 8f * density);
+        if (floorManager != null) {
+            float pulse = (float) (Math.sin(System.currentTimeMillis() / 400.0) * 0.125 + 0.875);
+            if (floorManager.isPortalOpen())
+                drawMapDot(canvas, ox + floorManager.getPortalX() * scale, oy + floorManager.getPortalY() * scale,
+                        pulse, minimapPortalPaint);
+            if (floorManager.isShopPortalOpen())
+                drawMapDot(canvas, ox + floorManager.getShopPortalX() * scale, oy + floorManager.getShopPortalY() * scale,
+                        1f, minimapShopPaint);
+        }
+        drawMapUnits(canvas, ox, oy, scale, 4.5f * density);
+        drawMapPlayer(canvas, ox + player.x * scale, oy + player.y * scale, 1.6f);
+    }
+
+    /** Map ink for both maps: seen corridors, explored rooms filled, door-seen rooms dashed, icons. */
+    private void drawMapRooms(Canvas canvas, float ox, float oy, float scale, float icon) {
+        Room here = floorLayout.getRoomAt(player.x, player.y);
+        long now = System.currentTimeMillis();
+        for (Corridor c : floorLayout.corridors) {
+            Room a = minimapRoom(c.roomIdA), b = minimapRoom(c.roomIdB);
+            if ((a == null || !a.explored) && (b == null || !b.explored)) continue;
+            canvas.drawRect(ox + c.x * scale, oy + c.y * scale,
+                    ox + (c.x + c.width) * scale, oy + (c.y + c.height) * scale, minimapCorridorPaint);
+        }
+        float corner = 2f * density;
+        for (Room r : floorLayout.rooms) {
+            if (!r.explored && !nextToExplored(r)) continue;
+            mapRect.set(ox + r.x * scale, oy + r.y * scale, ox + (r.x + r.width) * scale, oy + (r.y + r.height) * scale);
+            if (r.explored) {
+                canvas.drawRoundRect(mapRect, corner, corner, minimapPaintFor(r));
+                canvas.drawRoundRect(mapRect, corner, corner, r == here ? mapHerePaint : mapStrokePaint);
+            } else {
+                canvas.drawRoundRect(mapRect, corner, corner, mapUnknownPaint);
+            }
+            drawRoomIcon(canvas, r, mapRect.centerX(), mapRect.centerY(), icon, now);
+        }
+    }
+
+    /** True when a corridor joins this room to an explored one, so its door has been seen. */
+    private boolean nextToExplored(Room r) {
+        for (Corridor c : floorLayout.corridors) {
+            int other = c.roomIdA == r.id ? c.roomIdB : c.roomIdB == r.id ? c.roomIdA : -1;
+            Room o = other >= 0 ? minimapRoom(other) : null;
+            if (o != null && o.explored) return true;
+        }
+        return false;
+    }
+
+    /** Glyphs for special rooms: lock (vault), chest (treasure), skull (boss), portal ring (exit). */
+    private void drawRoomIcon(Canvas canvas, Room r, float cx, float cy, float s, long now) {
+        int ink = Color.rgb(20, 16, 12);
+        mapIconPaint.setStyle(Paint.Style.FILL);
+        if (r == floorLayout.vaultRoom) {
+            float lift = floorLayout.vaultLocked ? 0f : s * 0.4f; // an open lock's shackle pops up
+            mapIconPaint.setColor(Color.rgb(244, 215, 122));
+            mapIconPaint.setStyle(Paint.Style.STROKE);
+            mapIconPaint.setStrokeWidth(s * 0.28f);
+            iconRect.set(cx - s * 0.45f, cy - s * 1.05f - lift, cx + s * 0.45f, cy - lift);
+            canvas.drawArc(iconRect, 180f, 180f, false, mapIconPaint);
+            mapIconPaint.setStyle(Paint.Style.FILL);
+            canvas.drawRect(cx - s * 0.75f, cy - s * 0.5f, cx + s * 0.75f, cy + s * 0.75f, mapIconPaint);
+            mapIconPaint.setColor(ink);
+            canvas.drawCircle(cx, cy + s * 0.1f, s * 0.2f, mapIconPaint);
+        } else if (r == floorLayout.treasureRoom) {
+            mapIconPaint.setColor(Color.rgb(184, 145, 30));
+            canvas.drawRect(cx - s, cy - s * 0.35f, cx + s, cy + s * 0.7f, mapIconPaint);
+            mapIconPaint.setColor(Color.rgb(244, 215, 122));
+            canvas.drawRect(cx - s, cy - s * 0.8f, cx + s, cy - s * 0.25f, mapIconPaint);
+            mapIconPaint.setColor(ink);
+            canvas.drawRect(cx - s * 0.18f, cy - s * 0.4f, cx + s * 0.18f, cy + s * 0.1f, mapIconPaint);
+        } else if (r.type == Room.Type.BOSS) {
+            mapIconPaint.setColor(Color.rgb(224, 72, 72));
+            canvas.drawCircle(cx, cy - s * 0.2f, s * 0.85f, mapIconPaint);
+            canvas.drawRect(cx - s * 0.5f, cy + s * 0.3f, cx + s * 0.5f, cy + s * 0.85f, mapIconPaint);
+            mapIconPaint.setColor(ink);
+            canvas.drawCircle(cx - s * 0.33f, cy - s * 0.2f, s * 0.24f, mapIconPaint);
+            canvas.drawCircle(cx + s * 0.33f, cy - s * 0.2f, s * 0.24f, mapIconPaint);
+        } else if (r.type == Room.Type.EXIT) {
+            float pulse = 0.9f + 0.1f * (float) Math.sin(now / 300.0);
+            mapIconPaint.setColor(Color.rgb(181, 140, 224));
+            mapIconPaint.setStyle(Paint.Style.STROKE);
+            mapIconPaint.setStrokeWidth(s * 0.25f);
+            canvas.drawCircle(cx, cy, s * 0.8f * pulse, mapIconPaint);
+            mapIconPaint.setStyle(Paint.Style.FILL);
+            canvas.drawCircle(cx, cy, s * 0.25f, mapIconPaint);
+        }
+    }
+
+    /** Teammates as coloured dots; with two or fewer enemies left, those as pulsing red dots. */
+    private void drawMapUnits(Canvas canvas, float ox, float oy, float scale, float dot) {
+        if (floorManager == null) return;
+        if (coop != null) {
+            for (CoopSession.RemotePlayer r : coop.others.values()) {
+                if (r.dead || r.floor != floorManager.getCurrentFloor()) continue;
+                allyDotPaint.setColor(r.color);
+                canvas.drawCircle(ox + r.body.x * scale, oy + r.body.y * scale, dot, allyDotPaint);
+            }
+        }
+        if (enemies == null || floorManager.isPortalOpen()) return;
+        synchronized (enemies) {
+            int left = 0;
+            for (Enemy e : enemies) if (!e.isDead && !e.summoned && !e.mimic) left++;
+            if (left == 0 || left > 2) return;
+            float pulse = 0.75f + 0.25f * (float) Math.sin(System.currentTimeMillis() / 250.0);
+            mapEnemyPaint.setAlpha((int) (255 * pulse));
+            for (Enemy e : enemies) {
+                if (!e.isDead && !e.summoned && !e.mimic)
+                    canvas.drawCircle(ox + e.x * scale, oy + e.y * scale, dot * pulse, mapEnemyPaint);
+            }
+        }
+    }
+
+    /** The player's arrow along the facing angle, in a soft gold halo. */
+    private void drawMapPlayer(Canvas canvas, float x, float y, float size) {
+        canvas.save();
+        canvas.translate(x, y);
+        canvas.drawCircle(0, 0, 8f * density * size, mapGlowPaint);
+        canvas.rotate(player.getFacingAngle());
+        canvas.scale(size, size);
+        canvas.drawPath(minimapArrow, minimapPlayerPaint);
+        canvas.restore();
+    }
+
+    /** A glowing dot, e.g. an open portal on the full map. */
+    private void drawMapDot(Canvas canvas, float x, float y, float pulse, Paint paint) {
+        paint.setAlpha((int) (90 * pulse));
+        canvas.drawCircle(x, y, 7f * density * pulse, paint);
+        paint.setAlpha(255);
+        canvas.drawCircle(x, y, 3.5f * density, paint);
     }
 
     /** Portal marker with a soft glow; pinned just inside the frame when out of range. */
@@ -820,7 +1090,7 @@ public class GameDisplay extends View {
     }
 
     private Paint minimapPaintFor(Room r) {
-        if (r == floorLayout.treasureRoom) return minimapTreasurePaint;
+        if (r == floorLayout.treasureRoom || r == floorLayout.vaultRoom) return minimapTreasurePaint;
         switch (r.type) {
             case ENTRY: return minimapEntryPaint;
             case EXIT:  return minimapExitPaint;

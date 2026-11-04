@@ -13,7 +13,6 @@ import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
@@ -146,7 +145,7 @@ public class LobbyActivity extends AppCompatActivity {
                 return;
             }
             if (code == null) {
-                toast("Couldn't create a party. Check your connection.");
+                showStatus("Couldn't create a party. Check your connection.");
                 return;
             }
             enterParty(code, true);
@@ -168,7 +167,7 @@ public class LobbyActivity extends AppCompatActivity {
                 return;
             }
             if (error != null) {
-                toast(error);
+                showStatus(error);
                 return;
             }
             enterParty(code, false);
@@ -222,16 +221,16 @@ public class LobbyActivity extends AppCompatActivity {
     private void onLobbyChanged(Map<String, Object> lobby) {
         if (lobbyCode == null) return;
         if (lobby == null) {
-            if (!isHost) toast("The host closed the party");
             resetToJoin();
+            if (!isHost) showStatus("The host closed the party");
             return;
         }
 
         Map<String, Object> players = (Map<String, Object>) lobby.get("players");
         if (players == null) players = new HashMap<>();
         if (!players.containsKey(userId)) {
-            toast("You are no longer in this party");
             resetToJoin();
+            showStatus("You are no longer in this party");
             return;
         }
         currentPlayers = players;
@@ -294,7 +293,7 @@ public class LobbyActivity extends AppCompatActivity {
                 dbManager.startLobby(code, seed);
             } else {
                 btnStart.setEnabled(true);
-                toast("Couldn't start the run. Check your connection.");
+                showStatus("Couldn't start the run. Check your connection.");
             }
         });
     }
@@ -393,15 +392,15 @@ public class LobbyActivity extends AppCompatActivity {
         if (lobbyCode == null) return;
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         if (clipboard != null) clipboard.setPrimaryClip(ClipData.newPlainText("Party code", lobbyCode));
-        toast("Code copied");
+        showStatus("Code copied");
     }
 
     /* ============================================================
        UI UTILITIES
        ============================================================ */
 
-    private void toast(String message) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    private void showStatus(String message) {
+        txtStatus.setText(message);
     }
 
     private void showLoading(String message) {

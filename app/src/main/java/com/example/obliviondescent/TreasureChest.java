@@ -22,6 +22,7 @@ public class TreasureChest {
     public boolean opened = false;
     public boolean landed = false; // set by GameActivity once the landing burst has played
     public boolean mimic = false;  // treasure room only: wakes up as an enemy instead of opening
+    public boolean vault = false;  // vault chest: the rarest loot plus gold
 
     public static final float OPEN_RADIUS = 80f;
     private static final long DROP_TIME = 650;     // flight from the boss to the landing spot

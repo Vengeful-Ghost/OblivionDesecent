@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Yes / no card for choices that can't be undone -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_overlay"
+    android:clickable="true"
+    android:focusable="true"
+    android:padding="@dimen/space_md">
+
+    <!-- Only scrolls if the card is taller than the screen -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:overScrollMode="ifContentScrolls">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+    <LinearLayout
+        style="@style/OD.Card"
+        android:layout_width="@dimen/card_width_md"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:animation="@anim/dialog_open">
+
+        <ImageView
+            android:id="@+id/confirm_icon"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="@dimen/space_sm"
+            android:layout_marginBottom="@dimen/space_sm"
+            android:importantForAccessibility="no"/>
+
+        <TextView
+            android:id="@+id/confirm_title"
+            style="@style/OD.Text.Title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Are you sure?"
+            android:textSize="@dimen/text_heading"
+            android:shadowColor="@color/gold_glow"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="10"
+            android:maxLines="2"
+            android:ellipsize="end"
+            tools:ignore="HardcodedText"/>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@drawable/divider_gold"
+            android:layout_marginTop="@dimen/space_sm"
+            android:layout_marginBottom="@dimen/space_md"/>
+
+        <TextView
+            android:id="@+id/confirm_message"
+            style="@style/OD.Text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="@color/bone_dim"
+            android:layout_marginBottom="@dimen/space_lg"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_confirm_no"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/button_height"
+                android:layout_weight="1"
+                android:layout_marginEnd="@dimen/space_md"
+                android:text="Keep"
+                tools:ignore="HardcodedText"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_confirm_yes"
+                style="@style/OD.Button.Danger"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/button_height"
+                android:layout_weight="1"
+                android:text="Sell"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    </FrameLayout>
+
+    </ScrollView>
+
+</FrameLayout>

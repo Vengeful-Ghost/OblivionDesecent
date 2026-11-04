@@ -11,7 +11,6 @@ import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -147,9 +146,7 @@ public class SignUpActivity extends AppCompatActivity
                     .addOnFailureListener(e ->
                     {
                         hideLoading();
-                        Toast.makeText(SignUpActivity.this,
-                                "Error checking username: " + e.getMessage(),
-                                Toast.LENGTH_SHORT).show();
+                        signupUsernameLayout.setError("Error checking username: " + e.getMessage());
                     });
         });
 
@@ -192,26 +189,19 @@ public class SignUpActivity extends AppCompatActivity
                                         DBManager dbManager = new DBManager();
                                         dbManager.initPlayerDocument(userId, username);
                                         hideLoading();
-                                        Toast.makeText(SignUpActivity.this,
-                                                "Account created!",
-                                                Toast.LENGTH_SHORT).show();
                                         finish();
                                     })
                                     .addOnFailureListener(e ->
                                     {
                                         hideLoading();
-                                        Toast.makeText(SignUpActivity.this,
-                                                "Error saving user: " + e.getMessage(),
-                                                Toast.LENGTH_SHORT).show();
+                                        signupUsernameLayout.setError("Error saving user: " + e.getMessage());
                                     });
                         }
                     }
                     else
                     {
                         hideLoading();
-                        Toast.makeText(SignUpActivity.this,
-                                "Sign up failed: " + task.getException().getMessage(),
-                                Toast.LENGTH_SHORT).show();
+                        signupUsernameLayout.setError("Sign up failed: " + task.getException().getMessage());
                     }
                 });
     }

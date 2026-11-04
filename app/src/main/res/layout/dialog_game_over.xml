@@ -19,9 +19,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
-    <!-- Two columns, so the card fits short landscape screens without scrolling -->
+    <!-- Three columns, so the card fits short landscape screens without scrolling -->
     <LinearLayout
-        android:layout_width="@dimen/card_width_lg"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
@@ -38,14 +38,15 @@
         android:gravity="center">
 
         <ImageView
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:src="@drawable/ic_skull"
             android:tint="@color/crimson_glow"
             android:importantForAccessibility="no"
             android:layout_marginBottom="@dimen/space_sm"/>
 
         <TextView
+            android:id="@+id/txt_over_title"
             style="@style/OD.Text.Title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -60,6 +61,7 @@
             android:gravity="center"/>
 
         <TextView
+            android:id="@+id/txt_over_message"
             style="@style/OD.Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -90,8 +92,38 @@
         android:layout_marginHorizontal="@dimen/space_lg"
         android:background="@color/divider_gold"/>
 
+    <!-- Run summary: stat cards, two per row, added in Java -->
     <LinearLayout
-        android:layout_width="200dp"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1.6"
+        android:orientation="vertical">
+
+        <TextView
+            style="@style/OD.Text.Label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_xs"
+            android:layout_marginBottom="@dimen/space_xs"
+            android:text="RUN SUMMARY"
+            android:textColor="@color/gold_bright"/>
+
+        <LinearLayout
+            android:id="@+id/summary_grid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"/>
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:layout_marginHorizontal="@dimen/space_lg"
+        android:background="@color/divider_gold"/>
+
+    <LinearLayout
+        android:layout_width="168dp"
         android:layout_height="wrap_content"
         android:orientation="vertical">
 

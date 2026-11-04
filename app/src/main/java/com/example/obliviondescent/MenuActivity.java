@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -90,43 +91,93 @@ public class MenuActivity extends AppCompatActivity {
         findViewById(R.id.btn_coop).setOnClickListener(v ->
                 startActivity(new Intent(this, LobbyActivity.class)));
 
-        findViewById(R.id.btn_tutorial).setOnClickListener(v -> showTutorial(0));
+        findViewById(R.id.btn_tutorial).setOnClickListener(v -> showTutorial());
     }
+
+    // Icon of each tutorial page
+    private static final int[] TUTORIAL_ICONS = {
+            R.drawable.ic_boots, R.drawable.ic_sword, R.drawable.ic_warning,
+            R.drawable.ic_stairs, R.drawable.ic_key, R.drawable.ic_level
+    };
 
     // Title and text of each tutorial page
     private static final String[][] TUTORIAL = {
             {"Move & Dash",
                     "Drag the left stick to move. You face the way you walk.\n\n"
-                    + "Tap D to dash. Nothing can hit you mid-dash, so use it to slip through attacks."},
+                    + "Tap D to dash. Nothing can hit you mid-dash. Dash just as a hit lands for a PERFECT dodge: "
+                    + "time slows, the dash recharges and your next hits are sure crits."},
             {"Attack",
                     "Hold ATK to keep attacking. It aims at the nearest enemy; drag it to aim yourself.\n\n"
                     + "Keep swinging for a 3-hit combo: the third hit is wider and stronger. Gold numbers are critical hits.\n\n"
                     + "SPIN hits everything around you, then needs a few seconds to recharge."},
             {"Read the Enemy",
                     "A red ! means an enemy is about to strike. The red cone or circle shows where it lands, so step out or dash.\n\n"
-                    + "A combo finisher or critical hit during that wind-up staggers the enemy and cancels its attack (bosses can't be staggered)."},
+                    + "A combo finisher or critical hit during that wind-up staggers the enemy (bosses can't be staggered).\n\n"
+                    + "Glowing elites are tougher, but always drop a key."},
             {"Floors & Shop",
                     "Defeat the enemies on a floor to open the purple EXIT portal. Edge arrows point the way.\n\n"
-                    + "The gold SHOP portal sells weapons, armor and potions for the coins you collect.\n\n"
-                    + "Every 5th floor has a boss guarding treasure chests."},
+                    + "The gold SHOP portal sells gear for the coins you collect. Every 5th floor has a boss.\n\n"
+                    + "Tap the minimap to see the whole floor."},
+            {"Treasure & Keys",
+                    "Gold-marked rooms hold a treasure chest, but some chests are mimics that bite back.\n\n"
+                    + "A gold gate seals a vault. Walk up to it with a key to open it: vaults hold the best loot. "
+                    + "Keys drop from elites, mimics and now and then other enemies."},
             {"Grow Stronger",
-                    "Kills give XP. Each level adds max HP and damage.\n\n"
-                    + "Tap \u2665 to drink a healing potion. Armor absorbs hits first but wears down with every hit.\n\n"
+                    "Kills give XP. When you level up, tap the glowing badge and pick a perk.\n\n"
+                    + "Tap \u2665 to drink a healing potion. Armor absorbs hits first but wears down.\n\n"
                     + "Your run saves at the start of every floor, and if you fall you can respawn there."}
     };
 
-    /** Shows one page of the new-player guide, with Back / Next to flip through it. */
-    private void showTutorial(int page) {
-        android.app.AlertDialog.Builder builder =
-                new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
-                        .setTitle(TUTORIAL[page][0] + "  (" + (page + 1) + "/" + TUTORIAL.length + ")")
-                        .setMessage(TUTORIAL[page][1])
-                        .setNegativeButton("Close", null);
-        if (page + 1 < TUTORIAL.length)
-            builder.setPositiveButton("Next", (dialog, which) -> showTutorial(page + 1));
-        if (page > 0)
-            builder.setNeutralButton("Back", (dialog, which) -> showTutorial(page - 1));
-        builder.show();
+    /** New-player guide: one card, Back / Next flip its page in place. */
+    private void showTutorial() {
+        Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dialog.setContentView(R.layout.dialog_tutorial);
+        if (dialog.getWindow() != null)
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dialog.findViewById(R.id.btn_close_tutorial).setOnClickListener(v -> dialog.dismiss());
+
+        // One dot per page, the current one lit
+        LinearLayout dots = dialog.findViewById(R.id.tutorial_dots);
+        int size = getResources().getDimensionPixelSize(R.dimen.space_sm);
+        for (int i = 0; i < TUTORIAL.length; i++) {
+            View dot = new View(this);
+            android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+            shape.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            dot.setBackground(shape);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
+            lp.setMargins(size / 2, 0, size / 2, 0);
+            dots.addView(dot, lp);
+        }
+
+        int[] page = {0};
+        Runnable render = () -> {
+            int p = page[0];
+            ((android.widget.ImageView) dialog.findViewById(R.id.tutorial_icon)).setImageResource(TUTORIAL_ICONS[p]);
+            ((TextView) dialog.findViewById(R.id.tutorial_title)).setText(TUTORIAL[p][0]);
+            ((TextView) dialog.findViewById(R.id.tutorial_page)).setText((p + 1) + " / " + TUTORIAL.length);
+            ((TextView) dialog.findViewById(R.id.tutorial_body)).setText(TUTORIAL[p][1]);
+            dialog.findViewById(R.id.btn_tutorial_back).setVisibility(p > 0 ? View.VISIBLE : View.INVISIBLE);
+            ((MaterialButton) dialog.findViewById(R.id.btn_tutorial_next)).setText(p + 1 < TUTORIAL.length ? "Next" : "Done");
+            for (int i = 0; i < dots.getChildCount(); i++)
+                ((android.graphics.drawable.GradientDrawable) dots.getChildAt(i).getBackground())
+                        .setColor(getColor(i == p ? R.color.gold_bright : R.color.bone_faint));
+        };
+        dialog.findViewById(R.id.btn_tutorial_back).setOnClickListener(v -> {
+            page[0]--;
+            render.run();
+        });
+        dialog.findViewById(R.id.btn_tutorial_next).setOnClickListener(v -> {
+            if (page[0] + 1 >= TUTORIAL.length) {
+                dialog.dismiss();
+                return;
+            }
+            page[0]++;
+            render.run();
+        });
+        render.run();
+        dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().getDecorView().setSystemUiVisibility(
+                getWindow().getDecorView().getSystemUiVisibility());
     }
 
     /**

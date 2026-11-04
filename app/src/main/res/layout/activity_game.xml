@@ -229,6 +229,25 @@
             android:drawableTint="@color/gold_bright"
             android:shadowDx="0"/>
 
+        <!-- Keys open vault gates; shown once you hold one -->
+        <TextView
+            android:id="@+id/txt_keys"
+            style="@style/OD.Text.Value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_xs"
+            android:background="@drawable/hud_panel"
+            android:paddingHorizontal="@dimen/space_sm"
+            android:paddingVertical="@dimen/space_xs"
+            android:gravity="center_vertical"
+            android:text="0"
+            android:textSize="@dimen/text_caption"
+            android:drawableStart="@drawable/ic_key"
+            android:drawablePadding="@dimen/space_xs"
+            android:drawableTint="@color/gold_bright"
+            android:shadowDx="0"
+            android:visibility="gone"/>
+
     </LinearLayout>
 
     <com.example.obliviondescent.JoystickView
