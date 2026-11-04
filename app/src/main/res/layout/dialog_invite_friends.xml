@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -9,50 +10,40 @@
     tools:ignore="HardcodedText">
 
     <LinearLayout
+        style="@style/OD.Card"
         android:layout_width="380dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:orientation="vertical"
-        android:background="@drawable/rounded_dialog_bg"
-        android:padding="22dp"
         android:animation="@anim/dialog_open">
 
         <!-- Header -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="@dimen/space_md">
 
-            <TextView
+            <ImageButton
                 android:id="@+id/btn_close_invite"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
+                style="@style/OD.CloseButton"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
                 android:layout_gravity="start|center_vertical"
-                android:text="✕"
-                android:textColor="@color/bone_dim"
-                android:textSize="18sp"
-                android:fontFamily="serif"
-                android:gravity="center"
-                android:clickable="true"
-                android:focusable="true"
-                android:background="?attr/selectableItemBackgroundBorderless"/>
+                android:contentDescription="Close"/>
 
             <TextView
+                style="@style/OD.Text.Title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:gravity="center"
-                android:paddingHorizontal="36dp"
+                android:paddingHorizontal="@dimen/touch_min"
                 android:text="Invite Friends"
-                android:textColor="@color/gold_bright"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:letterSpacing="0.06"
-                android:shadowColor="@color/gold_glow"
-                android:shadowDx="0"
-                android:shadowDy="0"
-                android:shadowRadius="10"/>
+                android:maxLines="1"
+                app:autoSizeTextType="uniform"
+                app:autoSizeMinTextSize="16sp"
+                app:autoSizeMaxTextSize="@dimen/text_title"
+                app:autoSizeStepGranularity="1sp"/>
 
         </FrameLayout>
 
@@ -60,18 +51,17 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="@drawable/divider_gold"
-            android:layout_marginBottom="8dp"/>
+            android:layout_marginBottom="@dimen/space_sm"/>
 
         <TextView
             android:id="@+id/invite_empty"
+            style="@style/OD.Text.Caption"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Loading friends..."
             android:textColor="@color/bone_muted"
-            android:textSize="13sp"
-            android:fontFamily="serif"
             android:gravity="center"
-            android:paddingVertical="24dp"/>
+            android:paddingVertical="@dimen/space_xl"/>
 
         <!-- Friend rows (people you follow) -->
         <ScrollView

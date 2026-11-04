@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:layout_weight="1"
     android:orientation="vertical"
-    android:layout_margin="4dp"
+    android:layout_margin="@dimen/space_xs"
     android:clickable="true"
     android:focusable="true"
     android:background="@drawable/slot_inventory">
@@ -13,18 +13,16 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="12dp"
+        android:padding="@dimen/space_md"
         android:gravity="center_vertical">
 
         <TextView
             android:id="@+id/item_name"
+            style="@style/OD.Text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Item Name"
-            android:textColor="@color/bone_white"
-            android:textSize="13sp"
             android:textStyle="bold"
-            android:fontFamily="serif"
             android:maxLines="2"
             android:ellipsize="end"/>
 
@@ -32,34 +30,30 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="@dimen/space_xs"
             android:gravity="center_vertical">
 
             <TextView
                 android:id="@+id/item_type_badge"
+                style="@style/OD.Text.Label"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="WEAPON"
-                android:textColor="@color/bone_muted"
-                android:textSize="10sp"
-                android:textStyle="italic"
-                android:fontFamily="serif"
-                android:letterSpacing="0.18"/>
+                android:maxLines="1"
+                android:ellipsize="end"/>
 
             <TextView
                 android:id="@+id/item_price"
+                style="@style/OD.Text.Value"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="🪙 50"
-                android:textColor="@color/gold_bright"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:shadowColor="@color/ink_shadow"
-                android:shadowDx="0"
-                android:shadowDy="1"
-                android:shadowRadius="2"/>
+                android:gravity="center_vertical"
+                android:text="50"
+                android:textSize="@dimen/text_small"
+                android:drawableStart="@drawable/ic_coin"
+                android:drawablePadding="@dimen/space_xs"
+                android:drawableTint="@color/gold_bright"/>
 
         </LinearLayout>
 

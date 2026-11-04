@@ -6,7 +6,7 @@
     android:background="@color/bg_overlay"
     android:clickable="true"
     android:focusable="true"
-    android:padding="16dp">
+    android:padding="@dimen/space_lg">
 
     <LinearLayout
         android:id="@+id/dialog_inventory_layout"
@@ -15,28 +15,26 @@
         android:layout_gravity="center"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
-        android:padding="26dp"
+        android:padding="@dimen/space_xl"
         android:minWidth="520dp"
         android:animation="@anim/dialog_open">
 
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingBottom="16dp">
+            android:paddingBottom="@dimen/space_lg">
 
             <TextView
                 android:id="@+id/InventoryTitleBack"
+                style="@style/OD.Text.Title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Inventory"
                 android:textAllCaps="true"
-                android:textSize="34sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:textColor="#66000000"
+                android:textSize="@dimen/text_display"
+                android:textColor="@color/shadow_soft"
                 android:gravity="center"
-                android:letterSpacing="0.08"
-                android:shadowColor="#CC000000"
+                android:shadowColor="@color/shadow_hard"
                 android:shadowDx="3"
                 android:shadowDy="3"
                 android:shadowRadius="8"
@@ -45,16 +43,13 @@
 
             <TextView
                 android:id="@+id/InventoryTitleFront"
+                style="@style/OD.Text.Title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Inventory"
                 android:textAllCaps="true"
-                android:textSize="34sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:textColor="@color/gold_bright"
+                android:textSize="@dimen/text_display"
                 android:gravity="center"
-                android:letterSpacing="0.08"
                 android:shadowColor="@color/gold_glow"
                 android:shadowDx="0"
                 android:shadowDy="0"
@@ -65,7 +60,7 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="@drawable/divider_gold"
-            android:layout_marginBottom="14dp"/>
+            android:layout_marginBottom="@dimen/space_md"/>
 
         <androidx.core.widget.NestedScrollView
             android:layout_width="wrap_content"
@@ -82,7 +77,7 @@
                 app:alignmentMode="alignMargins"
                 app:columnOrderPreserved="false"
                 android:orientation="horizontal"
-                android:padding="4dp" />
+                android:padding="@dimen/space_xs" />
 
         </androidx.core.widget.NestedScrollView>
 

@@ -61,23 +61,23 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/settingsScrollView"
-        android:layout_marginEnd="32dp"
+        android:layout_marginEnd="@dimen/space_xxl"
         android:gravity="center">
 
         <TextView
+            style="@style/OD.Text.Title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Settings"
             android:textAllCaps="true"
             android:textSize="46sp"
-            android:textStyle="bold"
-            android:fontFamily="serif"
-            android:textColor="@color/gold_bright"
             android:gravity="center"
-            android:letterSpacing="0.08"
+            android:maxLines="1"
+            app:autoSizeTextType="uniform"
+            app:autoSizeMinTextSize="16sp"
+            app:autoSizeMaxTextSize="46sp"
+            app:autoSizeStepGranularity="1sp"
             android:shadowColor="@color/gold_glow"
-            android:shadowDx="0"
-            android:shadowDy="0"
             android:shadowRadius="18"
             android:animation="@anim/glow_pulse"
             tools:ignore="HardcodedText"/>
@@ -96,28 +96,25 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginEnd="48dp"
-        android:layout_marginTop="24dp"
-        android:layout_marginBottom="24dp">
+        android:layout_marginTop="@dimen/space_xl"
+        android:layout_marginBottom="@dimen/space_xl">
 
         <LinearLayout
             android:id="@+id/settingsCard"
+            style="@style/OD.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/rounded_dialog_bg"
-            android:padding="28dp">
+            android:orientation="vertical">
 
             <!-- Section label -->
             <TextView
+                style="@style/OD.Text.Label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="FEEDBACK"
                 android:textColor="@color/gold_bright"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
                 android:letterSpacing="0.24"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="@dimen/space_lg"
                 tools:ignore="HardcodedText"/>
 
             <!-- Vibration row -->
@@ -126,7 +123,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="12dp">
+                android:layout_marginBottom="@dimen/space_md">
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -135,30 +132,29 @@
                     android:orientation="vertical">
 
                     <TextView
+                        style="@style/OD.Text"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="📳  Vibration on hit"
-                        android:textColor="@color/bone_white"
-                        android:textSize="16sp"
+                        android:text="Vibration on hit"
                         android:textStyle="bold"
-                        android:fontFamily="serif"
+                        android:drawableStart="@drawable/ic_vibration"
+                        android:drawablePadding="@dimen/space_sm"
+                        android:drawableTint="@color/gold_bright"
                         tools:ignore="HardcodedText"/>
 
                     <TextView
+                        style="@style/OD.Text.Caption"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Phone vibrates when taking damage"
-                        android:textColor="@color/bone_dim"
-                        android:textSize="12sp"
                         android:textStyle="italic"
-                        android:fontFamily="serif"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="@dimen/space_xs"
                         tools:ignore="HardcodedText"/>
 
                 </LinearLayout>
 
                 <LinearLayout
-                    android:layout_width="72dp"
+                    android:layout_width="80dp"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:gravity="center_horizontal">
@@ -167,30 +163,26 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
-                        android:paddingStart="4dp"
-                        android:paddingEnd="4dp">
+                        android:paddingStart="@dimen/space_xs"
+                        android:paddingEnd="@dimen/space_xs">
 
                         <TextView
+                            style="@style/OD.Text.Label"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="OFF"
-                            android:textSize="10sp"
                             android:textColor="@color/bone_muted"
-                            android:fontFamily="serif"
-                            android:letterSpacing="0.16"
                             android:gravity="start"
                             tools:ignore="HardcodedText"/>
 
                         <TextView
+                            style="@style/OD.Text.Label"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="ON"
-                            android:textSize="10sp"
                             android:textColor="@color/gold_bright"
-                            android:fontFamily="serif"
-                            android:letterSpacing="0.16"
                             android:gravity="end"
                             tools:ignore="HardcodedText"/>
 
@@ -200,6 +192,7 @@
                         android:id="@+id/switch_vibration"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:minHeight="@dimen/touch_min"
                         android:checked="true"
                         app:thumbTint="@color/gold_bright"
                         app:trackTint="@color/border_gold_outer"/>
@@ -213,13 +206,15 @@
                 android:id="@+id/txt_miui_warning"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="⚠️ On Xiaomi, Samsung, Oppo, or Huawei devices, vibration may be restricted by battery savers. Check: Settings → Apps → Oblivion Descent → Permissions."
+                style="@style/OD.Text.Caption"
+                android:text="On Xiaomi, Samsung, Oppo, or Huawei devices, vibration may be restricted by battery savers. Check: Settings → Apps → Oblivion Descent → Permissions."
                 android:textColor="@color/warning_amber"
-                android:textSize="11sp"
-                android:fontFamily="serif"
                 android:textStyle="italic"
+                android:drawableStart="@drawable/ic_warning"
+                android:drawablePadding="@dimen/space_sm"
+                android:drawableTint="@color/warning_amber"
                 android:visibility="gone"
-                android:layout_marginBottom="24dp"
+                android:layout_marginBottom="@dimen/space_xl"
                 tools:ignore="HardcodedText"/>
 
             <!-- Divider -->
@@ -227,143 +222,129 @@
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="@drawable/divider_gold"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginBottom="@dimen/space_xl"/>
 
             <!-- Sound section label -->
             <TextView
+                style="@style/OD.Text.Label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="AUDIO"
                 android:textColor="@color/gold_bright"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
                 android:letterSpacing="0.24"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="@dimen/space_lg"
                 tools:ignore="HardcodedText"/>
 
             <TextView
+                style="@style/OD.Text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="🔊  Sound Effects Volume"
-                android:textColor="@color/bone_white"
-                android:textSize="16sp"
+                android:text="Sound Effects Volume"
                 android:textStyle="bold"
-                android:fontFamily="serif"
-                android:layout_marginBottom="4dp"
+                android:drawableStart="@drawable/ic_volume"
+                android:drawablePadding="@dimen/space_sm"
+                android:drawableTint="@color/gold_bright"
+                android:layout_marginBottom="@dimen/space_xs"
                 tools:ignore="HardcodedText"/>
 
             <TextView
+                style="@style/OD.Text.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Adjust in-game sound effect volume"
-                android:textColor="@color/bone_dim"
-                android:textSize="12sp"
                 android:textStyle="italic"
-                android:fontFamily="serif"
-                android:layout_marginBottom="12dp"
+                android:layout_marginBottom="@dimen/space_xs"
                 tools:ignore="HardcodedText"/>
 
             <SeekBar
                 android:id="@+id/seekbar_sfx_volume"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="@dimen/touch_min"
                 android:max="100"
                 android:progress="100"
                 android:progressTint="@color/gold_bright"
                 android:thumbTint="@color/gold_bright"
                 android:progressBackgroundTint="@color/border_gold_outer"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginBottom="@dimen/space_lg"/>
 
             <TextView
+                style="@style/OD.Text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="🎵  Menu Music Volume"
-                android:textColor="@color/bone_white"
-                android:textSize="16sp"
+                android:text="Menu Music Volume"
                 android:textStyle="bold"
-                android:fontFamily="serif"
-                android:layout_marginBottom="4dp"
+                android:drawableStart="@drawable/ic_music"
+                android:drawablePadding="@dimen/space_sm"
+                android:drawableTint="@color/gold_bright"
+                android:layout_marginBottom="@dimen/space_xs"
                 tools:ignore="HardcodedText"/>
 
             <TextView
+                style="@style/OD.Text.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Adjust main menu background music"
-                android:textColor="@color/bone_dim"
-                android:textSize="12sp"
                 android:textStyle="italic"
-                android:fontFamily="serif"
-                android:layout_marginBottom="12dp"
+                android:layout_marginBottom="@dimen/space_xs"
                 tools:ignore="HardcodedText"/>
 
             <SeekBar
                 android:id="@+id/seekbar_menu_music_volume"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="@dimen/touch_min"
                 android:max="100"
                 android:progress="85"
                 android:progressTint="@color/gold_bright"
                 android:thumbTint="@color/gold_bright"
                 android:progressBackgroundTint="@color/border_gold_outer"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginBottom="@dimen/space_lg"/>
 
             <TextView
+                style="@style/OD.Text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="🎶  Game Music Volume"
-                android:textColor="@color/bone_white"
-                android:textSize="16sp"
+                android:text="Game Music Volume"
                 android:textStyle="bold"
-                android:fontFamily="serif"
-                android:layout_marginBottom="4dp"
+                android:drawableStart="@drawable/ic_music"
+                android:drawablePadding="@dimen/space_sm"
+                android:drawableTint="@color/gold_bright"
+                android:layout_marginBottom="@dimen/space_xs"
                 tools:ignore="HardcodedText"/>
 
             <TextView
+                style="@style/OD.Text.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Adjust in-game background music"
-                android:textColor="@color/bone_dim"
-                android:textSize="12sp"
                 android:textStyle="italic"
-                android:fontFamily="serif"
-                android:layout_marginBottom="12dp"
+                android:layout_marginBottom="@dimen/space_xs"
                 tools:ignore="HardcodedText"/>
 
             <SeekBar
                 android:id="@+id/seekbar_game_music_volume"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="@dimen/touch_min"
                 android:max="100"
                 android:progress="85"
                 android:progressTint="@color/gold_bright"
                 android:thumbTint="@color/gold_bright"
                 android:progressBackgroundTint="@color/border_gold_outer"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginBottom="@dimen/space_lg"/>
 
             <!-- Divider -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="@drawable/divider_gold"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginBottom="@dimen/space_xl"/>
 
             <!-- Sign out button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_sign_out"
+                style="@style/OD.Button.Danger"
                 android:layout_width="match_parent"
-                android:layout_height="54dp"
+                android:layout_height="@dimen/button_height"
                 android:text="Sign Out"
-                android:textAllCaps="false"
-                android:textColor="@color/crimson_glow"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:letterSpacing="0.06"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                app:backgroundTint="@null"
-                android:background="@drawable/btn_gothic_danger"
                 tools:ignore="HardcodedText"/>
 
             <!-- Divider -->
@@ -371,27 +352,30 @@
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="@drawable/divider_gold"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="24dp"/>
+                android:layout_marginTop="@dimen/space_xl"
+                android:layout_marginBottom="@dimen/space_xl"/>
 
             <!-- Back button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_back"
+                style="@style/OD.Button"
                 android:layout_width="match_parent"
-                android:layout_height="62dp"
+                android:layout_height="@dimen/button_height"
                 android:text="Back"
-                android:textAllCaps="false"
-                android:textColor="@color/gold_glow"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:letterSpacing="0.08"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                app:backgroundTint="@null"
-                android:background="@drawable/btn_login"
+                app:icon="@drawable/ic_back"
                 android:stateListAnimator="@animator/button_elevation_anim"
                 android:translationZ="6dp"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                style="@style/OD.Text.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xl"
+                android:gravity="center"
+                android:text="Icons by Lorc, Delapouite and Skoll · game-icons.net · CC BY 3.0&#10;Fonts: Cinzel, Crimson Pro · SIL Open Font License 1.1"
+                android:textSize="@dimen/text_caption"
+                android:textColor="@color/bone_muted"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>

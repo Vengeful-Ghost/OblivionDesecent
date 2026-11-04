@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "stairs" by delapouite, game-icons.net (CC BY 3.0) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512"
+    android:tint="@color/gold_bright">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64 448v-64h64v-64h64v-64h64v-64h64v-64h64V64h64v384z"/>
+</vector>

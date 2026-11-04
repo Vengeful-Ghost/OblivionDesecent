@@ -59,6 +59,11 @@ public class GameEffects {
         slashPaint.setStrokeCap(Paint.Cap.ROUND);
     }
 
+    // Floating numbers use the game's title font
+    public void setFont(Typeface font) {
+        textPaint.setTypeface(Typeface.create(font, Typeface.BOLD));
+    }
+
     /**
      * A quick fading arc showing where a swing or strike landed.
      * @param x world X of the attacker

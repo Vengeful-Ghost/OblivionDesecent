@@ -67,6 +67,10 @@
     <color name="bone_faint">#4A4338</color>
     <color name="ink_shadow">#0A0807</color>
 
+    <!-- Engraved title (dark duplicate behind gold titles) -->
+    <color name="shadow_soft">#66000000</color>
+    <color name="shadow_hard">#CC000000</color>
+
     <!-- Rarity tints (loot frames) -->
     <color name="rarity_common">#B8AC91</color>
     <color name="rarity_uncommon">#7AB85C</color>
@@ -74,6 +78,10 @@
     <color name="rarity_epic">#8B5FBF</color>
     <color name="rarity_legendary">#D4AF37</color>
     <color name="rarity_mythic">#E04848</color>
+
+    <!-- Leaderboard medals (gold = gold_bright) -->
+    <color name="medal_silver">#CCCCCC</color>
+    <color name="medal_bronze">#CD7F32</color>
 
     <!-- Status -->
     <color name="success_green">#7A8B3D</color>

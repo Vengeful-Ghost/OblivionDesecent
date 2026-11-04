@@ -4,32 +4,31 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingVertical="11dp"
+    android:paddingVertical="10dp"
     android:paddingHorizontal="6dp">
+
+    <ImageView
+        android:id="@+id/stat_icon"
+        android:layout_width="@dimen/icon_md"
+        android:layout_height="@dimen/icon_md"
+        android:layout_marginEnd="@dimen/space_md"
+        android:importantForAccessibility="no"
+        android:visibility="gone"/>
 
     <TextView
         android:id="@+id/stat_label"
+        style="@style/OD.Text.Caption"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:text="Highest Floor"
-        android:textColor="@color/bone_dim"
-        android:textSize="13sp"
-        android:fontFamily="serif"
-        android:letterSpacing="0.03"/>
+        android:textSize="@dimen/text_body"/>
 
     <TextView
         android:id="@+id/stat_value"
+        style="@style/OD.Text.Value"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="0"
-        android:textColor="@color/gold_bright"
-        android:textSize="15sp"
-        android:textStyle="bold"
-        android:fontFamily="serif"
-        android:shadowColor="@color/ink_shadow"
-        android:shadowDx="0"
-        android:shadowDy="1"
-        android:shadowRadius="2"/>
+        android:text="0"/>
 
 </LinearLayout>

@@ -76,14 +76,17 @@ public class LeaderboardAdapter
         }
 
         void bind(LeaderboardItem item, OnItemClickListener listener) {
-            // Rank — top 3 get special colors
+            // Rank — top 3 get medal colours
             rankView.setText("#" + item.rank);
+            android.content.Context ctx = itemView.getContext();
+            int medal;
             switch (item.rank) {
-                case 1: rankView.setTextColor(Color.parseColor("#FFD700")); break;
-                case 2: rankView.setTextColor(Color.parseColor("#CCCCCC")); break;
-                case 3: rankView.setTextColor(Color.parseColor("#CD7F32")); break;
-                default: rankView.setTextColor(Color.parseColor("#555555")); break;
+                case 1:  medal = ctx.getColor(R.color.gold_bright); break;
+                case 2:  medal = ctx.getColor(R.color.medal_silver); break;
+                case 3:  medal = ctx.getColor(R.color.medal_bronze); break;
+                default: medal = ctx.getColor(R.color.bone_muted); break;
             }
+            rankView.setTextColor(medal);
 
             usernameView.setText(item.username);
             subtitleView.setText(
@@ -97,15 +100,9 @@ public class LeaderboardAdapter
             if (item.rank <= 3) {
                 android.graphics.drawable.GradientDrawable bg =
                         new android.graphics.drawable.GradientDrawable();
-                int strokeColor;
-                switch (item.rank) {
-                    case 1: strokeColor = Color.parseColor("#FFD700"); break;
-                    case 2: strokeColor = Color.parseColor("#CCCCCC"); break;
-                    default: strokeColor = Color.parseColor("#CD7F32"); break;
-                }
-                bg.setColor(Color.parseColor("#1A1A1A"));
+                bg.setColor(ctx.getColor(R.color.bg_surface));
                 bg.setCornerRadius(10f);
-                bg.setStroke(2, strokeColor);
+                bg.setStroke(2, medal);
                 itemView.setBackground(bg);
             } else {
                 itemView.setBackgroundResource(R.drawable.dialog_bg);

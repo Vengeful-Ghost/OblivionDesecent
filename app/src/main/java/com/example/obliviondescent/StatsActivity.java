@@ -145,15 +145,8 @@ public class StatsActivity extends AppCompatActivity {
     private void switchStatTab(boolean lifetime) {
         showingLifetime = lifetime;
 
-        tabLifetime.setTextColor(lifetime
-                ? Color.parseColor("#FFD700") : Color.parseColor("#666666"));
-        tabLifetime.setTypeface(null, lifetime
-                ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-
-        tabCurrent.setTextColor(!lifetime
-                ? Color.parseColor("#FFD700") : Color.parseColor("#666666"));
-        tabCurrent.setTypeface(null, !lifetime
-                ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        tabLifetime.setTextColor(getColor(lifetime ? R.color.gold_bright : R.color.bone_muted));
+        tabCurrent.setTextColor(getColor(!lifetime ? R.color.gold_bright : R.color.bone_muted));
 
         if (lifetime) {
             if (lifetimeData != null) populateStats(lifetimeData, true);
@@ -204,39 +197,39 @@ public class StatsActivity extends AppCompatActivity {
         if (data == null) { showEmptyStats(); return; }
 
         if (isLifetime) {
-            addStatRow("🏆  Highest Floor",
+            addStatRow(R.drawable.ic_trophy, "Highest Floor",
                     safeInt(data, "highestFloor") + "");
-            addStatRow("⚔  Enemies Killed",
+            addStatRow(R.drawable.ic_crossed_swords, "Enemies Killed",
                     safeInt(data, "enemiesKilled") + "");
-            addStatRow("💀  Bosses Killed",
+            addStatRow(R.drawable.ic_skull, "Bosses Killed",
                     safeInt(data, "bossesKilled") + "");
-            addStatRow("🪙  Coins Collected",
+            addStatRow(R.drawable.ic_coin, "Coins Collected",
                     safeInt(data, "coinsCollected") + "");
-            addStatRow("💸  Coins Spent",
+            addStatRow(R.drawable.ic_coins_spent, "Coins Spent",
                     safeInt(data, "coinsSpent") + "");
-            addStatRow("🗡  Damage Given",
+            addStatRow(R.drawable.ic_dagger, "Damage Given",
                     safeInt(data, "damageGiven") + "");
-            addStatRow("🛡  Damage Taken",
+            addStatRow(R.drawable.ic_shield, "Damage Taken",
                     safeInt(data, "damageTaken") + "");
-            addStatRow("💔  Times Died",
+            addStatRow(R.drawable.ic_broken_heart, "Times Died",
                     safeInt(data, "timesDied") + "");
-            addStatRow("🕐  Playtime",
+            addStatRow(R.drawable.ic_hourglass, "Playtime",
                     StatsManager.secondsToHours(safeLong(data, "playtimeSeconds")) + "h");
-            addStatRow("🗺  Floors Cleared",
+            addStatRow(R.drawable.ic_map, "Floors Cleared",
                     safeInt(data, "floorsCleared") + "");
         } else {
             // Current game — read from game save fields
-            addStatRow("🏔  Current Floor",
+            addStatRow(R.drawable.ic_stairs, "Current Floor",
                     safeInt(data, "currentFloor") + "");
             int level = Math.max(1, safeInt(data, "level"));
-            addStatRow("⭐  Level", level + "");
-            addStatRow("❤  Health",
+            addStatRow(R.drawable.ic_level, "Level", level + "");
+            addStatRow(R.drawable.ic_heart, "Health",
                     safeInt(data, "health") + " / " + (100 + (level - 1) * 10));
-            addStatRow("🛡  Armor",
+            addStatRow(R.drawable.ic_shield, "Armor",
                     safeInt(data, "armorValue") + "");
-            addStatRow("🪙  Gold",
+            addStatRow(R.drawable.ic_coin, "Gold",
                     safeInt(data, "gold") + "");
-            addStatRow("⚔  Equipped Weapon",
+            addStatRow(R.drawable.ic_sword, "Equipped Weapon",
                     safeString(data, "equippedWeaponName"));
         }
     }
@@ -245,23 +238,26 @@ public class StatsActivity extends AppCompatActivity {
         statsContainer.removeAllViews();
         TextView empty = new TextView(this);
         empty.setText("No data yet.\nStart a game to track stats!");
-        empty.setTextColor(Color.parseColor("#555555"));
-        empty.setTextSize(13f);
+        empty.setTextColor(getColor(R.color.bone_muted));
+        empty.setTextSize(16f);
         empty.setGravity(android.view.Gravity.CENTER);
         empty.setPadding(0, 48, 0, 0);
         statsContainer.addView(empty);
     }
 
-    private void addStatRow(String label, String value) {
+    private void addStatRow(int icon, String label, String value) {
         View row = LayoutInflater.from(this)
                 .inflate(R.layout.item_stat_row, statsContainer, false);
 
+        android.widget.ImageView iconView = row.findViewById(R.id.stat_icon);
+        iconView.setImageResource(icon);
+        iconView.setVisibility(View.VISIBLE);
         ((TextView) row.findViewById(R.id.stat_label)).setText(label);
         ((TextView) row.findViewById(R.id.stat_value)).setText(value);
 
         // Divider
         View divider = new View(this);
-        divider.setBackgroundColor(Color.parseColor("#1A1A1A"));
+        divider.setBackgroundColor(getColor(R.color.divider_gold));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 1);
         divider.setLayoutParams(lp);
@@ -281,15 +277,8 @@ public class StatsActivity extends AppCompatActivity {
     private void switchLeaderboardTab(boolean global) {
         showingGlobal = global;
 
-        tabGlobal.setTextColor(global
-                ? Color.parseColor("#FFD700") : Color.parseColor("#666666"));
-        tabGlobal.setTypeface(null, global
-                ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-
-        tabFollowing.setTextColor(!global
-                ? Color.parseColor("#FFD700") : Color.parseColor("#666666"));
-        tabFollowing.setTypeface(null, !global
-                ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        tabGlobal.setTextColor(getColor(global ? R.color.gold_bright : R.color.bone_muted));
+        tabFollowing.setTextColor(getColor(!global ? R.color.gold_bright : R.color.bone_muted));
 
         searchBarContainer.setVisibility(global ? View.GONE : View.VISIBLE);
 
@@ -379,7 +368,7 @@ public class StatsActivity extends AppCompatActivity {
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
 
         TextView nameView    = dialog.findViewById(R.id.user_detail_name);
-        TextView closeBtn    = dialog.findViewById(R.id.btn_close_user_detail);
+        View closeBtn        = dialog.findViewById(R.id.btn_close_user_detail);
         LinearLayout statsContainer = dialog.findViewById(R.id.user_detail_stats);
         MaterialButton followBtn = dialog.findViewById(R.id.btn_follow);
 
@@ -387,11 +376,11 @@ public class StatsActivity extends AppCompatActivity {
         closeBtn.setOnClickListener(v -> dialog.dismiss());
 
         // Populate stats
-        addUserStatRow(statsContainer, "🏆  Highest Floor",   item.highestFloor + "");
-        addUserStatRow(statsContainer, "⚔  Enemies Killed",   item.enemiesKilled + "");
-        addUserStatRow(statsContainer, "💀  Bosses Killed",    item.bossesKilled + "");
-        addUserStatRow(statsContainer, "💔  Times Died",       item.timesDied + "");
-        addUserStatRow(statsContainer, "🕐  Playtime",
+        addUserStatRow(statsContainer, R.drawable.ic_trophy, "Highest Floor", item.highestFloor + "");
+        addUserStatRow(statsContainer, R.drawable.ic_crossed_swords, "Enemies Killed", item.enemiesKilled + "");
+        addUserStatRow(statsContainer, R.drawable.ic_skull, "Bosses Killed", item.bossesKilled + "");
+        addUserStatRow(statsContainer, R.drawable.ic_broken_heart, "Times Died", item.timesDied + "");
+        addUserStatRow(statsContainer, R.drawable.ic_hourglass, "Playtime",
                 StatsManager.secondsToHours(item.playtimeSeconds) + "h");
 
         // Follow button
@@ -399,34 +388,18 @@ public class StatsActivity extends AppCompatActivity {
             followBtn.setVisibility(View.GONE); // Can't follow yourself
         } else {
             dbManager.isFollowing(userId, item.userId, isFollowing -> {
-                runOnUiThread(() -> {
-                    followBtn.setText(isFollowing ? "Unfollow" : "Follow");
-                    followBtn.setStrokeColor(
-                            android.content.res.ColorStateList.valueOf(
-                                    isFollowing ? Color.parseColor("#FF4444")
-                                            : Color.parseColor("#FFD700")));
-                });
+                runOnUiThread(() -> showFollowState(followBtn, isFollowing));
             });
 
             followBtn.setOnClickListener(v -> {
                 dbManager.isFollowing(userId, item.userId, isFollowing -> {
                     if (isFollowing) {
                         dbManager.unfollowUser(userId, item.userId, success -> {
-                            runOnUiThread(() -> {
-                                followBtn.setText("Follow");
-                                followBtn.setStrokeColor(
-                                        android.content.res.ColorStateList.valueOf(
-                                                Color.parseColor("#FFD700")));
-                            });
+                            runOnUiThread(() -> showFollowState(followBtn, false));
                         });
                     } else {
                         dbManager.followUser(userId, item.userId, success -> {
-                            runOnUiThread(() -> {
-                                followBtn.setText("Unfollow");
-                                followBtn.setStrokeColor(
-                                        android.content.res.ColorStateList.valueOf(
-                                                Color.parseColor("#FF4444")));
-                            });
+                            runOnUiThread(() -> showFollowState(followBtn, true));
                         });
                     }
                 });
@@ -437,9 +410,19 @@ public class StatsActivity extends AppCompatActivity {
         hideSystemUIOnWindow(dialog.getWindow());
     }
 
-    private void addUserStatRow(LinearLayout container, String label, String value) {
+    // Follow = gold primary button, Unfollow = crimson danger button
+    private void showFollowState(MaterialButton btn, boolean following) {
+        btn.setText(following ? "Unfollow" : "Follow");
+        btn.setBackgroundResource(following ? R.drawable.btn_gothic_danger : R.drawable.btn_login);
+        btn.setTextColor(getColor(following ? R.color.crimson_glow : R.color.gold_glow));
+    }
+
+    private void addUserStatRow(LinearLayout container, int icon, String label, String value) {
         View row = LayoutInflater.from(this)
                 .inflate(R.layout.item_stat_row, container, false);
+        android.widget.ImageView iconView = row.findViewById(R.id.stat_icon);
+        iconView.setImageResource(icon);
+        iconView.setVisibility(View.VISIBLE);
         ((TextView) row.findViewById(R.id.stat_label)).setText(label);
         ((TextView) row.findViewById(R.id.stat_value)).setText(value);
         container.addView(row);

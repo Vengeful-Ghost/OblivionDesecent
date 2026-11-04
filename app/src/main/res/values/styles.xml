@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ============ TEXT ============ -->
+
+    <!-- Body: Crimson Pro on bone -->
+    <style name="OD.Text" parent="">
+        <item name="android:fontFamily">@font/crimson_pro</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:textColor">@color/bone_white</item>
+    </style>
+
+    <!-- Secondary body text -->
+    <style name="OD.Text.Caption" parent="OD.Text">
+        <item name="android:textSize">@dimen/text_small</item>
+        <item name="android:textColor">@color/bone_dim</item>
+    </style>
+
+    <!-- Screen / dialog title: Cinzel with gold glow -->
+    <style name="OD.Text.Title" parent="OD.Text">
+        <item name="android:fontFamily">@font/cinzel</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">@dimen/text_title</item>
+        <item name="android:textColor">@color/gold_bright</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:shadowColor">@color/gold_dim</item>
+        <item name="android:shadowRadius">12</item>
+    </style>
+
+    <!-- Section heading -->
+    <style name="OD.Text.Heading" parent="OD.Text">
+        <item name="android:fontFamily">@font/cinzel</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">@dimen/text_heading</item>
+        <item name="android:textColor">@color/gold_bright</item>
+        <item name="android:letterSpacing">0.06</item>
+    </style>
+
+    <!-- Small caps label: badges, field labels, captions over values -->
+    <style name="OD.Text.Label" parent="OD.Text">
+        <item name="android:fontFamily">@font/cinzel</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">@dimen/text_caption</item>
+        <item name="android:textColor">@color/bone_dim</item>
+        <item name="android:letterSpacing">0.12</item>
+    </style>
+
+    <!-- Tab: label with a 48dp touch target -->
+    <style name="OD.Text.Tab" parent="OD.Text.Label">
+        <item name="android:textSize">@dimen/text_small</item>
+        <item name="android:textColor">@color/bone_muted</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingStart">@dimen/space_md</item>
+        <item name="android:paddingEnd">@dimen/space_md</item>
+    </style>
+
+    <!-- Numbers and stat values -->
+    <style name="OD.Text.Value" parent="OD.Text">
+        <item name="android:fontFamily">@font/cinzel</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/gold_bright</item>
+        <item name="android:shadowColor">@color/ink_shadow</item>
+        <item name="android:shadowDy">1</item>
+        <item name="android:shadowRadius">2</item>
+    </style>
+
+    <!-- ============ BUTTONS ============ -->
+
+    <!-- Primary: double gold trim -->
+    <style name="OD.Button" parent="Widget.Material3.Button">
+        <item name="android:minHeight">@dimen/touch_min</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="backgroundTint">@null</item>
+        <item name="android:background">@drawable/btn_login</item>
+        <item name="android:paddingStart">@dimen/space_lg</item>
+        <item name="android:paddingEnd">@dimen/space_lg</item>
+        <item name="android:fontFamily">@font/cinzel</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">@dimen/text_button</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/gold_glow</item>
+        <item name="iconTint">@color/gold_glow</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconSize">@dimen/icon_md</item>
+        <item name="iconPadding">@dimen/space_sm</item>
+    </style>
+
+    <!-- Secondary: thin trim, recessed -->
+    <style name="OD.Button.Secondary" parent="OD.Button">
+        <item name="android:background">@drawable/btn_gothic_secondary</item>
+        <item name="android:textColor">@color/gold_bright</item>
+        <item name="iconTint">@color/gold_bright</item>
+    </style>
+
+    <!-- Danger: blood-red trim -->
+    <style name="OD.Button.Danger" parent="OD.Button">
+        <item name="android:background">@drawable/btn_gothic_danger</item>
+        <item name="android:textColor">@color/crimson_glow</item>
+        <item name="iconTint">@color/crimson_glow</item>
+    </style>
+
+    <!-- Round gold-rimmed icon button (ImageButton, 48dp) -->
+    <style name="OD.IconButton" parent="">
+        <item name="android:background">@drawable/icon_btn_circle</item>
+        <item name="android:padding">@dimen/space_md</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="android:tint">@color/gold_bright</item>
+    </style>
+
+    <!-- Borderless close (ImageButton, 48dp) -->
+    <style name="OD.CloseButton" parent="">
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+        <item name="android:padding">14dp</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="android:src">@drawable/ic_close</item>
+        <item name="android:tint">@color/bone_dim</item>
+    </style>
+
+    <!-- ============ SURFACES / INPUTS ============ -->
+
+    <!-- Dialog card: double gold trim -->
+    <style name="OD.Card" parent="">
+        <item name="android:background">@drawable/rounded_dialog_bg</item>
+        <item name="android:paddingStart">@dimen/space_xl</item>
+        <item name="android:paddingEnd">@dimen/space_xl</item>
+        <item name="android:paddingTop">@dimen/space_lg</item>
+        <item name="android:paddingBottom">@dimen/space_xl</item>
+    </style>
+
+    <!-- Text field -->
+    <style name="OD.Input" parent="">
+        <item name="android:background">@drawable/input_bg</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
+        <item name="android:paddingStart">@dimen/space_lg</item>
+        <item name="android:paddingEnd">@dimen/space_lg</item>
+        <item name="android:fontFamily">@font/crimson_pro</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:textColor">@color/bone_white</item>
+        <item name="android:textColorHint">@color/bone_muted</item>
+    </style>
+
+</resources>

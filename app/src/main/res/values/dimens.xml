@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Spacing scale (4/8dp rhythm) -->
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_sm">8dp</dimen>
+    <dimen name="space_md">12dp</dimen>
+    <dimen name="space_lg">16dp</dimen>
+    <dimen name="space_xl">24dp</dimen>
+    <dimen name="space_xxl">32dp</dimen>
+
+    <!-- Touch targets and icons -->
+    <dimen name="touch_min">48dp</dimen>
+    <dimen name="button_height">52dp</dimen>
+    <dimen name="icon_sm">16dp</dimen>
+    <dimen name="icon_md">20dp</dimen>
+    <dimen name="icon_lg">24dp</dimen>
+
+    <!-- Type scale (12sp floor) -->
+    <dimen name="text_caption">12sp</dimen>
+    <dimen name="text_small">14sp</dimen>
+    <dimen name="text_body">16sp</dimen>
+    <dimen name="text_button">16sp</dimen>
+    <dimen name="text_heading">20sp</dimen>
+    <dimen name="text_title">26sp</dimen>
+    <dimen name="text_display">34sp</dimen>
+
+    <!-- Dialog card widths -->
+    <dimen name="card_width_sm">340dp</dimen>
+    <dimen name="card_width_md">420dp</dimen>
+    <dimen name="card_width_lg">560dp</dimen>
+
+</resources>

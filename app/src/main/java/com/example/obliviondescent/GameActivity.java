@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.HashMap;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -129,6 +130,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private TextView txtKillProgress;
     private FrameLayout floorTransitionOverlay;
     private TextView txtFloorTitle;
+
+    // Boss intro card
+    private View bossIntro, bossBand, bossLineTop, bossLineBottom;
+    private TextView bossLabel, bossName, bossTitle;
 
     private boolean enemiesKilledOnPortalOpen = false;
 
@@ -279,6 +284,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         txtPotionCount = findViewById(R.id.txt_potion_count);
         txtLevel = findViewById(R.id.txt_level);
         gameDisplay.setEffects(effects);
+        effects.setFont(getResources().getFont(R.font.cinzel));
 
         player = new Player();
         player.equipWeapon(weapons.get(0));
@@ -337,6 +343,18 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         txtKillProgress       = findViewById(R.id.txt_kill_progress);
         floorTransitionOverlay = findViewById(R.id.floor_transition_overlay);
         txtFloorTitle         = findViewById(R.id.txt_floor_title);
+
+        bossIntro      = findViewById(R.id.boss_intro);
+        bossBand       = findViewById(R.id.boss_band);
+        bossLineTop    = findViewById(R.id.boss_line_top);
+        bossLineBottom = findViewById(R.id.boss_line_bottom);
+        bossLabel      = findViewById(R.id.boss_label);
+        bossName       = findViewById(R.id.boss_name);
+        bossTitle      = findViewById(R.id.boss_title);
+        // Dark band that fades out at its top and bottom edges
+        bossBand.setBackground(new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x00000000, 0xE6000000, 0xE6000000, 0x00000000}));
 
         gameDisplay.setFloorManager(floorManager);
 
@@ -1336,10 +1354,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (root == null) return;
 
         TextView popup = new TextView(this);
-        popup.setText("⚠ " + slotName + " ARMOR BROKEN");
-        popup.setTextColor(Color.rgb(255, 80, 80));
-        popup.setTextSize(13f);
-        popup.setTypeface(null, android.graphics.Typeface.BOLD);
+        popup.setText(slotName + " ARMOR BROKEN");
+        popup.setTextColor(ContextCompat.getColor(this, R.color.crimson_glow));
+        popup.setTextSize(14f);
+        popup.setTypeface(getResources().getFont(R.font.cinzel), android.graphics.Typeface.BOLD);
+        popup.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_warning, 0, 0, 0);
+        popup.setCompoundDrawableTintList(popup.getTextColors());
+        popup.setCompoundDrawablePadding(16);
         popup.setPadding(28, 14, 28, 14);
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
         bg.setColor(Color.argb(210, 25, 0, 0));
@@ -1810,7 +1831,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                                                 .withEndAction(() -> {
                                                     floorTransitionOverlay.setVisibility(
                                                             android.view.View.GONE);
-                                                    txtFloorTitle.setTextColor(Color.WHITE);
+                                                    txtFloorTitle.setTextColor(
+                                                            androidx.core.content.ContextCompat.getColor(
+                                                                    GameActivity.this, R.color.gold_bright));
                                                     isTransitioning = false;
                                                 }).start();
                                     }, 1000)
@@ -1901,21 +1924,16 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                                            android.view.View itemsContainer,
                                            TextView goldDisplay,
                                            List<ShopItem> shopItems) {
-        LinearLayout row0 = dialog.findViewById(R.id.shop_row_0);
-        LinearLayout row1 = dialog.findViewById(R.id.shop_row_1);
-        LinearLayout row2 = dialog.findViewById(R.id.shop_row_2);
-        row0.removeAllViews();
-        row1.removeAllViews();
-        row2.removeAllViews();
-
-        LinearLayout[] rows = {row0, row1, row2};
+        // 2 rows of 3 cards, so the shop fits a landscape screen
+        LinearLayout[] rows = {dialog.findViewById(R.id.shop_row_0), dialog.findViewById(R.id.shop_row_1)};
+        for (LinearLayout row : rows) row.removeAllViews();
 
         for (int i = 0; i < Math.min(shopItems.size(), 6); i++) {
             ShopItem item = shopItems.get(i);
             final int index = i;
 
             android.view.View card = getLayoutInflater()
-                    .inflate(R.layout.dialog_shop_item, rows[i / 2], false);
+                    .inflate(R.layout.dialog_shop_item, rows[i / 3], false);
 
             TextView nameView  = card.findViewById(R.id.item_name);
             TextView typeView  = card.findViewById(R.id.item_type_badge);
@@ -1924,7 +1942,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             int rarityColor = getRarityColor(item.rarity);
             android.graphics.drawable.GradientDrawable border =
                     new android.graphics.drawable.GradientDrawable();
-            border.setColor(Color.parseColor("#1A1A1A"));
+            border.setColor(ContextCompat.getColor(this, R.color.bg_surface));
             border.setCornerRadius(12f);
             border.setStroke(3, rarityColor);
             card.setBackground(border);
@@ -1932,12 +1950,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             nameView.setText(item.name);
             nameView.setTextColor(rarityColor);
             typeView.setText(item.type.name());
-            priceView.setText("🪙 " + item.price);
+            priceView.setText(String.valueOf(item.price));
 
             if (shopBoughtIndices.contains(index)) {
                 // Already purchased — dim and disable the card
                 card.setAlpha(0.3f);
                 priceView.setText("SOLD");
+                priceView.setCompoundDrawablesRelative(null, null, null, null);
             } else if (playerGold < item.price) {
                 card.setAlpha(0.5f);
                 card.setOnClickListener(v ->
@@ -1947,7 +1966,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         showItemDetailDialog(dialog, item, card, goldDisplay, shopBoughtIndices, index));
             }
 
-            rows[i / 2].addView(card);
+            rows[i / 3].addView(card);
         }
     }
 
@@ -1970,9 +1989,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         TextView typeView     = detail.findViewById(R.id.detail_type);
         TextView rarityView   = detail.findViewById(R.id.detail_rarity);
         TextView descView     = detail.findViewById(R.id.detail_description);
-        TextView statsView    = detail.findViewById(R.id.detail_stats);
+        LinearLayout statsView = detail.findViewById(R.id.detail_stats);
         TextView priceView    = detail.findViewById(R.id.detail_price);
-        TextView closeBtn     = detail.findViewById(R.id.btn_close_detail);
+        View closeBtn         = detail.findViewById(R.id.btn_close_detail);
         MaterialButton buyBtn = detail.findViewById(R.id.btn_buy_detail);
 
         int rarityColor = getRarityColor(item.rarity);
@@ -1982,8 +2001,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         rarityView.setText(item.rarity.toUpperCase());
         rarityView.setTextColor(rarityColor);
         descView.setText(item.description);
-        priceView.setText("🪙 " + item.price);
-        statsView.setText(buildDetailStats(item));
+        priceView.setText(String.valueOf(item.price));
+        showDetailStats(statsView, item);
 
         boolean canAfford = playerGold >= item.price;
         buyBtn.setAlpha(canAfford ? 1f : 0.4f);
@@ -1996,7 +2015,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
             playerGold -= item.price;
             statsManager.onCoinsSpent(item.price);
-            goldDisplay.setText("🪙 " + playerGold);
+            goldDisplay.setText(String.valueOf(playerGold));
             updateGoldHUD();
 
             purchaseItem(item);
@@ -2034,7 +2053,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         android.view.View container = dialog.findViewById(R.id.shop_items_container);
         MaterialButton btnClose    = dialog.findViewById(R.id.btn_close_shop);
 
-        goldDisplay.setText("🪙 " + playerGold);
+        goldDisplay.setText(String.valueOf(playerGold));
 
         btnClose.setOnClickListener(v -> {
             ShopParticleView particles = dialog.findViewById(R.id.shop_particles);
@@ -2121,32 +2140,53 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     private int getRarityColor(String rarity) {
-        if (rarity == null) return Color.parseColor("#888888");
+        if (rarity == null) return ContextCompat.getColor(this, R.color.rarity_common);
         switch (rarity.toUpperCase()) {
-            case "RARE":      return Color.parseColor("#3399FF");
-            case "EPIC":      return Color.parseColor("#AA44FF");
-            case "LEGENDARY": return Color.parseColor("#FFD700");
-            default:          return Color.parseColor("#888888");
+            case "RARE":      return ContextCompat.getColor(this, R.color.rarity_rare);
+            case "EPIC":      return ContextCompat.getColor(this, R.color.arcane_glow); // rarity_epic is too dark for text
+            case "LEGENDARY": return ContextCompat.getColor(this, R.color.rarity_legendary);
+            default:          return ContextCompat.getColor(this, R.color.rarity_common);
         }
     }
 
-    private String buildDetailStats(ShopItem item) {
+    private void showDetailStats(LinearLayout box, ShopItem item) {
         switch (item.type) {
             case WEAPON:
-                return "⚔  Damage      " + item.damage + "\n" +
-                        "📏  Range         " + (int) item.range + "\n" +
-                        "⏱  Cooldown    " + item.cooldown + "ms\n" +
-                        "💫  Knockback  " + item.knockback + "\n" +
-                        "🎯  Attack        " + (item.isProjectile ? "Projectile" : "Melee");
+                addStatRow(box, R.drawable.ic_crossed_swords, "Damage", String.valueOf(item.damage));
+                addStatRow(box, R.drawable.ic_range, "Range", String.valueOf((int) item.range));
+                addStatRow(box, R.drawable.ic_hourglass, "Cooldown", item.cooldown + "ms");
+                addStatRow(box, R.drawable.ic_knockback, "Knockback", String.valueOf(item.knockback));
+                addStatRow(box, R.drawable.ic_target, "Attack", item.isProjectile ? "Projectile" : "Melee");
+                break;
             case ARMOR:
-                return "🛡  Defense      +" + item.defense + "\n" +
-                        "❤  Durability    " + (int) item.maxDurability + "\n" +
-                        "📦  Slot            " + item.armorSlot;
+                String slot = String.valueOf(item.armorSlot);
+                addStatRow(box, R.drawable.ic_shield, "Defense", "+" + item.defense);
+                addStatRow(box, R.drawable.ic_anvil, "Durability", String.valueOf((int) item.maxDurability));
+                addStatRow(box, slotIcon(slot), "Slot", slot);
+                break;
             case CONSUMABLE:
-                return ("heal".equals(item.effect) ? "❤  Restores    +" : "🛡  Restores    +")
-                        + item.effectValue
-                        + ("heal".equals(item.effect) ? " HP" : " Armor");
-            default: return "";
+                showConsumableStats(box, item);
+                break;
+        }
+    }
+
+    // One icon + label + value line, reusing the stats screen row
+    private void addStatRow(LinearLayout box, int icon, String label, String value) {
+        View row = getLayoutInflater().inflate(R.layout.item_stat_row, box, false);
+        android.widget.ImageView iconView = row.findViewById(R.id.stat_icon);
+        iconView.setImageResource(icon);
+        iconView.setVisibility(View.VISIBLE);
+        ((TextView) row.findViewById(R.id.stat_label)).setText(label);
+        ((TextView) row.findViewById(R.id.stat_value)).setText(value);
+        box.addView(row);
+    }
+
+    private int slotIcon(String slot) {
+        switch (slot.toUpperCase()) {
+            case "HEAD":  return R.drawable.ic_helmet;
+            case "LEGS":  return R.drawable.ic_leg_armor;
+            case "BOOTS": return R.drawable.ic_boots;
+            default:      return R.drawable.ic_chest_armor;
         }
     }
 
@@ -2323,41 +2363,56 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         announceBoss();
     }
 
-    /** Shows the boss's name and title over the screen. */
+    /** Sweeps the boss title card across the screen: label, gold rules, name slam, title. */
     private void announceBoss() {
-        // Build announcement text
-        final String announceName  = currentBossName  != null ? currentBossName.toUpperCase()  : "⚠ BOSS ⚠";
-        final String announceTitle = currentBossTitle != null ? currentBossTitle : "";
-        final int    announceColor = currentBossColor;
+        final String name  = currentBossName  != null ? currentBossName.toUpperCase()  : "THE ANCIENT ONE";
+        final String title = currentBossTitle != null ? currentBossTitle : "";
+        final int    color = currentBossColor;
+        final int    floor = floorManager.getCurrentFloor();
 
         runOnUiThread(() -> {
-            txtFloorTitle.setText(announceName + (announceTitle.isEmpty()
-                    ? "" : "\n" + announceTitle));
             soundManager.playBossSpawn();
-            txtFloorTitle.setTextColor(announceColor);
-            txtFloorTitle.setAlpha(0f);
-            floorTransitionOverlay.setVisibility(android.view.View.VISIBLE);
-            floorTransitionOverlay.setAlpha(0f);
-            floorTransitionOverlay.setClickable(false);
-            floorTransitionOverlay.animate().alpha(0.6f).setDuration(300)
-                    .withEndAction(() ->
-                            txtFloorTitle.animate().alpha(1f).setDuration(300)
-                                    .withEndAction(() ->
-                                            new android.os.Handler().postDelayed(() ->
-                                                            txtFloorTitle.animate().alpha(0f).setDuration(300)
-                                                                    .withEndAction(() -> {
-                                                                        floorTransitionOverlay.animate()
-                                                                                .alpha(0f).setDuration(300)
-                                                                                .withEndAction(() -> {
-                                                                                    floorTransitionOverlay.setVisibility(
-                                                                                            android.view.View.GONE);
-                                                                                    txtFloorTitle.setTextColor(
-                                                                                            android.graphics.Color.WHITE);
-                                                                                }).start();
-                                                                    }).start()
-                                                    , 1800)
-                                    ).start()
-                    ).start();
+            float dp = getResources().getDisplayMetrics().density;
+            android.view.animation.DecelerateInterpolator ease =
+                    new android.view.animation.DecelerateInterpolator(2f);
+
+            bossLabel.setText("GUARDIAN OF FLOOR " + floor);
+            bossName.setText(name);
+            bossName.setTextColor(color);
+            bossName.setShadowLayer(18f, 0f, 0f, color);
+            bossTitle.setText(title);
+            bossTitle.setVisibility(title.isEmpty() ? View.GONE : View.VISIBLE);
+
+            // Start state
+            bossIntro.animate().cancel();
+            bossIntro.setAlpha(1f);
+            bossIntro.setVisibility(View.VISIBLE);
+            bossBand.setAlpha(0f);
+            bossBand.setScaleY(0.4f);
+            bossLabel.setAlpha(0f);
+            bossLabel.setTranslationY(-12 * dp);
+            bossLineTop.setScaleX(0f);
+            bossLineBottom.setScaleX(0f);
+            bossName.setAlpha(0f);
+            bossName.setScaleX(1.4f);
+            bossName.setScaleY(1.4f);
+            bossTitle.setAlpha(0f);
+            bossTitle.setTranslationY(12 * dp);
+
+            bossBand.animate().alpha(1f).scaleY(1f).setStartDelay(0).setDuration(280).setInterpolator(ease).start();
+            bossLabel.animate().alpha(1f).translationY(0f).setStartDelay(200).setDuration(320).start();
+            bossLineTop.animate().scaleX(1f).setStartDelay(150).setDuration(500).setInterpolator(ease).start();
+            bossLineBottom.animate().scaleX(1f).setStartDelay(150).setDuration(500).setInterpolator(ease).start();
+            bossName.animate().alpha(1f).scaleX(1f).scaleY(1f).setStartDelay(350).setDuration(380)
+                    .setInterpolator(ease)
+                    .withEndAction(() -> { if (camera != null) camera.startShake(300, 10f); })
+                    .start();
+            bossTitle.animate().alpha(1f).translationY(0f).setStartDelay(700).setDuration(380).start();
+
+            // Hold, then fade the whole card away
+            bossIntro.animate().alpha(0f).setStartDelay(3000).setDuration(500)
+                    .withEndAction(() -> bossIntro.setVisibility(View.GONE))
+                    .start();
         });
     }
 
@@ -2496,13 +2551,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             for (int i = 0; i < ids.length; i++) {
                 TextView t = dialog.findViewById(ids[i]);
                 boolean sel = filters[i].equals(filter);
-                t.setTextColor(sel ? Color.parseColor("#FFD700") : Color.parseColor("#666666"));
-                t.setTypeface(null, sel ? android.graphics.Typeface.BOLD
-                        : android.graphics.Typeface.NORMAL);
+                t.setTextColor(ContextCompat.getColor(this, sel ? R.color.gold_bright : R.color.bone_muted));
                 if (sel) {
                     android.graphics.drawable.GradientDrawable bg =
                             new android.graphics.drawable.GradientDrawable();
-                    bg.setColor(Color.parseColor("#1A1A1A"));
+                    bg.setColor(ContextCompat.getColor(this, R.color.bg_surface_alt));
                     bg.setCornerRadius(6f);
                     t.setBackground(bg);
                 } else {
@@ -2534,7 +2587,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             view.setTextColor(getRarityColor(armor.rarity.name()));
         } else {
             view.setText("—");
-            view.setTextColor(Color.parseColor("#444444"));
+            view.setTextColor(ContextCompat.getColor(this, R.color.bone_muted));
         }
     }
 
@@ -2566,8 +2619,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (container.getChildCount() == 0) {
             TextView empty = new TextView(this);
             empty.setText("Nothing here...");
-            empty.setTextColor(Color.parseColor("#555555"));
-            empty.setTextSize(14f);
+            empty.setTextColor(ContextCompat.getColor(this, R.color.bone_muted));
+            empty.setTextSize(16f);
             empty.setGravity(android.view.Gravity.CENTER);
             empty.setPadding(0, 48, 0, 48);
             container.addView(empty);
@@ -2669,7 +2722,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             detail.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
 
         bindActionDialog(detail, weapon.name, "WEAPON", weapon.rarity.name(),
-                "", buildWeaponStats(weapon), weapon.color);
+                "", weapon.color);
+        showWeaponStats(detail.findViewById(R.id.action_stats), weapon);
 
         MaterialButton btn = detail.findViewById(R.id.btn_action);
         boolean isEquipped = player.getWeapon() == weapon;
@@ -2715,7 +2769,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         int rarityColor = getRarityColor(armor.rarity.name());
         bindActionDialog(detail, armor.name, armor.slot.name(), armor.rarity.name(),
-                "", buildArmorStats(armor), rarityColor);
+                "", rarityColor);
+        showArmorStats(detail.findViewById(R.id.action_stats), armor);
 
         MaterialButton btn = detail.findViewById(R.id.btn_action);
         boolean isEquipped = equippedArmor.get(armor.slot) == armor;
@@ -2756,7 +2811,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         int rarityColor = getRarityColor(stack.item.rarity);
         bindActionDialog(detail, stack.item.name, "CONSUMABLE", stack.item.rarity,
-                stack.item.description, buildConsumableStats(stack.item), rarityColor);
+                stack.item.description, rarityColor);
+        showConsumableStats(detail.findViewById(R.id.action_stats), stack.item);
 
         MaterialButton btn = detail.findViewById(R.id.btn_action);
         btn.setText("Use  (x" + stack.quantity + ")");
@@ -2780,7 +2836,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     private void bindActionDialog(Dialog dialog, String name, String type, String rarity,
-                                  String description, String stats, int nameColor) {
+                                  String description, int nameColor) {
         int rarityColor = getRarityColor(rarity);
 
         ((TextView) dialog.findViewById(R.id.action_name)).setText(name);
@@ -2788,7 +2844,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         ((TextView) dialog.findViewById(R.id.action_type)).setText(type);
         ((TextView) dialog.findViewById(R.id.action_rarity)).setText(rarity);
         ((TextView) dialog.findViewById(R.id.action_rarity)).setTextColor(rarityColor);
-        ((TextView) dialog.findViewById(R.id.action_stats)).setText(stats);
 
         TextView descView = dialog.findViewById(R.id.action_description);
         if (description == null || description.isEmpty()) {
@@ -2875,30 +2930,30 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         });
     }
 
-    private String buildWeaponStats(Weapon weapon) {
-        return "⚔  Damage      " + weapon.damage + "\n" +
-                "📏  Range         " + (int) weapon.range + "\n" +
-                "⏱  Cooldown    " + weapon.cooldown + "ms\n" +
-                "💫  Knockback  " + weapon.knockback + "\n" +
-                "🎯  Attack        " + (weapon.isProjectile ? "Projectile" : "Melee");
+    private void showWeaponStats(LinearLayout box, Weapon weapon) {
+        addStatRow(box, R.drawable.ic_crossed_swords, "Damage", String.valueOf(weapon.damage));
+        addStatRow(box, R.drawable.ic_range, "Range", String.valueOf((int) weapon.range));
+        addStatRow(box, R.drawable.ic_hourglass, "Cooldown", weapon.cooldown + "ms");
+        addStatRow(box, R.drawable.ic_knockback, "Knockback", String.valueOf(weapon.knockback));
+        addStatRow(box, R.drawable.ic_target, "Attack", weapon.isProjectile ? "Projectile" : "Melee");
     }
 
-    private String buildArmorStats(Armor armor) {
-        return "🛡  Defense      +" + armor.defense + "\n" +
-                "❤  Durability    " + (int) armor.maxDurability + "\n" +
-                "📦  Slot            " + armor.slot.name();
+    private void showArmorStats(LinearLayout box, Armor armor) {
+        addStatRow(box, R.drawable.ic_shield, "Defense", "+" + armor.defense);
+        addStatRow(box, R.drawable.ic_anvil, "Durability", String.valueOf((int) armor.maxDurability));
+        addStatRow(box, slotIcon(armor.slot.name()), "Slot", armor.slot.name());
     }
 
-    private String buildConsumableStats(ShopItem item) {
-        return ("heal".equals(item.effect) ? "❤  Restores    +" : "🛡  Restores    +")
-                + item.effectValue
-                + ("heal".equals(item.effect) ? " HP" : " Armor");
+    private void showConsumableStats(LinearLayout box, ShopItem item) {
+        boolean heal = "heal".equals(item.effect);
+        addStatRow(box, heal ? R.drawable.ic_heart : R.drawable.ic_shield, "Restores",
+                "+" + item.effectValue + (heal ? " HP" : " Armor"));
     }
 
     private void applyRarityBorder(View view, int color) {
         android.graphics.drawable.GradientDrawable border =
                 new android.graphics.drawable.GradientDrawable();
-        border.setColor(Color.parseColor("#1A1A1A"));
+        border.setColor(ContextCompat.getColor(this, R.color.bg_surface));
         border.setCornerRadius(10f);
         border.setStroke(2, color);
         view.setBackground(border);
@@ -2916,7 +2971,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
 
         TextView txtCheckpoint = dialog.findViewById(R.id.txt_checkpoint);
-        txtCheckpoint.setText("🏁  Last checkpoint: Floor " + checkpointFloor);
+        txtCheckpoint.setText("Last checkpoint: Floor " + checkpointFloor);
 
         MaterialButton btnRespawn = dialog.findViewById(R.id.btn_respawn);
         btnRespawn.setOnClickListener(v -> {
@@ -2960,7 +3015,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * Refreshes the gold display in the HUD to the current amount.
      */
     private void updateGoldHUD() {
-        runOnUiThread(() -> txtGold.setText("🪙 " + playerGold));
+        runOnUiThread(() -> txtGold.setText(String.valueOf(playerGold)));
     }
 
     /* ============================================================

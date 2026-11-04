@@ -263,7 +263,7 @@ public class LobbyActivity extends AppCompatActivity {
             TextView value = row.findViewById(R.id.stat_value);
             if (names[i] != null) {
                 label.setText((i + 1) + ".  " + names[i]);
-                label.setTextColor(Color.parseColor("#EAE0CA"));
+                label.setTextColor(getColor(R.color.bone_white));
                 value.setText(tags[i]);
             } else {
                 label.setText((i + 1) + ".  Empty slot");

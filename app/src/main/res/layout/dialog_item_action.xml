@@ -8,49 +8,51 @@
     android:clickable="true"
     android:focusable="true">
 
+    <!-- Scrolls instead of clipping on short landscape screens -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingVertical="@dimen/space_md">
+
     <LinearLayout
-        android:layout_width="400dp"
+        style="@style/OD.Card"
+        android:layout_width="@dimen/card_width_lg"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:orientation="vertical"
-        android:background="@drawable/rounded_dialog_bg"
-        android:padding="22dp"
         android:animation="@anim/dialog_open">
 
         <!-- Header: close + name -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp">
+            android:layout_marginBottom="@dimen/space_sm">
 
-            <TextView
+            <ImageButton
                 android:id="@+id/btn_close_action"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
+                style="@style/OD.CloseButton"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
                 android:layout_gravity="start|center_vertical"
-                android:text="✕"
-                android:textColor="@color/bone_dim"
-                android:textSize="18sp"
-                android:fontFamily="serif"
-                android:gravity="center"
-                android:clickable="true"
-                android:focusable="true"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Close"
                 tools:ignore="HardcodedText"/>
 
             <TextView
                 android:id="@+id/action_name"
+                style="@style/OD.Text.Title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:gravity="center"
-                android:paddingHorizontal="40dp"
+                android:paddingHorizontal="@dimen/touch_min"
                 android:text="Item Name"
-                android:textColor="@color/gold_bright"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:letterSpacing="0.06"
+                android:textSize="@dimen/text_heading"
                 android:shadowColor="@color/gold_glow"
                 android:shadowDx="0"
                 android:shadowDy="0"
@@ -61,44 +63,49 @@
 
         </FrameLayout>
 
+        <!-- Two panes for landscape: details + actions | stats -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
         <!-- Type + rarity -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="@dimen/space_md">
 
             <TextView
                 android:id="@+id/action_type"
+                style="@style/OD.Text.Label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="WEAPON"
                 android:textColor="@color/bone_white"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:letterSpacing="0.22"
                 android:background="@drawable/dialog_bg"
-                android:paddingHorizontal="12dp"
-                android:paddingVertical="5dp"
+                android:paddingHorizontal="@dimen/space_md"
+                android:paddingVertical="@dimen/space_xs"
                 tools:ignore="HardcodedText"/>
 
-            <View android:layout_width="8dp" android:layout_height="1dp"/>
+            <View android:layout_width="@dimen/space_sm" android:layout_height="1dp"/>
 
             <TextView
                 android:id="@+id/action_rarity"
+                style="@style/OD.Text.Label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="COMMON"
-                android:textColor="@color/bone_dim"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:letterSpacing="0.22"
                 android:background="@drawable/dialog_bg"
-                android:paddingHorizontal="12dp"
-                android:paddingVertical="5dp"
+                android:paddingHorizontal="@dimen/space_md"
+                android:paddingVertical="@dimen/space_xs"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
@@ -106,52 +113,23 @@
         <!-- Description -->
         <TextView
             android:id="@+id/action_description"
+            style="@style/OD.Text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text=""
             android:textColor="@color/bone_dim"
-            android:textSize="13sp"
             android:textStyle="italic"
-            android:fontFamily="serif"
             android:gravity="center"
             android:lineSpacingExtra="2dp"
-            android:layout_marginBottom="14dp"/>
-
-        <!-- Divider -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="@drawable/divider_gold"
-            android:layout_marginBottom="14dp"/>
-
-        <!-- Stats -->
-        <TextView
-            android:id="@+id/action_stats"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:textColor="@color/bone_white"
-            android:textSize="13sp"
-            android:fontFamily="serif"
-            android:lineSpacingExtra="6dp"
-            android:layout_marginBottom="18dp"/>
+            android:layout_marginBottom="@dimen/space_md"/>
 
         <!-- Action button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_action"
+            style="@style/OD.Button"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="@dimen/button_height"
             android:text="Use"
-            android:textAllCaps="false"
-            android:textColor="@color/gold_glow"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:fontFamily="serif"
-            android:letterSpacing="0.08"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            app:backgroundTint="@null"
-            android:background="@drawable/btn_login"
             android:stateListAnimator="@animator/button_elevation_anim"
             android:translationZ="4dp"
             tools:ignore="HardcodedText"/>
@@ -159,22 +137,36 @@
         <!-- Remove button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_remove"
+            style="@style/OD.Button.Danger"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:layout_marginTop="10dp"
+            android:layout_height="@dimen/touch_min"
+            android:layout_marginTop="@dimen/space_md"
             android:text="Remove"
-            android:textAllCaps="false"
-            android:textColor="@color/crimson_glow"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:fontFamily="serif"
-            android:letterSpacing="0.06"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            app:backgroundTint="@null"
-            android:background="@drawable/btn_gothic_danger"
+            android:textSize="@dimen/text_small"
             tools:ignore="HardcodedText"/>
 
+        </LinearLayout>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginHorizontal="@dimen/space_lg"
+            android:background="@color/divider_gold"/>
+
+        <!-- Stats: rows inflated in Java -->
+        <LinearLayout
+            android:id="@+id/action_stats"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"/>
+
+        </LinearLayout>
+
     </LinearLayout>
+
+    </FrameLayout>
+
+    </ScrollView>
 
 </FrameLayout>

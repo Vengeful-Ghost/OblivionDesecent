@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:orientation="horizontal"
     android:background="@drawable/game_background"
-    android:padding="12dp">
+    android:padding="@dimen/space_md">
 
     <!-- LEFT: Personal Stats Panel -->
     <LinearLayout
@@ -15,26 +15,23 @@
         android:layout_weight="1"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
-        android:padding="16dp"
-        android:layout_marginEnd="8dp">
+        android:padding="@dimen/space_lg"
+        android:layout_marginEnd="@dimen/space_sm">
 
         <!-- Title -->
         <TextView
+            style="@style/OD.Text.Title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Personal Stats"
             android:textAllCaps="true"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:fontFamily="serif"
-            android:textColor="@color/gold_bright"
             android:gravity="center"
-            android:letterSpacing="0.1"
-            android:shadowColor="@color/gold_glow"
-            android:shadowDx="0"
-            android:shadowDy="0"
-            android:shadowRadius="10"
-            android:layout_marginBottom="12dp"
+            android:maxLines="1"
+            app:autoSizeTextType="uniform"
+            app:autoSizeMinTextSize="16sp"
+            app:autoSizeMaxTextSize="@dimen/text_title"
+            app:autoSizeStepGranularity="1sp"
+            android:layout_marginBottom="@dimen/space_md"
             tools:ignore="HardcodedText"/>
 
         <!-- Lifetime / Current Game toggle -->
@@ -42,37 +39,29 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="12dp"
+            android:layout_marginBottom="@dimen/space_md"
             android:background="@drawable/dialog_bg"
-            android:padding="4dp">
+            android:padding="@dimen/space_xs">
 
             <TextView
                 android:id="@+id/tab_lifetime"
+                style="@style/OD.Text.Tab"
                 android:layout_width="0dp"
-                android:layout_height="38dp"
+                android:layout_height="@dimen/touch_min"
                 android:layout_weight="1"
                 android:text="Lifetime"
                 android:textColor="@color/gold_bright"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:letterSpacing="0.08"
-                android:gravity="center"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
 
             <TextView
                 android:id="@+id/tab_current"
+                style="@style/OD.Text.Tab"
                 android:layout_width="0dp"
-                android:layout_height="38dp"
+                android:layout_height="@dimen/touch_min"
                 android:layout_weight="1"
                 android:text="Current Game"
-                android:textColor="@color/bone_muted"
-                android:textSize="13sp"
-                android:fontFamily="serif"
-                android:letterSpacing="0.08"
-                android:gravity="center"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
@@ -83,7 +72,7 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="@drawable/divider_gold"
-            android:layout_marginBottom="12dp"/>
+            android:layout_marginBottom="@dimen/space_md"/>
 
         <!-- Stats scroll -->
         <ScrollView
@@ -103,20 +92,12 @@
         <!-- Back button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_back_stats"
+            style="@style/OD.Button.Secondary"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="12dp"
-            android:text="← Back"
-            android:textAllCaps="false"
-            android:textColor="@color/gold_glow"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:fontFamily="serif"
-            android:letterSpacing="0.08"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            app:backgroundTint="@null"
-            android:background="@drawable/btn_gothic_secondary"
+            android:layout_height="@dimen/touch_min"
+            android:layout_marginTop="@dimen/space_md"
+            android:text="Back"
+            app:icon="@drawable/ic_back"
             tools:ignore="HardcodedText"/>
 
     </LinearLayout>
@@ -128,25 +109,22 @@
         android:layout_weight="1"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
-        android:padding="16dp">
+        android:padding="@dimen/space_lg">
 
         <!-- Title -->
         <TextView
+            style="@style/OD.Text.Title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Leaderboard"
             android:textAllCaps="true"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:fontFamily="serif"
-            android:textColor="@color/gold_bright"
             android:gravity="center"
-            android:letterSpacing="0.1"
-            android:shadowColor="@color/gold_glow"
-            android:shadowDx="0"
-            android:shadowDy="0"
-            android:shadowRadius="10"
-            android:layout_marginBottom="12dp"
+            android:maxLines="1"
+            app:autoSizeTextType="uniform"
+            app:autoSizeMinTextSize="16sp"
+            app:autoSizeMaxTextSize="@dimen/text_title"
+            app:autoSizeStepGranularity="1sp"
+            android:layout_marginBottom="@dimen/space_md"
             tools:ignore="HardcodedText"/>
 
         <!-- Global / Following toggle -->
@@ -154,37 +132,29 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="8dp"
+            android:layout_marginBottom="@dimen/space_sm"
             android:background="@drawable/dialog_bg"
-            android:padding="4dp">
+            android:padding="@dimen/space_xs">
 
             <TextView
                 android:id="@+id/tab_global"
+                style="@style/OD.Text.Tab"
                 android:layout_width="0dp"
-                android:layout_height="38dp"
+                android:layout_height="@dimen/touch_min"
                 android:layout_weight="1"
                 android:text="Global"
                 android:textColor="@color/gold_bright"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:letterSpacing="0.08"
-                android:gravity="center"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
 
             <TextView
                 android:id="@+id/tab_following"
+                style="@style/OD.Text.Tab"
                 android:layout_width="0dp"
-                android:layout_height="38dp"
+                android:layout_height="@dimen/touch_min"
                 android:layout_weight="1"
                 android:text="Following"
-                android:textColor="@color/bone_muted"
-                android:textSize="13sp"
-                android:fontFamily="serif"
-                android:letterSpacing="0.08"
-                android:gravity="center"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>
@@ -198,44 +168,27 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="@drawable/dialog_bg"
-            android:paddingHorizontal="12dp"
-            android:paddingVertical="4dp"
-            android:layout_marginBottom="8dp"
+            android:layout_marginBottom="@dimen/space_sm"
             android:visibility="gone">
 
             <android.widget.EditText
                 android:id="@+id/search_input"
+                style="@style/OD.Input"
                 android:layout_width="0dp"
-                android:layout_height="38dp"
+                android:layout_height="@dimen/touch_min"
                 android:layout_weight="1"
                 android:hint="Search username..."
-                android:textColor="@color/bone_white"
-                android:textColorHint="@color/bone_muted"
-                android:textSize="13sp"
-                android:fontFamily="serif"
-                android:background="@null"
                 android:singleLine="true"
                 android:imeOptions="actionSearch"
                 android:inputType="text"/>
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_search"
+                style="@style/OD.Button.Secondary"
                 android:layout_width="wrap_content"
-                android:layout_height="34dp"
+                android:layout_height="@dimen/touch_min"
+                android:layout_marginStart="@dimen/space_sm"
                 android:text="Search"
-                android:textAllCaps="false"
-                android:textColor="@color/gold_glow"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:letterSpacing="0.06"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                app:backgroundTint="@null"
-                android:background="@drawable/btn_gothic_secondary"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
@@ -244,7 +197,7 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="@drawable/divider_gold"
-            android:layout_marginBottom="8dp"/>
+            android:layout_marginBottom="@dimen/space_sm"/>
 
         <!-- RecyclerView for leaderboard -->
         <androidx.recyclerview.widget.RecyclerView
@@ -266,15 +219,14 @@
         <!-- Empty state -->
         <TextView
             android:id="@+id/leaderboard_empty"
+            style="@style/OD.Text.Caption"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="No players found"
             android:textColor="@color/bone_faint"
-            android:textSize="14sp"
             android:textStyle="italic"
-            android:fontFamily="serif"
             android:gravity="center"
-            android:paddingVertical="32dp"
+            android:paddingVertical="@dimen/space_xxl"
             android:visibility="gone"
             tools:ignore="HardcodedText"/>
 

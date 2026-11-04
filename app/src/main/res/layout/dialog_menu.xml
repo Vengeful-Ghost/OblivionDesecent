@@ -7,15 +7,26 @@
     android:background="@color/bg_overlay"
     android:clickable="true"
     android:focusable="true"
-    android:padding="16dp">
+    android:padding="@dimen/space_lg">
+
+    <!-- Scrolls instead of clipping on short landscape screens -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
 
     <LinearLayout
         android:id="@+id/dialog_menu"
-        android:layout_width="420dp"
+        android:layout_width="@dimen/card_width_md"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
-        android:padding="28dp"
+        android:padding="@dimen/space_xl"
         android:layout_gravity="center"
         android:animation="@anim/dialog_open">
 
@@ -23,25 +34,25 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:paddingTop="6dp"
-            android:paddingBottom="22dp">
+            android:paddingBottom="@dimen/space_md">
 
             <TextView
                 android:id="@+id/GameTitleBack"
+                style="@style/OD.Text.Title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Oblivion Descent"
                 android:textAllCaps="true"
-                android:textSize="32sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:singleLine="true"
-                android:textColor="#66000000"
+                android:maxLines="1"
+                app:autoSizeTextType="uniform"
+                app:autoSizeMinTextSize="16sp"
+                app:autoSizeMaxTextSize="@dimen/text_title"
+                app:autoSizeStepGranularity="1sp"
+                android:textColor="@color/shadow_soft"
                 android:gravity="center"
-                android:letterSpacing="0.08"
                 android:ellipsize="none"
                 android:scrollHorizontally="false"
-                android:shadowColor="#CC000000"
+                android:shadowColor="@color/shadow_hard"
                 android:shadowDx="3"
                 android:shadowDy="3"
                 android:shadowRadius="8"
@@ -51,19 +62,19 @@
 
             <TextView
                 android:id="@+id/GameTitleFront"
+                style="@style/OD.Text.Title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Oblivion Descent"
                 android:textAllCaps="true"
-                android:textSize="32sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:singleLine="true"
-                android:textColor="@color/gold_bright"
+                android:maxLines="1"
+                app:autoSizeTextType="uniform"
+                app:autoSizeMinTextSize="16sp"
+                app:autoSizeMaxTextSize="@dimen/text_title"
+                app:autoSizeStepGranularity="1sp"
                 android:ellipsize="none"
                 android:scrollHorizontally="false"
                 android:gravity="center"
-                android:letterSpacing="0.08"
                 android:shadowColor="@color/gold_glow"
                 android:shadowDx="0"
                 android:shadowDy="0"
@@ -76,57 +87,37 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="@drawable/divider_gold"
-            android:layout_marginBottom="20dp"/>
+            android:layout_marginBottom="@dimen/space_md"/>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_resume"
+            style="@style/OD.Button"
             android:layout_width="match_parent"
-            android:layout_height="58dp"
+            android:layout_height="@dimen/button_height"
             android:text="Resume"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:fontFamily="serif"
-            android:letterSpacing="0.08"
-            android:textColor="@color/gold_glow"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            app:backgroundTint="@null"
-            android:background="@drawable/btn_login"
             android:stateListAnimator="@animator/button_elevation_anim"
             android:translationZ="4dp"
-            android:layout_marginBottom="14dp" />
+            android:layout_marginBottom="@dimen/space_md" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_settings"
+            style="@style/OD.Button.Secondary"
             android:layout_width="match_parent"
-            android:layout_height="58dp"
+            android:layout_height="@dimen/button_height"
             android:text="Settings"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:fontFamily="serif"
-            android:letterSpacing="0.08"
             android:textColor="@color/gold_glow"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            app:backgroundTint="@null"
-            android:background="@drawable/btn_gothic_secondary"
-            android:layout_marginBottom="14dp" />
+            android:layout_marginBottom="@dimen/space_md" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_main_menu"
+            style="@style/OD.Button.Danger"
             android:layout_width="match_parent"
-            android:layout_height="58dp"
-            android:text="Main Menu"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:fontFamily="serif"
-            android:letterSpacing="0.08"
-            android:textColor="@color/crimson_glow"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            app:backgroundTint="@null"
-            android:background="@drawable/btn_gothic_danger" />
-
+            android:layout_height="@dimen/button_height"
+            android:text="Main Menu" />
     </LinearLayout>
+
+    </FrameLayout>
+
+    </ScrollView>
 
 </FrameLayout>

@@ -236,9 +236,9 @@ public class MenuActivity extends AppCompatActivity {
 
         // Style the buttons
         alert.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
-                .setTextColor(Color.parseColor("#FF4444"));
+                .setTextColor(getColor(R.color.crimson_glow));
         alert.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
-                .setTextColor(Color.parseColor("#AAAAAA"));
+                .setTextColor(getColor(R.color.bone_dim));
     }
 
     /**

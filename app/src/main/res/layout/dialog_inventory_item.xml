@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="56dp"
+    android:layout_height="wrap_content"
+    android:minHeight="56dp"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingHorizontal="12dp"
-    android:paddingVertical="6dp"
-    android:layout_marginBottom="6dp"
+    android:paddingHorizontal="@dimen/space_md"
+    android:paddingVertical="@dimen/space_sm"
+    android:layout_marginBottom="@dimen/space_sm"
     android:clickable="true"
     android:focusable="true"
     android:background="@drawable/dialog_bg">
@@ -19,52 +20,42 @@
 
         <TextView
             android:id="@+id/inv_item_name"
+            style="@style/OD.Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Item Name"
-            android:textColor="@color/bone_white"
-            android:textSize="14sp"
             android:textStyle="bold"
-            android:fontFamily="serif"
             android:maxLines="1"
             android:ellipsize="end"/>
 
         <TextView
             android:id="@+id/inv_item_subtitle"
+            style="@style/OD.Text.Label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="WEAPON"
-            android:textColor="@color/bone_muted"
-            android:textSize="10sp"
-            android:textStyle="italic"
-            android:fontFamily="serif"
-            android:letterSpacing="0.08"
-            android:layout_marginTop="2dp"/>
+            android:maxLines="1"
+            android:ellipsize="end"/>
 
     </LinearLayout>
 
     <TextView
         android:id="@+id/inv_item_quantity"
+        style="@style/OD.Text.Value"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="x2"
-        android:textColor="@color/gold_bright"
-        android:textSize="13sp"
-        android:textStyle="bold"
-        android:fontFamily="serif"
         android:visibility="gone"
-        android:layout_marginEnd="10dp"/>
+        android:layout_marginEnd="@dimen/space_md"/>
 
     <TextView
         android:id="@+id/inv_equipped_badge"
+        style="@style/OD.Text.Label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_sm"
         android:text="EQUIPPED"
         android:textColor="@color/success_green"
-        android:textSize="9sp"
-        android:textStyle="bold"
-        android:fontFamily="serif"
-        android:letterSpacing="0.18"
         android:visibility="gone"/>
 
 </LinearLayout>

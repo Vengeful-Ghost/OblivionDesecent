@@ -11,74 +11,106 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 
-    <!-- Gold display — top right -->
-    <TextView
-        android:id="@+id/shop_gold_display"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|end"
-        android:layout_margin="42dp"
-        android:paddingHorizontal="18dp"
-        android:paddingVertical="10dp"
-        android:text="🪙 0"
-        android:textColor="@color/gold_bright"
-        android:textSize="17sp"
-        android:textStyle="bold"
-        android:fontFamily="serif"
-        android:letterSpacing="0.06"
-        android:shadowColor="@color/gold_glow"
-        android:shadowDx="0"
-        android:shadowDy="0"
-        android:shadowRadius="10"
-        android:background="@drawable/hud_panel"
-        tools:ignore="HardcodedText"/>
+    <!-- Scrolls instead of clipping on short landscape screens -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none">
 
-    <!-- Centered shop card -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingVertical="@dimen/space_md">
+
+    <!-- Centered shop card (600dp fits a 640dp landscape phone) -->
     <LinearLayout
-        android:layout_width="620dp"
+        style="@style/OD.Card"
+        android:layout_width="600dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:orientation="vertical"
-        android:background="@drawable/rounded_dialog_bg"
-        android:padding="14dp"
+        android:paddingStart="@dimen/space_lg"
+        android:paddingEnd="@dimen/space_lg"
         android:animation="@anim/dialog_open">
 
-        <!-- Title -->
+        <!-- Title bar: gold on the left, Leave on the right, so neither can end up off screen -->
         <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="6dp">
+            android:layout_height="@dimen/touch_min"
+            android:layout_marginBottom="@dimen/space_sm">
 
             <TextView
+                android:id="@+id/shop_gold_display"
+                style="@style/OD.Text.Value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start|center_vertical"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="@dimen/space_md"
+                android:paddingVertical="@dimen/space_sm"
+                android:text="0"
+                android:drawableStart="@drawable/ic_coin"
+                android:drawablePadding="@dimen/space_xs"
+                android:drawableTint="@color/gold_bright"
+                android:shadowColor="@color/gold_glow"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="10"
+                android:background="@drawable/hud_panel"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                style="@style/OD.Text.Title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:paddingHorizontal="120dp"
                 android:text="The Void Market"
                 android:textAllCaps="true"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:textColor="#66000000"
+                android:textColor="@color/shadow_soft"
+                android:shadowColor="@color/shadow_hard"
                 android:gravity="center"
-                android:letterSpacing="0.1"
+                android:maxLines="1"
+                app:autoSizeTextType="uniform"
+                app:autoSizeMinTextSize="16sp"
+                app:autoSizeMaxTextSize="@dimen/text_title"
+                app:autoSizeStepGranularity="1sp"
                 android:translationX="2dp"
                 android:translationY="2dp"
                 tools:ignore="HardcodedText"/>
 
             <TextView
+                style="@style/OD.Text.Title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:paddingHorizontal="120dp"
                 android:text="The Void Market"
                 android:textAllCaps="true"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:fontFamily="serif"
-                android:textColor="@color/gold_bright"
                 android:gravity="center"
-                android:letterSpacing="0.1"
+                android:maxLines="1"
+                app:autoSizeTextType="uniform"
+                app:autoSizeMinTextSize="16sp"
+                app:autoSizeMaxTextSize="@dimen/text_title"
+                app:autoSizeStepGranularity="1sp"
                 android:shadowColor="@color/gold_glow"
                 android:shadowDx="0"
                 android:shadowDy="0"
                 android:shadowRadius="12"
+                tools:ignore="HardcodedText"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_close_shop"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/touch_min"
+                android:layout_gravity="end|center_vertical"
+                android:text="Leave"
+                android:textColor="@color/bone_dim"
+                android:textSize="@dimen/text_small"
+                app:icon="@drawable/ic_close"
+                app:iconTint="@color/bone_dim"
                 tools:ignore="HardcodedText"/>
 
         </FrameLayout>
@@ -87,13 +119,13 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="@drawable/divider_gold"
-            android:layout_marginBottom="8dp"/>
+            android:layout_marginBottom="@dimen/space_sm"/>
 
         <!-- Loading state -->
         <LinearLayout
             android:id="@+id/shop_loading"
             android:layout_width="match_parent"
-            android:layout_height="170dp"
+            android:layout_height="150dp"
             android:orientation="vertical"
             android:gravity="center"
             android:visibility="gone">
@@ -104,20 +136,17 @@
                 android:indeterminateTint="@color/gold_bright"/>
 
             <TextView
+                style="@style/OD.Text.Caption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="The Merchant is preparing..."
-                android:textColor="@color/bone_dim"
-                android:textSize="14sp"
                 android:textStyle="italic"
-                android:fontFamily="serif"
-                android:letterSpacing="0.04"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="@dimen/space_lg"
                 tools:ignore="HardcodedText"/>
 
         </LinearLayout>
 
-        <!-- Items: 3 rows of 2 -->
+        <!-- Items: 2 rows of 3 -->
         <LinearLayout
             android:id="@+id/shop_items_container"
             android:layout_width="match_parent"
@@ -128,45 +157,22 @@
             <LinearLayout
                 android:id="@+id/shop_row_0"
                 android:layout_width="match_parent"
-                android:layout_height="86dp"
+                android:layout_height="96dp"
                 android:orientation="horizontal"
-                android:layout_marginBottom="6dp"/>
+                android:layout_marginBottom="@dimen/space_sm"/>
 
             <LinearLayout
                 android:id="@+id/shop_row_1"
                 android:layout_width="match_parent"
-                android:layout_height="86dp"
-                android:orientation="horizontal"
-                android:layout_marginBottom="6dp"/>
-
-            <LinearLayout
-                android:id="@+id/shop_row_2"
-                android:layout_width="match_parent"
-                android:layout_height="86dp"
-                android:orientation="horizontal"
-                android:layout_marginBottom="6dp"/>
+                android:layout_height="96dp"
+                android:orientation="horizontal"/>
 
         </LinearLayout>
 
-        <!-- Leave button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_close_shop"
-            android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:layout_marginTop="6dp"
-            android:text="Leave Shop"
-            android:textAllCaps="false"
-            android:textColor="@color/bone_dim"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:fontFamily="serif"
-            android:letterSpacing="0.08"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            app:backgroundTint="@null"
-            android:background="@drawable/btn_gothic_secondary"
-            tools:ignore="HardcodedText"/>
-
     </LinearLayout>
+
+    </FrameLayout>
+
+    </ScrollView>
 
 </FrameLayout>
