@@ -105,6 +105,7 @@ public class MenuActivity extends AppCompatActivity {
         findViewById(R.id.btn_daily).setOnClickListener(v -> { click(); showDaily(); });
         findViewById(R.id.btn_quests).setOnClickListener(v -> { click(); showQuests(); });
         findViewById(R.id.btn_history).setOnClickListener(v -> { click(); showHistory(); });
+        findViewById(R.id.btn_bestiary).setOnClickListener(v -> { click(); showBestiary(); });
         Ads.gatherConsent(this);
     }
 
@@ -310,6 +311,65 @@ public class MenuActivity extends AppCompatActivity {
         hideSystemUIOnWindow(dialog);
     }
 
+    // Bestiary, in the order the dungeon introduces them: {key (GameActivity.bestiary), name, how to fight it}
+    private static final String[][] BESTIARY = {
+            {"GRUNT", "Grunt", "Slow club swings. Step out of the wind-up, then hit back. A raised guard needs a heavy blow."},
+            {"BAT", "Bat", "Fragile and fast, it comes in flocks. One clean hit drops it."},
+            {"SPEEDER", "Speeder", "Darts in for quick stabs. Swing as it closes, or dash through it."},
+            {"ARCHER", "Archer", "Keeps its distance and fires aimed arrows. Close the gap or put a wall between you."},
+            {"BOMBER", "Bomber", "Runs at you and blows up. Kill it early or dash clear of the blast."},
+            {"BRUTE", "Brute", "A heavy axe, and it guards. Charge a heavy attack to break the guard."},
+            {"CHARGER", "Charger", "Lowers its horns and rushes in a line. Sidestep, and let it crash into a wall."},
+            {"NECROMANCER", "Necromancer", "Raises the fallen as thralls. Kill it first, before its army grows."},
+            {"TANK", "Tank", "Huge health and a crushing hammer. Strike after its slam; never trade blows."},
+            {"BOSS_BRUTE", "Warlord", "Slams and charges. Below half health it whirls; below a quarter the ground quakes."},
+            {"BOSS_SUMMONER", "Summoner", "Keeps away, raises thralls and fires bursts. Cut through to it."},
+            {"BOSS_SORCERER", "Sorcerer", "Blinks beside you and fires aimed fans; wounded, it spins storms of bolts."},
+            {"BOSS_HUNTER", "Hunter", "Leaps on you and looses volleys, then calls its hounds."},
+    };
+
+    /** Every kind met in the dungeon with its kills, four to a row; tap one to read how to fight it. */
+    private void showBestiary() {
+        if (userId == null) return;
+        SharedPreferences prefs = getSharedPreferences("bestiary_" + userId, MODE_PRIVATE);
+        int found = 0;
+        for (String[] b : BESTIARY) if (prefs.getBoolean("met_" + b[0], false)) found++;
+        Dialog dialog = listDialog("BESTIARY", found + " / " + BESTIARY.length + " found");
+        LinearLayout rows = dialog.findViewById(R.id.list_rows);
+        float dp = getResources().getDisplayMetrics().density;
+        int gap = Math.round(3 * dp);
+        TextView tip = new TextView(this, null, 0, R.style.OD_Text);
+        tip.setGravity(android.view.Gravity.CENTER);
+        tip.setTextColor(getColor(R.color.bone_dim));
+        tip.setPadding(0, Math.round(8 * dp), 0, 0);
+        tip.setText("Tap a creature you've met to learn how to fight it.");
+        LinearLayout row = null;
+        for (int i = 0; i < BESTIARY.length; i++) {
+            String[] b = BESTIARY[i];
+            if (i % 4 == 0) {
+                row = new LinearLayout(this);
+                rows.addView(row, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Math.round(44 * dp)));
+            }
+            boolean met = prefs.getBoolean("met_" + b[0], false);
+            View cell = getLayoutInflater().inflate(R.layout.item_stat_cell, row, false);
+            ((android.widget.ImageView) cell.findViewById(R.id.stat_icon))
+                    .setImageResource(b[0].startsWith("BOSS_") ? R.drawable.ic_trophy : R.drawable.ic_skull);
+            ((TextView) cell.findViewById(R.id.stat_value)).setText(met ? b[1] : "???");
+            ((TextView) cell.findViewById(R.id.stat_label)).setText(met ? prefs.getInt("kills_" + b[0], 0) + " slain" : "Not met");
+            cell.setAlpha(met ? 1f : 0.45f);
+            if (met) cell.setOnClickListener(v -> { click(); tip.setText(b[1] + ": " + b[2]); });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+            lp.setMargins(gap, gap, gap, gap);
+            row.addView(cell, lp);
+        }
+        // Fillers keep the last row's cells the same width as the others
+        while (row != null && row.getChildCount() < 4)
+            row.addView(new View(this), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+        rows.addView(tip);
+        dialog.show();
+        hideSystemUIOnWindow(dialog);
+    }
+
     private void hideSystemUIOnWindow(Dialog dialog) {
         if (dialog.getWindow() == null) return;
         dialog.getWindow().getDecorView().setSystemUiVisibility(
@@ -431,18 +491,37 @@ public class MenuActivity extends AppCompatActivity {
 
     /** Asks whether to join a friend's party; either answer removes the invite. */
     private void showInvitePopup(String inviteId, String fromName, String code) {
-        new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
-                .setTitle("Party invite")
-                .setMessage((fromName != null ? fromName : "A friend") + " invited you to a co-op run.")
-                .setCancelable(false)
-                .setPositiveButton("Join", (dialog, which) -> {
-                    dbManager.deleteInvite(inviteId);
-                    Intent intent = new Intent(this, LobbyActivity.class);
-                    intent.putExtra(LobbyActivity.EXTRA_JOIN_CODE, code);
-                    startActivity(intent);
-                })
-                .setNegativeButton("Decline", (dialog, which) -> dbManager.deleteInvite(inviteId))
-                .show();
+        Dialog invite = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        invite.setContentView(R.layout.dialog_confirm);
+        invite.setCancelable(false);
+        if (invite.getWindow() != null)
+            invite.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        ((android.widget.ImageView) invite.findViewById(R.id.confirm_icon)).setImageResource(R.drawable.ic_crossed_swords);
+        ((TextView) invite.findViewById(R.id.confirm_title)).setText("Party invite");
+        ((TextView) invite.findViewById(R.id.confirm_message)).setText(
+                (fromName != null ? fromName : "A friend") + " invited you to a co-op run.");
+        MaterialButton decline = invite.findViewById(R.id.btn_confirm_no);
+        MaterialButton join = invite.findViewById(R.id.btn_confirm_yes);
+        decline.setText("Decline");
+        join.setText("Join");
+        // Joining isn't destructive, so it gets the primary look instead of the card's red one
+        join.setBackgroundResource(R.drawable.btn_login);
+        join.setTextColor(getColor(R.color.gold_glow));
+        decline.setOnClickListener(v -> {
+            click();
+            invite.dismiss();
+            dbManager.deleteInvite(inviteId);
+        });
+        join.setOnClickListener(v -> {
+            click();
+            invite.dismiss();
+            dbManager.deleteInvite(inviteId);
+            Intent intent = new Intent(this, LobbyActivity.class);
+            intent.putExtra(LobbyActivity.EXTRA_JOIN_CODE, code);
+            startActivity(intent);
+        });
+        invite.show();
+        hideSystemUIOnWindow(invite);
     }
 
     /**
@@ -499,23 +578,27 @@ public class MenuActivity extends AppCompatActivity {
             return;
         }
 
-        // Existing save — confirm overwrite
-        android.app.AlertDialog.Builder builder =
-                new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark);
-        builder.setTitle("New Game");
-        builder.setMessage("Are you sure? This will remove all previous game data.");
-        builder.setPositiveButton("Yes", (dialog, which) -> {
+        // Existing save — confirm overwrite on the game's own confirm card
+        Dialog confirm = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        confirm.setContentView(R.layout.dialog_confirm);
+        if (confirm.getWindow() != null)
+            confirm.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        ((android.widget.ImageView) confirm.findViewById(R.id.confirm_icon)).setImageResource(R.drawable.ic_warning);
+        ((TextView) confirm.findViewById(R.id.confirm_title)).setText("Start a new run?");
+        ((TextView) confirm.findViewById(R.id.confirm_message)).setText(
+                "Your current save will be deleted for good.");
+        MaterialButton no = confirm.findViewById(R.id.btn_confirm_no);
+        MaterialButton yes = confirm.findViewById(R.id.btn_confirm_yes);
+        no.setText("Keep save");
+        yes.setText("New run");
+        no.setOnClickListener(v -> { click(); confirm.dismiss(); });
+        yes.setOnClickListener(v -> {
+            click();
+            confirm.dismiss();
             deleteSaveAndCreateNew();
         });
-        builder.setNegativeButton("No", (dialog, which) -> dialog.dismiss());
-        android.app.AlertDialog alert = builder.create();
-        alert.show();
-
-        // Style the buttons
-        alert.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
-                .setTextColor(getColor(R.color.crimson_glow));
-        alert.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
-                .setTextColor(getColor(R.color.bone_dim));
+        confirm.show();
+        hideSystemUIOnWindow(confirm);
     }
 
     /**

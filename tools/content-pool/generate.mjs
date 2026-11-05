@@ -12,10 +12,10 @@ const KEEP = 6;        // variants kept per range; each run adds one
 const PAUSE_MS = 6000; // stay well under the free-tier request rate
 
 const TIERS = ['COMMON', 'RARE', 'EPIC', 'LEGENDARY'];
-const STAT_MULT = [[0.85, 1.15], [1.15, 1.4], [1.4, 1.75], [1.75, 2.2]];
+const STAT_MULT = [[0.85, 1.1], [1.2, 1.4], [1.5, 1.75], [1.85, 2.2]]; // bands never overlap
 const PRICE_MULT = [[1.0, 1.4], [2.0, 2.8], [3.5, 5.0], [7.0, 10.0]];
-const CONSUMABLE_PRICE = [0.4, 0.7];
-const POTION_PCT = [[15, 20], [20, 25], [25, 30], [30, 35]]; // percent of max HP / armor, by rarity
+const CONSUMABLE_PRICE = [[0.35, 0.5], [0.6, 0.8], [0.95, 1.2], [1.4, 1.8]];
+const POTION_PCT = [[15, 18], [21, 25], [28, 32], [35, 40]]; // percent of max HP / armor, by rarity
 const weaponBase = f => 6 + f * 2.5;
 const armorBase = f => 3 + f * 1.5;
 const priceBase = f => 13 + f * 8.5;
@@ -23,7 +23,7 @@ const enemyHpMin = r => 1.0 + r * 0.02;
 const enemyHpMax = r => 1.5 + r * 0.03;
 const enemyDmgMin = r => 1.0 + r * 0.03;
 const enemyDmgMax = r => 1.4 + r * 0.04;
-const bossHp = f => 2.0 + f * 0.12;
+const bossHp = f => 1.6 + f * 0.09;
 const bossDmg = f => 1.1 + f * 0.05;
 const span = (base, lo, hi) => `${Math.max(1, Math.round(base * lo))}-${Math.max(1, Math.round(base * hi))}`;
 const fmt = v => v.toFixed(2);
@@ -48,7 +48,7 @@ function buildPrompt(start, end) {
     L.push('  weapon damage at 600 ms cooldown:' + TIERS.map((t, i) => ` ${t} ${span(weaponBase(f), ...STAT_MULT[i])}`).join(''));
     L.push('  armor defense per piece:' + TIERS.map((t, i) => ` ${t} ${span(armorBase(f), ...STAT_MULT[i])}`).join(''));
     L.push('  price (gold):' + TIERS.map((t, i) => ` ${t} ${span(priceBase(f), ...PRICE_MULT[i])}`).join(''));
-    L.push(`  consumables: price ${span(priceBase(f), ...CONSUMABLE_PRICE)}`);
+    L.push('  consumable price (gold):' + TIERS.map((t, i) => ` ${t} ${span(priceBase(f), ...CONSUMABLE_PRICE[i])}`).join(''));
   }
   L.push('');
   L.push('WEAPONS: final damage = budget value * cooldown / 600, so fast weapons (250-400 ms) hit soft');
@@ -58,7 +58,9 @@ function buildPrompt(start, end) {
   L.push('  Dagger/Knife (fast, short, cooldown 250-400), Sword/Blade (balanced), Axe/Cleaver (wide, slow),');
   L.push('  Spear/Glaive/Halberd (long reach, range 110-140), Hammer/Mace/Maul (slowest, 1000-1400, most knockback),');
   L.push('  Staff/Wand (projectile) or Bow/Crossbow (projectile). Mix the types across the range.');
-  L.push('ARMOR: maxDurability 40-120 hits (rarer lasts longer). armorType HEAD, CHEST, LEGS or BOOTS; vary them.');
+  L.push('ARMOR: maxDurability by rarity: ' + TIERS.map((t, i) => `${t} ${40 + i * 20}-${80 + i * 20}`).join(', ') + ' hits. armorType HEAD, CHEST, LEGS or BOOTS; vary them.');
+  L.push('RARITY must match the stats: every stat and price above sits in its rarity band, so a rarer item');
+  L.push('  is always stronger and dearer than a commoner one on the same floor. Never label a weak item rare.');
   L.push('CONSUMABLES: effectValue is a PERCENT of the maximum, not a flat number. "heal" restores that share of');
   L.push('  max HP over two seconds; "armor_restore" restores that share of max armor. All potions share an');
   L.push('  8 second cooldown. Percent by rarity: ' + TIERS.map((t, i) => `${t} ${POTION_PCT[i][0]}-${POTION_PCT[i][1]}`).join(', ') + '.');

@@ -65,11 +65,12 @@ public class BatchGenerator {
     // ============================================================
 
     private static final String[] TIERS = {"COMMON", "RARE", "EPIC", "LEGENDARY"};
-    private static final float[][] STAT_MULT  = {{0.85f, 1.15f}, {1.15f, 1.4f}, {1.4f, 1.75f}, {1.75f, 2.2f}};
+    // Rarity bands never overlap, so a rarer item always beats a commoner one from the same floor
+    private static final float[][] STAT_MULT  = {{0.85f, 1.1f}, {1.2f, 1.4f}, {1.5f, 1.75f}, {1.85f, 2.2f}};
     private static final float[][] PRICE_MULT = {{1.0f, 1.4f}, {2.0f, 2.8f}, {3.5f, 5.0f}, {7.0f, 10.0f}};
-    private static final float[] CONSUMABLE_PRICE = {0.4f, 0.7f};
+    private static final float[][] CONSUMABLE_PRICE = {{0.35f, 0.5f}, {0.6f, 0.8f}, {0.95f, 1.2f}, {1.4f, 1.8f}};
     // Potions restore a share of the maximum, in percent, by rarity: a sip in a fight, never a full refill
-    static final int[][] POTION_PCT = {{15, 20}, {20, 25}, {25, 30}, {30, 35}};
+    static final int[][] POTION_PCT = {{15, 18}, {21, 25}, {28, 32}, {35, 40}};
 
     static float weaponBase(int floor) { return 6f + floor * 2.5f; }  // damage at a 600 ms cooldown
     static float armorBase(int floor)  { return 3f + floor * 1.5f; }  // defense per piece
@@ -79,7 +80,7 @@ public class BatchGenerator {
     static float enemyHpMax(int rangeStart)  { return 1.5f + rangeStart * 0.03f; }
     static float enemyDmgMin(int rangeStart) { return 1.0f + rangeStart * 0.03f; }
     static float enemyDmgMax(int rangeStart) { return 1.4f + rangeStart * 0.04f; }
-    static float bossHpMultiplier(int floor)  { return 2.0f + floor * 0.12f; }
+    static float bossHpMultiplier(int floor)  { return 1.6f + floor * 0.09f; }
     static float bossDmgMultiplier(int floor) { return 1.1f + floor * 0.05f; }
 
     private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -97,14 +98,17 @@ public class BatchGenerator {
         return clampInt(item.effectValue, band[0], band[1]);
     }
 
-    // Pulls an AI item back inside the floor's budget, so a generous reply can't trivialise the run
+    // Pulls an AI item into its rarity's band for the floor: never above the budget, never below a commoner item
     private static void capToFloor(ShopItem item, int floor) {
-        float maxMult = STAT_MULT[tierOf(item.rarity)][1];
+        int tier = tierOf(item.rarity);
+        float[] band = STAT_MULT[tier];
         float pace = clamp(item.cooldown / 600f, 0.4f, 2.4f);
-        float maxDamage = weaponBase(floor) * maxMult * pace * (item.isProjectile ? 0.8f : 1f);
-        item.damage  = Math.max(1, Math.min(item.damage, Math.round(maxDamage)));
-        item.defense = Math.max(1, Math.min(item.defense, Math.round(armorBase(floor) * maxMult)));
-        float[] priceMult = item.type == ShopItem.ItemType.CONSUMABLE ? CONSUMABLE_PRICE : PRICE_MULT[tierOf(item.rarity)];
+        float weapon = weaponBase(floor) * pace * (item.isProjectile ? 0.8f : 1f);
+        item.damage  = clampInt(item.damage, Math.max(1, Math.round(weapon * band[0])), Math.max(1, Math.round(weapon * band[1])));
+        item.defense = clampInt(item.defense, Math.max(1, Math.round(armorBase(floor) * band[0])),
+                Math.max(1, Math.round(armorBase(floor) * band[1])));
+        item.maxDurability = clamp(item.maxDurability, 40 + tier * 20, 80 + tier * 20);
+        float[] priceMult = item.type == ShopItem.ItemType.CONSUMABLE ? CONSUMABLE_PRICE[tier] : PRICE_MULT[tier];
         item.price = clampInt(item.price, Math.round(priceBase(floor) * priceMult[0]), Math.round(priceBase(floor) * priceMult[1]));
         item.effectValue = potionPercent(item);
     }
@@ -338,8 +342,8 @@ public class BatchGenerator {
             item.type   = ShopItem.ItemType.CONSUMABLE;
             item.effect = heal ? "heal" : "armor_restore";
             item.name   = heal ? "Healing Draught" : "Ironbark Tonic";
-            item.price  = Math.max(1, Math.round(priceBase(floor)
-                    * (CONSUMABLE_PRICE[0] + rng.nextFloat() * (CONSUMABLE_PRICE[1] - CONSUMABLE_PRICE[0]))));
+            item.price  = Math.max(1, Math.round(priceBase(floor) * (CONSUMABLE_PRICE[tier][0]
+                    + rng.nextFloat() * (CONSUMABLE_PRICE[tier][1] - CONSUMABLE_PRICE[tier][0]))));
             item.effectValue = POTION_PCT[tier][0] + rng.nextInt(POTION_PCT[tier][1] - POTION_PCT[tier][0] + 1);
         }
         return item;

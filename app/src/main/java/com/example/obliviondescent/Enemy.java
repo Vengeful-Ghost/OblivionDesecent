@@ -872,7 +872,7 @@ public class Enemy {
             frenzied = true;
             justFrenzied = true;
         }
-        float pace = frenzied ? 0.55f : enraged ? 0.7f : 1f;
+        float pace = frenzied ? 0.7f : enraged ? 0.85f : 1f;
 
         switch (behaviorState) {
             case WINDUP: {
@@ -902,6 +902,7 @@ public class Enemy {
                         enterState(BehaviorState.WINDUP, 450);
                     } else {
                         leapChained = false;
+                        lastAttackTime = now; // the pause before the next move starts after landing
                         enterState(BehaviorState.APPROACH, 0);
                     }
                 }
@@ -915,7 +916,10 @@ public class Enemy {
                     rushHit = true;
                     strike(getDamage(), radius + 10f, 180f);
                 }
-                if (now - stateStartTime >= stateDuration) enterState(BehaviorState.APPROACH, 0);
+                if (now - stateStartTime >= stateDuration) {
+                    lastAttackTime = now;
+                    enterState(BehaviorState.APPROACH, 0);
+                }
                 break;
             }
 
@@ -943,7 +947,10 @@ public class Enemy {
                         strike(Math.max(1, (int) (getDamage() * 0.6f)), radius + 60f, 180f);
                     }
                 }
-                if (now - stateStartTime >= stateDuration) enterState(BehaviorState.APPROACH, 0);
+                if (now - stateStartTime >= stateDuration) {
+                    lastAttackTime = now;
+                    enterState(BehaviorState.APPROACH, 0);
+                }
                 break;
             }
 
@@ -965,7 +972,7 @@ public class Enemy {
                     x -= (dx / dist) * speed * 0.7f;
                     y -= (dy / dist) * speed * 0.7f;
                 }
-                if (now - lastAttackTime >= (long) (1800 * pace) && dist > 0.01f) {
+                if (now - lastAttackTime >= (long) (2400 * pace) && dist > 0.01f) {
                     bossMove = pickBossMove(dist);
                     aimX = dx / dist;
                     aimY = dy / dist;
@@ -1103,6 +1110,8 @@ public class Enemy {
     }
 
     /** Sets the archetype and its body colour; the hunter fights with a spear. */
+    public BossKind getBossKind() { return bossKind; }
+
     public void setBossKind(BossKind kind) {
         bossKind = kind;
         bodyPaint.setColor(kind == BossKind.SUMMONER ? Color.rgb(46, 26, 58)

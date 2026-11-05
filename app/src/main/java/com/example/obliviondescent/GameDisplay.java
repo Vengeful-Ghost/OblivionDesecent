@@ -935,7 +935,7 @@ public class GameDisplay extends View {
         canvas.drawCircle(mapCx, mapCy, band, minimapRimPaint);
         canvas.drawCircle(mapCx, mapCy, band, minimapBorderPaint);
         canvas.drawCircle(mapCx, mapCy, mapRadius - 4.5f * density, minimapHighlightPaint);
-        if (minimapWear == null) minimapWear = new Wear.Stone(System.identityHashCode(this), density, false, true);
+        if (minimapWear == null) minimapWear = new Wear.Stone(R.id.game_display, density, false, true);
         minimapWear.setBounds((int) (mapCx - mapRadius), (int) (mapCy - mapRadius),
                 (int) (mapCx + mapRadius), (int) (mapCy + mapRadius));
         minimapWear.draw(canvas);

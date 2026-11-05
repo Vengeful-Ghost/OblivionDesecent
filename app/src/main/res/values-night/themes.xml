@@ -18,14 +18,4 @@
         <item name="android:fontFamily">@font/crimson_pro</item>
     </style>
 
-    <style name="AlertDialogDark" parent="Theme.MaterialComponents.Dialog.Alert">
-        <item name="android:background">@color/bg_surface</item>
-        <item name="android:textColor">@color/bone_white</item>
-        <item name="colorAccent">@color/gold_bright</item>
-        <item name="colorPrimary">@color/gold_base</item>
-        <item name="android:textColorPrimary">@color/bone_white</item>
-        <item name="android:textColorSecondary">@color/bone_dim</item>
-        <item name="android:fontFamily">@font/crimson_pro</item>
-    </style>
-
 </resources>

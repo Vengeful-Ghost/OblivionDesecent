@@ -130,6 +130,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private boolean chargeFull = false;
     private DashCooldownView heavyCooldownView;
     private int heavyStepShown = -1;
+    private DashCooldownView potionCooldownView;
+    private int potionStepShown = -1;
 
     // The camera leans toward the fight; the low-health heartbeat only plays in combat
     private float leanX = 0f, leanY = 0f;
@@ -465,6 +467,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         });
         // Heavy: charges while held, strikes on release; tick() reads these
         heavyCooldownView = findViewById(R.id.heavy_cooldown_view);
+        potionCooldownView = findViewById(R.id.potion_cooldown_view);
         findViewById(R.id.btn_heavy).setOnTouchListener((v, event) -> {
             int action = event.getActionMasked();
             if (action == android.view.MotionEvent.ACTION_DOWN) {
@@ -484,8 +487,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             return true;
         });
         btnPotion.setOnClickListener(v -> quickHeal());
-        menuBtn.setOnClickListener(v -> showMenuDialog());
-        btnInventory.setOnClickListener(v -> showInventoryDialog());
+        // A fallen solo player can't open these (closing them would unpause mid-revive)
+        menuBtn.setOnClickListener(v -> { if (playerHealth > 0 || coop != null) showMenuDialog(); });
+        btnInventory.setOnClickListener(v -> { if (playerHealth > 0 || coop != null) showInventoryDialog(); });
         btnLevelUp = findViewById(R.id.btn_level_up);
         btnLevelUp.setOnClickListener(v -> showPerkDialog());
 
@@ -931,17 +935,21 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
         player.setInvulnerable(now < invulnerableUntil);
 
-        // Update dash, spin and heavy cooldown arcs, only when they visibly change
+        // Update dash, spin, heavy and potion cooldown arcs, only when they visibly change
         float dashProgress = Math.min(1f, (float) (now - lastDashTime) / dashCooldown());
         float spinProgress = Math.min(1f, (float) (now - lastSpinTime) / spinCooldown());
         float heavyProgress = Math.min(1f, (float) (now - lastHeavyTime) / HEAVY_COOLDOWN);
+        float potionProgress = Math.min(1f, (float) (now - lastPotionAt) / POTION_COOLDOWN);
         int dashStep = (int) (dashProgress * 50);
         int spinStep = (int) (spinProgress * 50);
         int heavyStep = (int) (heavyProgress * 50);
-        if (dashStep != dashStepShown || spinStep != spinStepShown || heavyStep != heavyStepShown) {
+        int potionStep = (int) (potionProgress * 50);
+        if (dashStep != dashStepShown || spinStep != spinStepShown || heavyStep != heavyStepShown
+                || potionStep != potionStepShown) {
             dashStepShown = dashStep;
             spinStepShown = spinStep;
             heavyStepShown = heavyStep;
+            potionStepShown = potionStep;
             runOnUiThread(() -> {
                 if (dashCooldownView != null)
                     dashCooldownView.setProgress(dashProgress);
@@ -949,6 +957,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     spinCooldownView.setProgress(spinProgress);
                 if (heavyCooldownView != null)
                     heavyCooldownView.setProgress(heavyProgress);
+                if (potionCooldownView != null)
+                    potionCooldownView.setProgress(potionProgress);
             });
         }
 
@@ -1234,18 +1244,19 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return Enemy.Type.GRUNT;
     }
 
-    // Spawn chances in percent: {first floor, chance there, extra per floor, cap}; grunts take the rest
+    // Spawn chances in percent: {first floor, chance there, extra per floor, cap}; grunts take the rest.
+    // Every type gains 1% a floor; the harder a type is to deal with, the lower its cap.
     private static final Enemy.Type[] SPAWN_TYPES = {Enemy.Type.SPEEDER, Enemy.Type.ARCHER, Enemy.Type.BRUTE,
             Enemy.Type.TANK, Enemy.Type.BAT, Enemy.Type.BOMBER, Enemy.Type.CHARGER, Enemy.Type.NECROMANCER};
     private static final float[][] SPAWN_TABLE = {
-            {3, 15f, 1.0f, 25f},   // speeder
-            {3, 8f, 0.5f, 15f},    // archer
-            {6, 10f, 1.0f, 20f},   // brute
-            {10, 5f, 0.75f, 15f},  // tank
-            {2, 0.5f, 0.5f, 15f},  // bat
-            {4, 0.5f, 0.5f, 15f},  // bomber
-            {6, 0.5f, 0.5f, 15f},  // charger
-            {8, 0.5f, 0.5f, 15f},  // necromancer
+            {3, 15f, 1f, 22f},   // speeder
+            {3, 8f, 1f, 18f},    // archer
+            {6, 10f, 1f, 15f},   // brute
+            {10, 5f, 1f, 12f},   // tank
+            {2, 4f, 1f, 25f},    // bat
+            {4, 3f, 1f, 16f},    // bomber
+            {6, 3f, 1f, 14f},    // charger
+            {8, 3f, 1f, 10f},    // necromancer
     };
 
     /**
@@ -1740,6 +1751,24 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         soundManager.play(SoundManager.Sfx.PERK_PICK);
     }
 
+    // Kinds already marked as met this session, so a hit doesn't touch the prefs every time
+    private final Set<String> bestiaryMet = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /**
+     * Bestiary (MenuActivity.showBestiary): marks an enemy's kind as met, announcing a first meeting, and
+     * counts kills. Kinds are archetypes, or BOSS_ + the boss kind; mimics and raised thralls don't count.
+     */
+    private void bestiary(Enemy e, boolean killed) {
+        if (e.mimic || e.summoned || userId == null) return;
+        String key = e.type == Enemy.Type.BOSS ? "BOSS_" + e.getBossKind().name() : e.type.name();
+        SharedPreferences prefs = getSharedPreferences("bestiary_" + userId, MODE_PRIVATE);
+        if (bestiaryMet.add(key) && !prefs.getBoolean("met_" + key, false)) {
+            prefs.edit().putBoolean("met_" + key, true).apply();
+            effects.banner(e.x, e.y - e.radius - 70f, "NEW IN BESTIARY", Color.rgb(244, 215, 122));
+        }
+        if (killed) prefs.edit().putInt("kills_" + key, prefs.getInt("kills_" + key, 0) + 1).apply();
+    }
+
     /** A heavy blow smashes through a raised guard. */
     private void showGuardBreak(Enemy e) {
         quest(Quests.GUARDS, 1);
@@ -1842,6 +1871,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      */
     private void damageEnemy(Enemy e, int damage, boolean crit, float pushX, float pushY, boolean stagger,
                              boolean heavy) {
+        bestiary(e, false);
         float dx = e.x - player.x, dy = e.y - player.y;
         float d = Math.max(1f, (float) Math.sqrt(dx * dx + dy * dy));
         boolean guardBroken = false;
@@ -2080,6 +2110,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     if (!isGuest() && !e.mimic && !e.summoned) floorManager.onEnemyKilled(player.x, player.y);
                     statsManager.onEnemyKilled();
                     if (!e.summoned) quest(Quests.KILLS, 1);
+                    bestiary(e, true);
                     if (e.elite) quest(Quests.ELITES, 1);
                     if (e.type == Enemy.Type.BAT) quest(Quests.BATS, 1);
                     effects.burst(e.x, e.y, e.getColor(), e.type == Enemy.Type.BOSS ? 60 : 16, 9f);
@@ -2652,7 +2683,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             TextView priceView = card.findViewById(R.id.item_price);
 
             int rarityColor = getRarityColor(item.rarity);
-            applyRarityBorder(card, rarityColor);
+            applyRarityBorder(card, rarityColor, item.name);
 
             nameView.setText(item.name);
             nameView.setTextColor(rarityColor);
@@ -2876,19 +2907,27 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     private void showDetailStats(LinearLayout box, ShopItem item) {
         switch (item.type) {
-            case WEAPON:
-                addStatRow(box, R.drawable.ic_crossed_swords, "Damage", String.valueOf(item.damage));
-                addStatRow(box, R.drawable.ic_range, "Range", String.valueOf((int) item.range));
+            case WEAPON: {
+                Weapon held = player.getWeapon();
+                addStatRow(box, R.drawable.ic_crossed_swords, "Damage", compared(item.damage, held.damage, true, false));
+                addStatRow(box, R.drawable.ic_dagger, "Per second",
+                        compared(dps(item.damage, item.cooldown), dps(held.damage, held.cooldown), true, true));
+                addStatRow(box, R.drawable.ic_range, "Range", compared(item.range, held.range, true, false));
                 addStatRow(box, R.drawable.ic_hourglass, "Cooldown", item.cooldown + "ms");
                 addStatRow(box, R.drawable.ic_knockback, "Knockback", String.valueOf(item.knockback));
                 addStatRow(box, R.drawable.ic_target, "Style", Weapon.kindOf(item.name, item.isProjectile).title());
                 break;
-            case ARMOR:
+            }
+            case ARMOR: {
                 String slot = String.valueOf(item.armorSlot);
-                addStatRow(box, R.drawable.ic_shield, "Defense", "+" + item.defense);
-                addStatRow(box, R.drawable.ic_anvil, "Durability", String.valueOf((int) item.maxDurability));
+                Armor worn = null;
+                try { worn = equippedArmor.get(Armor.Slot.valueOf(slot.toUpperCase())); } catch (IllegalArgumentException ignored) {}
+                addStatRow(box, R.drawable.ic_shield, "Defense", compared(item.defense, worn != null ? worn.defense : 0, true, false));
+                addStatRow(box, R.drawable.ic_anvil, "Durability", worn == null ? String.valueOf((int) item.maxDurability)
+                        : compared(item.maxDurability, worn.maxDurability, true, false));
                 addStatRow(box, slotIcon(slot), "Slot", slot);
                 break;
+            }
             case CONSUMABLE:
                 showConsumableStats(box, item);
                 break;
@@ -2896,7 +2935,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     // One icon + label + value line, reusing the stats screen row
-    private void addStatRow(LinearLayout box, int icon, String label, String value) {
+    private void addStatRow(LinearLayout box, int icon, String label, CharSequence value) {
         View row = getLayoutInflater().inflate(R.layout.item_stat_row, box, false);
         android.widget.ImageView iconView = row.findViewById(R.id.stat_icon);
         iconView.setImageResource(icon);
@@ -3117,6 +3156,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Sweeps the boss title card across the screen: label, gold rules, name slam, title. */
     private void announceBoss() {
+        if (activeBoss != null) bestiary(activeBoss, false);
         final String name  = currentBossName  != null ? currentBossName.toUpperCase()  : "THE ANCIENT ONE";
         final String title = currentBossTitle != null ? currentBossTitle : "";
         final int    color = currentBossColor;
@@ -3777,7 +3817,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         boolean isEquipped = player.getWeapon() == weapon;
         equippedBadge.setVisibility(isEquipped ? View.VISIBLE : View.GONE);
 
-        applyRarityBorder(cell, rarityColor);
+        applyRarityBorder(cell, rarityColor, weapon.name);
         cell.setOnClickListener(v -> showWeaponActionDialog(dialog, weapon));
         addCell(row, cell);
     }
@@ -3799,7 +3839,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         boolean isEquipped = equippedArmor.get(armor.slot) == armor;
         equippedBadge.setVisibility(isEquipped ? View.VISIBLE : View.GONE);
 
-        applyRarityBorder(cell, rarityColor);
+        applyRarityBorder(cell, rarityColor, armor.name);
         cell.setOnClickListener(v -> showArmorActionDialog(dialog, armor));
         addCell(row, cell);
     }
@@ -3821,7 +3861,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         quantityView.setVisibility(View.VISIBLE);
         quantityView.setText("x" + stack.quantity);
 
-        applyRarityBorder(cell, rarityColor);
+        applyRarityBorder(cell, rarityColor, stack.item.name);
         cell.setOnClickListener(v -> showConsumableActionDialog(dialog, stack));
         addCell(row, cell);
     }
@@ -3839,7 +3879,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         TextView quantityView = cell.findViewById(R.id.inv_item_quantity);
         quantityView.setVisibility(View.VISIBLE);
         quantityView.setText("x" + stacks(perk));
-        applyRarityBorder(cell, perk.color);
+        applyRarityBorder(cell, perk.color, perk.title);
         addCell(row, cell);
     }
 
@@ -3854,7 +3894,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         nameView.setText(synergy.title);
         nameView.setTextColor(gold);
         ((TextView) cell.findViewById(R.id.inv_item_subtitle)).setText(synergy.effect);
-        applyRarityBorder(cell, gold);
+        applyRarityBorder(cell, gold, synergy.title);
         addCell(row, cell);
     }
 
@@ -4113,17 +4153,46 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     private void showWeaponStats(LinearLayout box, Weapon weapon) {
-        addStatRow(box, R.drawable.ic_crossed_swords, "Damage", String.valueOf(weapon.damage));
-        addStatRow(box, R.drawable.ic_range, "Range", String.valueOf((int) weapon.range));
+        Weapon held = player.getWeapon() == weapon ? null : player.getWeapon();
+        addStatRow(box, R.drawable.ic_crossed_swords, "Damage",
+                held == null ? String.valueOf(weapon.damage) : compared(weapon.damage, held.damage, true, false));
+        float perSecond = dps(weapon.damage, weapon.cooldown);
+        addStatRow(box, R.drawable.ic_dagger, "Per second", held == null
+                ? String.format(java.util.Locale.US, "%.1f", perSecond)
+                : compared(perSecond, dps(held.damage, held.cooldown), true, true));
+        addStatRow(box, R.drawable.ic_range, "Range",
+                held == null ? String.valueOf((int) weapon.range) : compared(weapon.range, held.range, true, false));
         addStatRow(box, R.drawable.ic_hourglass, "Cooldown", weapon.cooldown + "ms");
         addStatRow(box, R.drawable.ic_knockback, "Knockback", String.valueOf(weapon.knockback));
         addStatRow(box, R.drawable.ic_target, "Style", weapon.kind().title());
     }
 
     private void showArmorStats(LinearLayout box, Armor armor) {
-        addStatRow(box, R.drawable.ic_shield, "Defense", "+" + armor.defense);
-        addStatRow(box, R.drawable.ic_anvil, "Durability", String.valueOf((int) armor.maxDurability));
+        Armor worn = equippedArmor.get(armor.slot);
+        if (worn == armor) worn = null;
+        addStatRow(box, R.drawable.ic_shield, "Defense", worn == null ? "+" + armor.defense
+                : compared(armor.defense, worn.defense, true, false));
+        addStatRow(box, R.drawable.ic_anvil, "Durability", worn == null ? String.valueOf((int) armor.maxDurability)
+                : compared(armor.maxDurability, worn.maxDurability, true, false));
         addStatRow(box, slotIcon(armor.slot.name()), "Slot", armor.slot.name());
+    }
+
+    private static float dps(int damage, long cooldown) {
+        return damage * 1000f / Math.max(1, cooldown);
+    }
+
+    /** A stat next to what's equipped: "18  +4", the difference signed and coloured green when better, red when worse. */
+    private CharSequence compared(float value, float equipped, boolean higherIsBetter, boolean oneDecimal) {
+        String text = oneDecimal ? String.format(java.util.Locale.US, "%.1f", value) : String.valueOf(Math.round(value));
+        float diff = value - equipped;
+        if (Math.abs(diff) < (oneDecimal ? 0.05f : 0.5f)) return text;
+        String delta = (diff > 0 ? "  +" : "  -") + (oneDecimal
+                ? String.format(java.util.Locale.US, "%.1f", Math.abs(diff)) : String.valueOf(Math.round(Math.abs(diff))));
+        android.text.SpannableString s = new android.text.SpannableString(text + delta);
+        int color = (diff > 0) == higherIsBetter ? 0xFF7AB85C : 0xFFE04848;
+        s.setSpan(new android.text.style.ForegroundColorSpan(color), text.length(), s.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return s;
     }
 
     private void showConsumableStats(LinearLayout box, ShopItem item) {
@@ -4135,7 +4204,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /** A stone cell edged in its rarity colour, worn like the rest of the UI. */
-    private void applyRarityBorder(View view, int color) {
+    private void applyRarityBorder(View view, int color, String name) {
         float dp = getResources().getDisplayMetrics().density;
         android.graphics.drawable.GradientDrawable border = new android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
@@ -4143,7 +4212,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         border.setCornerRadius(3 * dp);
         border.setStroke(Math.round(2 * dp), color);
         view.setBackground(border);
-        Wear.wrap(view, false, false);
+        Wear.wrap(view, false, false, name);
     }
 
     /**
@@ -4192,7 +4261,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         adRevive.setOnClickListener(v -> Ads.show(this, () -> {
             adReviveUsed = true;
             dialog.dismiss();
-            reviveHere();
+            hideSystemUI();
+            reviveCountdown(3);
         }, () -> {
             adSouls.setVisibility(View.GONE);
             adRevive.setVisibility(View.GONE);
@@ -4265,6 +4335,17 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         } catch (org.json.JSONException e) {
             prefs.edit().remove("list").apply();
         }
+    }
+
+    /** Counts 3, 2, 1 over the fallen player (the game stays paused), then revives. */
+    private void reviveCountdown(int left) {
+        if (left == 0) {
+            reviveHere();
+            return;
+        }
+        effects.countdown(player.x, player.y - player.radius - 40f, String.valueOf(left), Color.rgb(244, 215, 122));
+        soundManager.play(SoundManager.Sfx.CLICK);
+        gameDisplay.postDelayed(() -> reviveCountdown(left - 1), 1000);
     }
 
     /** Ad revive: back up where you fell at half health, briefly untouchable. */
@@ -4562,12 +4643,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             boolean last = i == 2;
             View card = getLayoutInflater().inflate(R.layout.item_perk_card, row, false);
             bindPerkCard(card, perk);
-            Wear.apply(card);
             card.setCameraDistance(cameraDistance);
             card.setScaleX(0f);
             card.setScaleY(0f);
             card.setOnClickListener(v -> { if (ready[0]) choosePerk(dialog, perk); });
             row.addView(card);
+            Wear.apply(card); // after addView, so each slot keeps its own cracks
             card.animate().scaleX(1f).scaleY(1f).setStartDelay(i * 90L).setDuration(320)
                     .setInterpolator(new android.view.animation.OvershootInterpolator(1.2f)).start();
             card.postDelayed(() -> flipCard(card, () -> { if (last) ready[0] = true; }), 650 + i * 380L);

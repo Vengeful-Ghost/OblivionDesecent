@@ -1,5 +1,6 @@
 package com.example.obliviondescent;
 
+import android.app.Dialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Point;
@@ -126,22 +127,33 @@ public class SettingsActivity extends AppCompatActivity {
 
         MaterialButton btnSignOut = findViewById(R.id.btn_sign_out);
         btnSignOut.setOnClickListener(v -> {
-            new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)
-                    .setTitle("Sign Out")
-                    .setMessage("Are you sure you want to sign out?")
-                    .setPositiveButton("Yes", (dialog, which) -> {
-                        SoundManager.stopMenuMusic(); // silence before leaving to login screen
-                        FirebaseAuth.getInstance().signOut();
-                        getSharedPreferences("loginPrefs", MODE_PRIVATE)
-                                .edit().clear().apply();
-                        Intent intent = new Intent(this, MainActivity.class);
-                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                                | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                        startActivity(intent);
-                        finish();
-                    })
-                    .setNegativeButton("No", (dialog, which) -> dialog.dismiss())
-                    .show();
+            Dialog confirm = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+            confirm.setContentView(R.layout.dialog_confirm);
+            if (confirm.getWindow() != null) {
+                confirm.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+                confirm.getWindow().getDecorView().setSystemUiVisibility(getWindow().getDecorView().getSystemUiVisibility());
+            }
+            ((ImageView) confirm.findViewById(R.id.confirm_icon)).setImageResource(R.drawable.ic_flag);
+            ((TextView) confirm.findViewById(R.id.confirm_title)).setText("Sign out?");
+            ((TextView) confirm.findViewById(R.id.confirm_message)).setText(
+                    "You'll need your username and password to sign back in.");
+            ((MaterialButton) confirm.findViewById(R.id.btn_confirm_no)).setText("Stay");
+            ((MaterialButton) confirm.findViewById(R.id.btn_confirm_yes)).setText("Sign out");
+            confirm.findViewById(R.id.btn_confirm_no).setOnClickListener(b -> confirm.dismiss());
+            confirm.findViewById(R.id.btn_confirm_yes).setOnClickListener(b -> {
+                confirm.dismiss();
+                SoundManager.stopMenuMusic(); // silence before leaving to login screen
+                FirebaseAuth.getInstance().signOut();
+                getSharedPreferences("loginPrefs", MODE_PRIVATE)
+                        .edit().clear().apply();
+                Intent intent = new Intent(this, MainActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(intent);
+                finish();
+            });
+            confirm.show();
+            if (confirm.getWindow() != null) Wear.apply(confirm.getWindow().getDecorView());
         });
 
         SeekBar sfxSlider = findViewById(R.id.seekbar_sfx_volume);

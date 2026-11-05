@@ -117,7 +117,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:layout_marginTop="@dimen/space_lg"
+        android:layout_marginTop="@dimen/space_sm"
         android:layout_marginStart="@dimen/space_md"
         android:layout_marginEnd="@dimen/space_md"
         app:layout_constraintWidth_max="360dp"
@@ -202,6 +202,33 @@
                 android:textSize="@dimen/text_small"
                 android:text="Runs"
                 app:icon="@drawable/ic_hourglass"
+                app:iconSize="@dimen/icon_sm"
+                app:iconPadding="@dimen/space_xs"
+                tools:ignore="HardcodedText" />
+
+        </LinearLayout>
+
+        <!-- Half width and centred under the pairs above -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            android:orientation="horizontal"
+            android:gravity="center_horizontal"
+            android:weightSum="2">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_bestiary"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="@dimen/touch_min"
+                android:paddingStart="@dimen/space_sm"
+                android:paddingEnd="@dimen/space_sm"
+                android:maxLines="1"
+                android:textSize="@dimen/text_small"
+                android:text="Bestiary"
+                app:icon="@drawable/ic_skull"
                 app:iconSize="@dimen/icon_sm"
                 app:iconPadding="@dimen/space_xs"
                 tools:ignore="HardcodedText" />

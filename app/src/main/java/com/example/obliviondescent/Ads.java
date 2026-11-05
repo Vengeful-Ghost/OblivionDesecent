@@ -78,7 +78,7 @@ final class Ads {
         return ready != null;
     }
 
-    /** Shows the loaded ad; onReward runs only if it was watched through, onClosed always runs. */
+    /** Shows the loaded ad; onClosed always runs, then onReward only if it was watched through and closed. */
     static void show(Activity activity, Runnable onReward, Runnable onClosed) {
         RewardedAd ad = ready;
         ready = null;
@@ -86,10 +86,12 @@ final class Ads {
             onClosed.run();
             return;
         }
+        boolean[] earned = {false};
         ad.setFullScreenContentCallback(new FullScreenContentCallback() {
             @Override
             public void onAdDismissedFullScreenContent() {
                 onClosed.run();
+                if (earned[0]) onReward.run();
                 preload(activity);
             }
 
@@ -99,6 +101,7 @@ final class Ads {
                 preload(activity);
             }
         });
-        ad.show(activity, reward -> onReward.run());
+        // The SDK reports the reward while the ad is still on screen; it's paid out once the player closes it
+        ad.show(activity, reward -> earned[0] = true);
     }
 }

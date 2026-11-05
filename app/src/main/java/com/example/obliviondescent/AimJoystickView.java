@@ -109,7 +109,7 @@ public class AimJoystickView extends View {
         rustPaint.setStrokeWidth(2f * dp);
         rustPaint.setColor(Color.argb(200, 107, 58, 32));
 
-        wear = new Wear.Stone(System.identityHashCode(this), dp, false, true);
+        wear = new Wear.Stone(getId(), dp, false, true);
     }
 
     /* ============================================================

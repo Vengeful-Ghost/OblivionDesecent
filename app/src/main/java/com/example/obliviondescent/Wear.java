@@ -49,6 +49,11 @@ final class Wear {
 
     /** Lays wear over a view's background; panels wear more, round buttons wear from the rim. */
     static void wrap(View v, boolean panel, boolean roundable) {
+        wrap(v, panel, roundable, null);
+    }
+
+    /** As above; key names what a view shows when many share one layout (inventory cells, shop cards). */
+    static void wrap(View v, boolean panel, boolean roundable, String key) {
         Drawable bg = v.getBackground();
         if (bg == null) return;
         if (bg instanceof LayerDrawable) {
@@ -57,7 +62,11 @@ final class Wear {
             if (n > 0 && layers.getDrawable(n - 1) instanceof Stone) return; // already worn
         }
         float dp = v.getResources().getDisplayMetrics().density;
-        long seed = System.identityHashCode(v) * 31L + v.getId();
+        // Same view, same cracks every time it's shown: seeded by its id and place in the tree
+        long seed = v.getId();
+        for (View c = v; c.getParent() instanceof ViewGroup; c = (View) c.getParent())
+            seed = seed * 31 + ((ViewGroup) c.getParent()).indexOfChild(c);
+        if (key != null) seed = seed * 31 + key.hashCode();
         v.setBackground(new LayerDrawable(new Drawable[]{bg, new Stone(seed, dp, panel, roundable)}));
         // Buttons with translationZ already dip through their XML button_elevation_anim
         if (roundable && v.getTranslationZ() == 0) v.setStateListAnimator(press(v));

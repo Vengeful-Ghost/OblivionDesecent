@@ -90,7 +90,7 @@ public class JoystickView extends View {
         rimPaint.setStrokeWidth(2f * dp);
         rimPaint.setColor(Color.argb(220, 30, 27, 23));
 
-        wear = new Wear.Stone(System.identityHashCode(this), dp, false, true);
+        wear = new Wear.Stone(getId(), dp, false, true);
 
         // Safe defaults
         centerX = 0;

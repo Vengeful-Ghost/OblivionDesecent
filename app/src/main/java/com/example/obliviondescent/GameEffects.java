@@ -227,6 +227,11 @@ public class GameEffects {
         addText(x, y, text, color, 46f, 50f, 1400);
     }
 
+    /** Huge text that holds about a second, e.g. a countdown. */
+    public synchronized void countdown(float x, float y, String text, int color) {
+        addText(x, y, text, color, 96f, 20f, 950);
+    }
+
     private void addText(float x, float y, String text, int color, float size, float rise, long life) {
         FloatingText t = new FloatingText();
         t.x = x;
