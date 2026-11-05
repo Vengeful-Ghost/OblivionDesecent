@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Secondary gothic button: thinner trim, more recessed feel -->
+<!-- Secondary button: a darker, thinner slab, cracked across the top and chipped at the bottom -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="@color/gold_translucent">
 
     <item android:id="@android:id/mask">
         <shape android:shape="rectangle">
             <solid android:color="@color/gold_bright"/>
-            <corners android:radius="8dp"/>
+            <corners android:radius="3dp"/>
         </shape>
     </item>
 
@@ -15,7 +15,7 @@
             <item>
                 <shape android:shape="rectangle">
                     <solid android:color="@color/border_gold_inner"/>
-                    <corners android:radius="8dp"/>
+                    <corners android:radius="3dp"/>
                 </shape>
             </item>
             <item
@@ -25,11 +25,15 @@
                     <gradient
                         android:type="linear"
                         android:angle="270"
-                        android:startColor="@color/bg_surface_alt"
-                        android:endColor="@color/bg_base"/>
-                    <corners android:radius="7dp"/>
+                        android:startColor="#2A2621"
+                        android:endColor="#121110"/>
+                    <corners android:radius="2dp"/>
                 </shape>
             </item>
+            <item android:drawable="@drawable/wear_crack" android:gravity="top|end"
+                android:right="12dp" android:width="30dp" android:height="16dp"/>
+            <item android:drawable="@drawable/wear_chip_bl" android:gravity="bottom|start"
+                android:width="22dp" android:height="16dp"/>
         </layer-list>
     </item>
 

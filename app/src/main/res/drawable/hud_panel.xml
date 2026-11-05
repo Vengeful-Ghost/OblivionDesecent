@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Small gold-trimmed panel for HUD elements (floor/gold/kills cluster) -->
+<!-- Small HUD plate (floor/gold/kills): dark stone in a worn iron edge, one corner chipped -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item>
         <shape android:shape="rectangle">
             <solid android:color="@color/border_gold_inner"/>
-            <corners android:radius="6dp"/>
+            <corners android:radius="3dp"/>
         </shape>
     </item>
 
@@ -14,10 +14,13 @@
             <gradient
                 android:type="linear"
                 android:angle="270"
-                android:startColor="#E61E1813"
-                android:endColor="#E60A0807"/>
-            <corners android:radius="5dp"/>
+                android:startColor="#E6262320"
+                android:endColor="#E60C0B0A"/>
+            <corners android:radius="2dp"/>
         </shape>
     </item>
+
+    <item android:drawable="@drawable/wear_chip" android:gravity="top|end"
+        android:width="13dp" android:height="10dp"/>
 
 </layer-list>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Worn surface: a hairline crack with two branches -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="30dp"
+    android:height="16dp"
+    android:viewportWidth="30"
+    android:viewportHeight="16">
+    <path
+        android:strokeColor="#C8070605"
+        android:strokeWidth="1"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round"
+        android:pathData="M0.5,15.5L5,12L4,9L9,6.5L12,7.5L17,2.5L20,3.5L24,0.5M9,6.5L10,10.5L14,12M17,2.5L18,6"/>
+    <path
+        android:strokeColor="#26D9C9A6"
+        android:strokeWidth="0.6"
+        android:strokeLineJoin="round"
+        android:pathData="M1.2,16L5.6,12.6L4.7,9.6L9.5,7.3L12.4,8.3L17.4,3.3"/>
+</vector>

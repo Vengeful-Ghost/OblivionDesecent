@@ -200,12 +200,6 @@ tone(a, 0.1, 0.1, 2000, 0.15, { decay: 0.04 });
 tone(a, 0.17, 0.1, 2400, 0.15, { decay: 0.04 });
 save('stagger', a);
 
-// Enemy wind-up: rising warning
-a = buffer(0.22);
-tone(a, 0, 0.2, sweep(260, 520), 0.3, { wave: 'saw', attack: 0.08, decay: 0.2 });
-noise(a, 0, 0.2, 0.2, { center: sweep(800, 2000), shape: p => p });
-save('enemy_windup', a, 0.7);
-
 // Enemy shot: low pew
 a = buffer(0.2);
 tone(a, 0, 0.18, sweep(620, 240), 0.35, { wave: 'square', decay: 0.06 });
@@ -260,3 +254,59 @@ a = buffer(0.36);
 tone(a, 0, 0.3, sweep(110, 50), 1, { decay: 0.1 });
 noise(a, 0, 0.2, 0.7, { center: 250, type: 'low', decay: 0.05 });
 save('thud', a);
+
+// Portal: a swirling rush that rises into chimes and a soft landing
+a = buffer(1.6);
+noise(a, 0, 1.2, 1, { center: p => 300 + 2600 * p, damp: 0.5, shape: p => hump(p) ** 0.8 });
+tone(a, 0, 1.2, sweep(110, 520), 0.4, { wave: 'tri', attack: 0.4, decay: 0.8, vib: 0.04, vibRate: 9 });
+tone(a, 0, 1.2, p => sweep(165, 780)(p) * 1.01, 0.25, { attack: 0.4, decay: 0.8, vib: 0.04, vibRate: 7 });
+[[0.85, 1318.5], [0.95, 1568], [1.05, 1975.5], [1.15, 2637]].forEach(([t, f]) => bell(a, t, f, 0.3, 0.12));
+tone(a, 1.15, 0.4, sweep(90, 45), 0.6, { decay: 0.15 });
+save('portal_enter', a);
+
+// Portal opening: a low swell and a shimmering minor chord
+a = buffer(1.5);
+tone(a, 0, 1.4, sweep(55, 80), 0.6, { attack: 0.5, decay: 0.8 });
+[293.66, 349.23, 440, 523.25].forEach((f, i) =>
+  tone(a, 0.15 + i * 0.08, 1.2, f, 0.18, { wave: 'tri', attack: 0.3, decay: 0.6, vib: 0.006, vibRate: 5 + i }));
+noise(a, 0, 1.3, 0.25, { center: sweep(600, 3000), damp: 0.4, shape: hump });
+save('portal_open', a);
+
+// Heartbeat: lub-dub
+a = buffer(0.42);
+tone(a, 0, 0.16, sweep(70, 45), 1, { decay: 0.05 });
+tone(a, 0.17, 0.16, sweep(62, 40), 0.7, { decay: 0.05 });
+save('heartbeat', a);
+
+// Block: a blade ringing off a shield
+a = buffer(0.36);
+noise(a, 0, 0.05, 0.8, { center: 2400, decay: 0.012 });
+metal(a, 0, [620, 1040, 1630, 2480], 0.6, 0.06);
+tone(a, 0, 0.1, sweep(160, 90), 0.4, { decay: 0.03 });
+save('block', a);
+
+// Guard break: a heavy crack with splinters and a falling groan
+a = buffer(0.65);
+noise(a, 0, 0.12, 1, { center: 700, damp: 0.6, decay: 0.04 });
+tone(a, 0, 0.3, sweep(200, 60), 0.9, { decay: 0.1 });
+metal(a, 0.02, [480, 760, 1290], 0.5, 0.08);
+for (let k = 0; k < 5; k++) noise(a, 0.08 + k * 0.05, 0.05, 0.4, { center: 1500 + k * 300, decay: 0.012 });
+save('guard_break', a);
+
+// Heavy charge: a rising growl of tension
+a = buffer(0.75);
+tone(a, 0, 0.72, sweep(90, 260), 0.45, { wave: 'saw', attack: 0.25, decay: 0.6, vib: 0.03, vibRate: 14 });
+noise(a, 0, 0.72, 0.3, { center: sweep(300, 1600), damp: 0.6, shape: p => p });
+save('heavy_charge', a, 0.75);
+
+// Heavy swing: a deep, wide whoosh
+a = buffer(0.45);
+noise(a, 0, 0.42, 1, { center: p => 250 + 1100 * hump(p), damp: 0.6, shape: p => hump(p) ** 1.2 });
+tone(a, 0, 0.35, sweep(120, 55), 0.5, { wave: 'tri', attack: 0.04, decay: 0.15 });
+save('heavy_swing', a);
+
+// Crate smash: cracking wood and a dull knock
+a = buffer(0.5);
+tone(a, 0, 0.2, sweep(140, 70), 0.7, { decay: 0.06 });
+for (let k = 0; k < 6; k++) noise(a, k * 0.035 + rand() * 0.01, 0.06, 0.7 - k * 0.08, { center: 900 + rand() * 900, damp: 0.5, decay: 0.015 });
+save('crate_smash', a);

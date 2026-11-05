@@ -108,6 +108,7 @@ public class SoundManager {
     private static MediaPlayer gamePlayer   = null;
     private static int         gameRefCount = 0;
     private static float       gameMusicVolume = 0.85f;
+    private static int         gameTrack = R.raw.game_music; // dungeon, boss or game-over music
     // Dynamic music: 0 calm .. 1 full fight; the track swells and quickens with it
     private static float       gameIntensity = 0f;
     private static int         volumeStep = -1, speedStep = -1;
@@ -117,7 +118,7 @@ public class SoundManager {
         gameRefCount++;
         if (gamePlayer == null) {
             gamePlayer = MediaPlayer.create(
-                    context.getApplicationContext(), R.raw.game_music);
+                    context.getApplicationContext(), gameTrack);
             if (gamePlayer != null) {
                 gamePlayer.setLooping(true);
                 gamePlayer.setVolume(gameVolume(), gameVolume());
@@ -144,11 +145,29 @@ public class SoundManager {
      */
     public static synchronized void stopGameMusic() {
         gameRefCount = 0;
+        gameTrack = R.raw.game_music;
         if (gamePlayer != null) {
             try { if (gamePlayer.isPlaying()) gamePlayer.stop(); }
             catch (Exception ignored) {}
             gamePlayer.release();
             gamePlayer = null;
+        }
+    }
+
+    /** Switches the in-game music (dungeon, boss or game over); nothing happens if it is already playing. */
+    public static synchronized void setGameTrack(Context context, int track) {
+        if (track == gameTrack) return;
+        gameTrack = track;
+        if (gamePlayer == null) return;
+        try { gamePlayer.stop(); } catch (Exception ignored) {}
+        gamePlayer.release();
+        gamePlayer = MediaPlayer.create(context.getApplicationContext(), track);
+        if (gamePlayer == null) return;
+        gamePlayer.setLooping(true);
+        gamePlayer.setVolume(gameVolume(), gameVolume());
+        speedStep = -1;
+        if (gameRefCount > 0) {
+            try { gamePlayer.start(); } catch (Exception ignored) {}
         }
     }
 
@@ -213,10 +232,12 @@ public class SoundManager {
         MIMIC(R.raw.mimic_awaken, 1f, 0), POTION(R.raw.potion_drink, 0.8f, 0), PURCHASE(R.raw.purchase, 0.9f, 0),
         SELL(R.raw.sell, 0.8f, 0), EQUIP(R.raw.equip, 0.8f, 0), CLICK(R.raw.ui_click, 0.5f, 40),
         CRIT(R.raw.crit_hit, 0.9f, 80), ENEMY_DEATH(R.raw.enemy_death, 0.7f, 60), STAGGER(R.raw.stagger, 0.7f, 100),
-        WINDUP(R.raw.enemy_windup, 0.3f, 150), ENEMY_SHOT(R.raw.enemy_shot, 0.35f, 90),
+        ENEMY_SHOT(R.raw.enemy_shot, 0.35f, 90),
         ARMOR_BREAK(R.raw.armor_break, 1f, 0), PLAYER_DEATH(R.raw.player_death, 1f, 0), REVIVE(R.raw.revive, 1f, 0),
         SUMMON(R.raw.summon, 0.8f, 300), ENRAGE(R.raw.enrage, 1f, 0), BLINK(R.raw.blink, 0.8f, 100),
-        THUD(R.raw.thud, 0.9f, 80);
+        THUD(R.raw.thud, 0.9f, 80), PORTAL_OPEN(R.raw.portal_open, 0.9f, 0), HEARTBEAT(R.raw.heartbeat, 0.8f, 300),
+        BLOCK(R.raw.block, 0.8f, 60), GUARD_BREAK(R.raw.guard_break, 1f, 0), HEAVY_CHARGE(R.raw.heavy_charge, 0.6f, 0),
+        HEAVY_SWING(R.raw.heavy_swing, 1f, 0), CRATE_SMASH(R.raw.crate_smash, 0.8f, 50);
 
         final int res;
         final float volume;
@@ -251,7 +272,7 @@ public class SoundManager {
                 .build();
 
         soundPool = new SoundPool.Builder()
-                .setMaxStreams(12)
+                .setMaxStreams(16)
                 .setAudioAttributes(attrs)
                 .build();
 

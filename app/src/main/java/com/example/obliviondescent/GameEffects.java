@@ -41,14 +41,26 @@ public class GameEffects {
 
     private static final long SLASH_LIFE = 180;
 
+    // Marks left on the floor for the rest of the floor: blood, scorch, and bodies that slowly fade
+    private static class Stain {
+        float x, y, rx, ry, angle;
+        int color;
+        long born, life; // life 0 = stays until the floor changes
+    }
+
+    private static final int MAX_STAINS = 220;
+    private static final long CORPSE_LIFE = 9000;
+
     private final List<Particle> particles = new ArrayList<>();
     private final List<FloatingText> texts = new ArrayList<>();
     private final List<Slash> slashes = new ArrayList<>();
+    private final List<Stain> stains = new ArrayList<>();
     private final Random rng = new Random();
 
     private final Paint particlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint slashPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint stainPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF slashRect = new RectF();
 
     public GameEffects() {
@@ -150,6 +162,66 @@ public class GameEffects {
         addText(x + (rng.nextFloat() - 0.5f) * 30f, y, text, color, 30f, 70f, 700);
     }
 
+    /**
+     * Sprays particles in a cone along (dirX, dirY), e.g. blood and sparks flying off the side that was hit.
+     * @param spread half-width of the cone in radians
+     */
+    public synchronized void spray(float x, float y, float dirX, float dirY, int color, int count, float speed,
+                                   float spread) {
+        long now = System.currentTimeMillis();
+        double base = Math.atan2(dirY, dirX);
+        for (int i = 0; i < count && particles.size() < MAX_PARTICLES; i++) {
+            double angle = base + (rng.nextFloat() * 2f - 1f) * spread;
+            float v = speed * (0.35f + rng.nextFloat() * 0.65f);
+            Particle p = new Particle();
+            p.x = x;
+            p.y = y;
+            p.vx = (float) Math.cos(angle) * v;
+            p.vy = (float) Math.sin(angle) * v;
+            p.size = 2.5f + rng.nextFloat() * 4f;
+            p.color = color;
+            p.born = now;
+            p.life = 250 + rng.nextInt(300);
+            particles.add(p);
+        }
+    }
+
+    /** A splash that stays on the floor: a main blot ringed by a few droplets. */
+    /** Settings: blood stains and bodies on the floor. */
+    public volatile boolean gore = true;
+
+    public synchronized void stain(float x, float y, float size, int color) {
+        if (!gore) return;
+        addStain(x, y, size, size * (0.7f + rng.nextFloat() * 0.3f), color, 0);
+        int drops = 2 + rng.nextInt(4);
+        for (int i = 0; i < drops; i++) {
+            double a = rng.nextDouble() * Math.PI * 2;
+            float d = size * (0.9f + rng.nextFloat() * 0.8f), r = size * (0.12f + rng.nextFloat() * 0.18f);
+            addStain(x + (float) Math.cos(a) * d, y + (float) Math.sin(a) * d, r, r, color, 0);
+        }
+    }
+
+    /** A fallen body, flattened and darkened, that lies a while and then fades away. */
+    public synchronized void corpse(float x, float y, float radius, int color) {
+        if (!gore) return;
+        int dark = Color.rgb(Color.red(color) * 2 / 5, Color.green(color) * 2 / 5, Color.blue(color) * 2 / 5);
+        addStain(x, y, radius * 1.05f, radius * 0.6f, dark, CORPSE_LIFE);
+    }
+
+    private void addStain(float x, float y, float rx, float ry, int color, long life) {
+        if (stains.size() >= MAX_STAINS) stains.remove(0);
+        Stain s = new Stain();
+        s.x = x;
+        s.y = y;
+        s.rx = rx;
+        s.ry = ry;
+        s.angle = rng.nextFloat() * 180f;
+        s.color = color;
+        s.born = System.currentTimeMillis();
+        s.life = life;
+        stains.add(s);
+    }
+
     /** Large text that floats up slowly, e.g. "LEVEL 3" or "ENRAGED". */
     public synchronized void banner(float x, float y, String text, int color) {
         addText(x, y, text, color, 46f, 50f, 1400);
@@ -186,6 +258,31 @@ public class GameEffects {
             if (now - t.born >= t.life) tit.remove();
         }
         slashes.removeIf(s -> now - s.born >= SLASH_LIFE);
+        stains.removeIf(s -> s.life > 0 && now - s.born >= s.life);
+    }
+
+    /** Floor marks, drawn before coins and bodies so everything stands on them. */
+    public synchronized void drawFloor(Canvas canvas, GameCamera camera) {
+        long now = System.currentTimeMillis();
+        float offX = camera.getOffsetX();
+        float offY = camera.getOffsetY();
+        int w = canvas.getWidth(), h = canvas.getHeight();
+        for (Stain s : stains) {
+            float sx = s.x - offX, sy = s.y - offY;
+            if (sx < -s.rx || sy < -s.rx || sx > w + s.rx || sy > h + s.rx) continue;
+            int alpha = Color.alpha(s.color);
+            if (s.life > 0) {
+                // Bodies hold for most of their life, then fade
+                float age = (float) (now - s.born) / s.life;
+                alpha = (int) (alpha * Math.min(1f, (1f - age) / 0.35f));
+            }
+            stainPaint.setColor(s.color);
+            stainPaint.setAlpha(alpha);
+            canvas.save();
+            canvas.rotate(s.angle, sx, sy);
+            canvas.drawOval(sx - s.rx, sy - s.ry, sx + s.rx, sy + s.ry, stainPaint);
+            canvas.restore();
+        }
     }
 
     /**
@@ -235,5 +332,6 @@ public class GameEffects {
         particles.clear();
         texts.clear();
         slashes.clear();
+        stains.clear();
     }
 }

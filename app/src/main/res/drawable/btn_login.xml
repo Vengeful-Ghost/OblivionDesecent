@@ -1,24 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Gothic primary button: dark interior, double gold trim, gold ripple -->
+<!-- Primary button: a worn stone slab in an iron frame, a corner broken off, cracked and mossy -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="@color/gold_translucent_strong">
 
     <item android:id="@android:id/mask">
         <shape android:shape="rectangle">
             <solid android:color="@color/gold_bright"/>
-            <corners android:radius="10dp"/>
+            <corners android:radius="3dp"/>
         </shape>
     </item>
 
     <item>
         <selector>
-            <!-- Pressed state: brighter gold glow on interior -->
+            <!-- Pressed: the slab sinks in and the frame catches the torchlight -->
             <item android:state_pressed="true">
                 <layer-list>
                     <item>
                         <shape android:shape="rectangle">
-                            <solid android:color="@color/gold_bright"/>
-                            <corners android:radius="10dp"/>
+                            <solid android:color="@color/stone_crack"/>
+                            <corners android:radius="3dp"/>
+                        </shape>
+                    </item>
+                    <item
+                        android:left="1dp" android:top="1dp"
+                        android:right="1dp" android:bottom="1dp">
+                        <shape android:shape="rectangle">
+                            <solid android:color="@color/torch"/>
+                            <corners android:radius="2dp"/>
+                        </shape>
+                    </item>
+                    <item
+                        android:left="2dp" android:top="3dp"
+                        android:right="2dp" android:bottom="1dp">
+                        <shape android:shape="rectangle">
+                            <gradient
+                                android:type="linear"
+                                android:angle="270"
+                                android:startColor="#2A1E14"
+                                android:endColor="#120D09"/>
+                            <corners android:radius="2dp"/>
+                        </shape>
+                    </item>
+                    <item android:drawable="@drawable/wear_chip" android:gravity="top|end"
+                        android:width="22dp" android:height="16dp"/>
+                    <item android:drawable="@drawable/wear_crack" android:gravity="bottom|start"
+                        android:left="8dp" android:width="30dp" android:height="16dp"/>
+                </layer-list>
+            </item>
+
+            <!-- Default: dark gap, worn iron frame, stone face lit from above -->
+            <item>
+                <layer-list>
+                    <item>
+                        <shape android:shape="rectangle">
+                            <solid android:color="@color/stone_crack"/>
+                            <corners android:radius="3dp"/>
+                        </shape>
+                    </item>
+                    <item
+                        android:left="1dp" android:top="1dp"
+                        android:right="1dp" android:bottom="1dp">
+                        <shape android:shape="rectangle">
+                            <solid android:color="@color/border_gold"/>
+                            <corners android:radius="2dp"/>
                         </shape>
                     </item>
                     <item
@@ -28,52 +72,24 @@
                             <gradient
                                 android:type="linear"
                                 android:angle="270"
-                                android:startColor="#4A2A0A"
-                                android:endColor="#1A0F05"/>
-                            <corners android:radius="8dp"/>
+                                android:startColor="#3A352E"
+                                android:centerColor="#26231E"
+                                android:endColor="#161411"/>
+                            <corners android:radius="2dp"/>
                         </shape>
                     </item>
-                </layer-list>
-            </item>
-
-            <!-- Default state: tarnished gold double-border, dark gradient -->
-            <item>
-                <layer-list>
-                    <item>
+                    <item android:gravity="top" android:top="2dp" android:left="3dp" android:right="3dp"
+                        android:height="1dp">
                         <shape android:shape="rectangle">
-                            <solid android:color="@color/border_gold_outer"/>
-                            <corners android:radius="10dp"/>
+                            <solid android:color="#2EEAE0CA"/>
                         </shape>
                     </item>
-                    <item
-                        android:left="1dp" android:top="1dp"
-                        android:right="1dp" android:bottom="1dp">
-                        <shape android:shape="rectangle">
-                            <solid android:color="@color/border_gold"/>
-                            <corners android:radius="9dp"/>
-                        </shape>
-                    </item>
-                    <item
-                        android:left="3dp" android:top="3dp"
-                        android:right="3dp" android:bottom="3dp">
-                        <shape android:shape="rectangle">
-                            <solid android:color="@color/gold_deep"/>
-                            <corners android:radius="7dp"/>
-                        </shape>
-                    </item>
-                    <item
-                        android:left="4dp" android:top="4dp"
-                        android:right="4dp" android:bottom="4dp">
-                        <shape android:shape="rectangle">
-                            <gradient
-                                android:type="linear"
-                                android:angle="270"
-                                android:startColor="#2A1F14"
-                                android:centerColor="#1A130D"
-                                android:endColor="#0A0807"/>
-                            <corners android:radius="6dp"/>
-                        </shape>
-                    </item>
+                    <item android:drawable="@drawable/wear_chip" android:gravity="top|end"
+                        android:width="22dp" android:height="16dp"/>
+                    <item android:drawable="@drawable/wear_crack" android:gravity="bottom|start"
+                        android:left="8dp" android:width="30dp" android:height="16dp"/>
+                    <item android:drawable="@drawable/wear_moss" android:gravity="bottom|center_horizontal"
+                        android:bottom="2dp" android:width="48dp" android:height="10dp"/>
                 </layer-list>
             </item>
         </selector>

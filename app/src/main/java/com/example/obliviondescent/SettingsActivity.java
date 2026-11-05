@@ -37,6 +37,9 @@ public class SettingsActivity extends AppCompatActivity {
     public static final String PREFS_NAME    = "gameSettings";
     public static final String KEY_VIBRATION = "vibration_enabled";
     public static final String KEY_ATTACK_FACING = "attack_facing"; // true: attack where the player faces
+    // Fight effects, all on by default
+    public static final String KEY_SHAKE = "screen_shake", KEY_NUMBERS = "damage_numbers", KEY_GORE = "blood_effects",
+            KEY_DANGER = "low_health_effects", KEY_LEAN = "camera_lean";
 
     // True when this screen was opened from the in-game pause menu — music must NOT play
     public static final String EXTRA_FROM_GAME = "from_game";
@@ -48,6 +51,8 @@ public class SettingsActivity extends AppCompatActivity {
     private SwitchCompat switchVibration;
     private TextView txtMiuiWarning;
     private TextView attackAim, attackFacing;
+    private TextView[] tabs;
+    private View[] panes;
 
     /**
      * Initialises the settings screen, loads saved preferences and sets up sliders.
@@ -96,6 +101,23 @@ public class SettingsActivity extends AppCompatActivity {
         });
 
         btnBack.setOnClickListener(v -> finish());
+
+        // One section at a time, picked from the tabs on the left
+        tabs = new TextView[]{findViewById(R.id.tab_audio), findViewById(R.id.tab_controls),
+                findViewById(R.id.tab_effects), findViewById(R.id.tab_account)};
+        panes = new View[]{findViewById(R.id.pane_audio), findViewById(R.id.pane_controls),
+                findViewById(R.id.pane_effects), findViewById(R.id.pane_account)};
+        for (int i = 0; i < tabs.length; i++) {
+            int index = i;
+            tabs[i].setOnClickListener(v -> showTab(index));
+        }
+        showTab(0);
+
+        bindSwitch(R.id.switch_shake, KEY_SHAKE, prefs);
+        bindSwitch(R.id.switch_numbers, KEY_NUMBERS, prefs);
+        bindSwitch(R.id.switch_gore, KEY_GORE, prefs);
+        bindSwitch(R.id.switch_danger, KEY_DANGER, prefs);
+        bindSwitch(R.id.switch_lean, KEY_LEAN, prefs);
 
         View btnPrivacy = findViewById(R.id.btn_privacy_options);
         btnPrivacy.setVisibility(Ads.privacyOptionsRequired(this) ? View.VISIBLE : View.GONE);
@@ -173,6 +195,21 @@ public class SettingsActivity extends AppCompatActivity {
     private void showAttackMode(boolean facing) {
         attackAim.setTextColor(getColor(facing ? R.color.bone_muted : R.color.gold_bright));
         attackFacing.setTextColor(getColor(facing ? R.color.gold_bright : R.color.bone_muted));
+    }
+
+    /** Shows one section and lights its tab. */
+    private void showTab(int index) {
+        for (int i = 0; i < tabs.length; i++) {
+            panes[i].setVisibility(i == index ? View.VISIBLE : View.GONE);
+            tabs[i].setTextColor(getColor(i == index ? R.color.gold_bright : R.color.bone_muted));
+        }
+    }
+
+    /** A switch saved straight to a setting that is on by default. */
+    private void bindSwitch(int id, String key, SharedPreferences prefs) {
+        SwitchCompat toggle = findViewById(id);
+        toggle.setChecked(prefs.getBoolean(key, true));
+        toggle.setOnCheckedChangeListener((button, on) -> prefs.edit().putBoolean(key, on).apply());
     }
 
     @Override

@@ -70,7 +70,11 @@ public class GameCamera {
      * Called by GameActivity when the player takes a hit.
      * Stores the shake parameters — the actual offset is applied in update().
      */
+    /** Settings: screen shake on or off. */
+    public static volatile boolean shakeEnabled = true;
+
     public void startShake(long duration, float magnitude) {
+        if (!shakeEnabled) return;
         isShaking = true;
         shakeStartTime = System.currentTimeMillis();
         shakeDuration = duration;

@@ -68,6 +68,7 @@ public class Props {
     static final class Decor {
         final int kind;
         final float x, y, a, b;
+        volatile boolean broken; // a smashed crate or barrel
 
         Decor(int kind, float x, float y, float a, float b) {
             this.kind = kind;
@@ -379,6 +380,19 @@ public class Props {
         canvas.restore();
     }
 
+    /** What is left of a smashed crate or barrel: planks scattered where it stood. */
+    void drawSplinters(Canvas canvas, float x, float y, float r) {
+        fill.setColor(WOOD_MID);
+        for (int i = 0; i < 5; i++) {
+            float a = i * 1.3f + x * 0.013f;
+            float px = x + (float) Math.cos(a) * r * 0.7f, py = y + (float) Math.sin(a * 1.7f) * r * 0.6f;
+            canvas.save();
+            canvas.rotate((float) Math.toDegrees(a * 2.1f), px, py);
+            canvas.drawRect(px - r * 0.35f, py - 3f, px + r * 0.35f, py + 3f, fill);
+            canvas.restore();
+        }
+    }
+
     /** Cobweb in a room corner; (sx, sy) point into the room. */
     void drawCobweb(Canvas canvas, float x, float y, float sx, float sy) {
         canvas.save();
@@ -440,7 +454,12 @@ public class Props {
        ============================================================ */
 
     private static boolean solid(Decor d) {
-        return d.kind == BARREL || d.kind == CRATE || d.kind == PILLAR;
+        return !d.broken && (d.kind == BARREL || d.kind == CRATE || d.kind == PILLAR);
+    }
+
+    /** Crates and barrels break when hit. */
+    static boolean breakable(Decor d) {
+        return !d.broken && (d.kind == BARREL || d.kind == CRATE);
     }
 
     /** Pushes a body of radius r out of every solid prop it overlaps; the result goes to out. */
@@ -496,6 +515,10 @@ public class Props {
     }
 
     void drawDecor(Canvas canvas, Decor d, long now) {
+        if (d.broken) {
+            drawSplinters(canvas, d.x, d.y, d.a);
+            return;
+        }
         switch (d.kind) {
             case TORCH:   drawTorch(canvas, d.x, d.y, now, (int) d.a); break;
             case BARREL:  drawBarrel(canvas, d.x, d.y, d.a); break;

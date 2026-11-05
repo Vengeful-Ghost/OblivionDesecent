@@ -109,12 +109,12 @@
         android:layout_marginTop="@dimen/space_sm"
         tools:ignore="HardcodedText" />
 
-    <!-- Meta progression and the daily challenge, under the title -->
+    <!-- Meta progression, the daily challenge, quests and past runs, two by two under the title -->
     <LinearLayout
         android:id="@+id/menu_extras"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:gravity="center"
         android:layout_marginTop="@dimen/space_lg"
         app:layout_constraintTop_toBottomOf="@id/MainMenu"
@@ -122,24 +122,58 @@
         app:layout_constraintStart_toStartOf="@+id/GameTitleFront"
         app:layout_constraintEnd_toEndOf="@+id/GameTitleFront">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_altar"
-            style="@style/OD.Button.Secondary"
+        <LinearLayout
             android:layout_width="wrap_content"
-            android:layout_height="@dimen/touch_min"
-            android:layout_marginEnd="@dimen/space_md"
-            android:text="Soul Altar"
-            app:icon="@drawable/ic_level"
-            tools:ignore="HardcodedText" />
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_daily"
-            style="@style/OD.Button.Secondary"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_altar"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="164dp"
+                android:layout_height="@dimen/touch_min"
+                android:layout_marginEnd="@dimen/space_md"
+                android:text="Soul Altar"
+                app:icon="@drawable/ic_level"
+                tools:ignore="HardcodedText" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_daily"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="164dp"
+                android:layout_height="@dimen/touch_min"
+                android:text="Daily Run"
+                app:icon="@drawable/ic_trophy"
+                tools:ignore="HardcodedText" />
+
+        </LinearLayout>
+
+        <LinearLayout
             android:layout_width="wrap_content"
-            android:layout_height="@dimen/touch_min"
-            android:text="Daily Run"
-            app:icon="@drawable/ic_trophy"
-            tools:ignore="HardcodedText" />
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_quests"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="164dp"
+                android:layout_height="@dimen/touch_min"
+                android:layout_marginEnd="@dimen/space_md"
+                android:text="Quests"
+                app:icon="@drawable/ic_flag"
+                tools:ignore="HardcodedText" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_history"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="164dp"
+                android:layout_height="@dimen/touch_min"
+                android:text="Runs"
+                app:icon="@drawable/ic_hourglass"
+                tools:ignore="HardcodedText" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

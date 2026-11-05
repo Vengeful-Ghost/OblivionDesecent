@@ -16,29 +16,36 @@
     <!-- Names are semantic so layouts read like prose                 -->
     <!-- ============================================================ -->
 
-    <!-- Backgrounds: warm-tinted charcoals, ascending in lightness -->
-    <color name="bg_deepest">#0A0807</color>
-    <color name="bg_base">#14100D</color>
-    <color name="bg_surface">#1E1813</color>
-    <color name="bg_surface_alt">#2A211A</color>
-    <color name="bg_surface_hi">#36291F</color>
-    <color name="bg_overlay">#CC0A0807</color>
+    <!-- Backgrounds: cold, damp stone, ascending in lightness -->
+    <color name="bg_deepest">#090908</color>
+    <color name="bg_base">#121110</color>
+    <color name="bg_surface">#1B1917</color>
+    <color name="bg_surface_alt">#25221E</color>
+    <color name="bg_surface_hi">#2F2B26</color>
+    <color name="bg_overlay">#D9090807</color>
     <color name="bg_scrim">#B3000000</color>
 
-    <!-- Aged gold (primary accent) -->
-    <color name="gold_deep">#7A5A1F</color>
-    <color name="gold_base">#B8911E</color>
-    <color name="gold_bright">#D4AF37</color>
-    <color name="gold_glow">#F4D77A</color>
-    <color name="gold_dim">#5C4517</color>
-    <color name="gold_translucent">#33D4AF37</color>
-    <color name="gold_translucent_strong">#66D4AF37</color>
+    <!-- Aged brass (primary accent): dull and worn, with torchlight for glows -->
+    <color name="gold_deep">#4E4330</color>
+    <color name="gold_base">#8A7650</color>
+    <color name="gold_bright">#BBA57A</color>
+    <color name="gold_glow">#D9A35A</color>
+    <color name="gold_dim">#4A2A14</color>
+    <color name="gold_translucent">#33C8742E</color>
+    <color name="gold_translucent_strong">#55C8742E</color>
 
-    <!-- Tarnished bronze trim / borders -->
-    <color name="border_gold">#8B6F2C</color>
-    <color name="border_gold_inner">#5C4517</color>
-    <color name="border_gold_outer">#3C2D1A</color>
-    <color name="divider_gold">#3C2D1A</color>
+    <!-- Worn iron trim / borders -->
+    <color name="border_gold">#5A5244</color>
+    <color name="border_gold_inner">#3A352D</color>
+    <color name="border_gold_outer">#1E1B17</color>
+    <color name="divider_gold">#2C2822</color>
+
+    <!-- Dungeon details: torchlight, the dark in the cracks, moss, rust -->
+    <color name="torch">#C8742E</color>
+    <color name="stone_crack">#070605</color>
+    <color name="stone_face">#2E2A24</color>
+    <color name="moss">#3E4A2A</color>
+    <color name="rust">#6B3A20</color>
 
     <!-- Crimson (danger / blood / health) -->
     <color name="crimson_deep">#4A0A0A</color>

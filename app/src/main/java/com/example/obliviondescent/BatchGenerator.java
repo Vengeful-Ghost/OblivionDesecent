@@ -68,11 +68,12 @@ public class BatchGenerator {
     private static final float[][] STAT_MULT  = {{0.85f, 1.15f}, {1.15f, 1.4f}, {1.4f, 1.75f}, {1.75f, 2.2f}};
     private static final float[][] PRICE_MULT = {{1.0f, 1.4f}, {2.0f, 2.8f}, {3.5f, 5.0f}, {7.0f, 10.0f}};
     private static final float[] CONSUMABLE_PRICE = {0.4f, 0.7f};
+    // Potions restore a share of the maximum, in percent, by rarity: a sip in a fight, never a full refill
+    static final int[][] POTION_PCT = {{15, 20}, {20, 25}, {25, 30}, {30, 35}};
 
     static float weaponBase(int floor) { return 6f + floor * 2.5f; }  // damage at a 600 ms cooldown
     static float armorBase(int floor)  { return 3f + floor * 1.5f; }  // defense per piece
     static float priceBase(int floor)  { return 13f + floor * 8.5f; }
-    static float healBase(int floor)   { return 15f + floor * 3f; }
     // Floor scaling (Enemy.applyFloorScaling) already tracks weapon growth, so templates stay flat
     static float enemyHpMin(int rangeStart)  { return 1.0f + rangeStart * 0.02f; }
     static float enemyHpMax(int rangeStart)  { return 1.5f + rangeStart * 0.03f; }
@@ -90,6 +91,12 @@ public class BatchGenerator {
         return Math.max(0, t);
     }
 
+    /** A potion's strength in percent, inside its rarity's band (old flat values are pulled into it too). */
+    static int potionPercent(ShopItem item) {
+        int[] band = POTION_PCT[tierOf(item.rarity)];
+        return clampInt(item.effectValue, band[0], band[1]);
+    }
+
     // Pulls an AI item back inside the floor's budget, so a generous reply can't trivialise the run
     private static void capToFloor(ShopItem item, int floor) {
         float maxMult = STAT_MULT[tierOf(item.rarity)][1];
@@ -99,8 +106,7 @@ public class BatchGenerator {
         item.defense = Math.max(1, Math.min(item.defense, Math.round(armorBase(floor) * maxMult)));
         float[] priceMult = item.type == ShopItem.ItemType.CONSUMABLE ? CONSUMABLE_PRICE : PRICE_MULT[tierOf(item.rarity)];
         item.price = clampInt(item.price, Math.round(priceBase(floor) * priceMult[0]), Math.round(priceBase(floor) * priceMult[1]));
-        item.effectValue = Math.min(item.effectValue, "heal".equals(item.effect)
-                ? Math.round(healBase(floor) * STAT_MULT[3][1]) : Math.round(armorBase(floor) * 5f));
+        item.effectValue = potionPercent(item);
     }
 
     /**
@@ -226,9 +232,7 @@ public class BatchGenerator {
             item.maxDurability = (float) obj.optDouble("maxDurability", 100);
             item.armorSlot   = obj.optString("armorType", "CHEST");
             item.effect      = obj.optString("effect", "heal");
-            int rawEffect    = obj.optInt("effectValue", 20);
-            // Player max health is 100; cap heal effectValue there. Armor restore is uncapped.
-            item.effectValue = "heal".equals(item.effect) ? Math.min(100, rawEffect) : rawEffect;
+            item.effectValue = obj.optInt("effectValue", 20); // percent; capToFloor keeps it in its band
             return item;
         } catch (Exception e) {
             Log.e(TAG, "Failed to parse shop item: " + e.getMessage());
@@ -336,10 +340,17 @@ public class BatchGenerator {
             item.name   = heal ? "Healing Draught" : "Ironbark Tonic";
             item.price  = Math.max(1, Math.round(priceBase(floor)
                     * (CONSUMABLE_PRICE[0] + rng.nextFloat() * (CONSUMABLE_PRICE[1] - CONSUMABLE_PRICE[0]))));
-            item.effectValue = heal ? Math.min(100, Math.round(healBase(floor) * stat))
-                    : Math.round(armorBase(floor) * (2f + rng.nextFloat() * 3f));
+            item.effectValue = POTION_PCT[tier][0] + rng.nextInt(POTION_PCT[tier][1] - POTION_PCT[tier][0] + 1);
         }
         return item;
+    }
+
+    /** Six new offline shop items for a floor, e.g. when the shop is restocked. */
+    static List<ShopItem> freshStock(int floor, long seed) {
+        java.util.Random rng = new java.util.Random(seed);
+        List<ShopItem> items = new ArrayList<>();
+        for (int i = 0; i < 6; i++) items.add(fallbackItem(floor, i / 2, rng));
+        return items;
     }
 
     private static String pick(java.util.Random rng, String[] options) {

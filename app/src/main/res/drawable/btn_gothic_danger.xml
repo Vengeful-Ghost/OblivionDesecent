@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Danger button: blood-red trim, dark crimson interior (respawn, delete, etc.) -->
+<!-- Danger button: rust-and-blood iron frame on dark stone, chipped and cracked (respawn, delete, etc.) -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="#66E04848">
 
     <item android:id="@android:id/mask">
         <shape android:shape="rectangle">
             <solid android:color="@color/crimson_bright"/>
-            <corners android:radius="10dp"/>
+            <corners android:radius="3dp"/>
         </shape>
     </item>
 
@@ -14,8 +14,8 @@
         <layer-list>
             <item>
                 <shape android:shape="rectangle">
-                    <solid android:color="@color/crimson_deep"/>
-                    <corners android:radius="10dp"/>
+                    <solid android:color="@color/stone_crack"/>
+                    <corners android:radius="3dp"/>
                 </shape>
             </item>
             <item
@@ -23,21 +23,25 @@
                 android:right="1dp" android:bottom="1dp">
                 <shape android:shape="rectangle">
                     <solid android:color="@color/crimson_base"/>
-                    <corners android:radius="9dp"/>
+                    <corners android:radius="2dp"/>
                 </shape>
             </item>
             <item
-                android:left="3dp" android:top="3dp"
-                android:right="3dp" android:bottom="3dp">
+                android:left="2dp" android:top="2dp"
+                android:right="2dp" android:bottom="2dp">
                 <shape android:shape="rectangle">
                     <gradient
                         android:type="linear"
                         android:angle="270"
-                        android:startColor="#3A0A0A"
-                        android:endColor="#1A0505"/>
-                    <corners android:radius="7dp"/>
+                        android:startColor="#2E1410"
+                        android:endColor="#140807"/>
+                    <corners android:radius="2dp"/>
                 </shape>
             </item>
+            <item android:drawable="@drawable/wear_chip" android:gravity="top|end"
+                android:width="22dp" android:height="16dp"/>
+            <item android:drawable="@drawable/wear_crack" android:gravity="bottom|start"
+                android:left="10dp" android:width="30dp" android:height="16dp"/>
         </layer-list>
     </item>
 

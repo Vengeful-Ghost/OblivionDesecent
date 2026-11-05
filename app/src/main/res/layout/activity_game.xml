@@ -140,13 +140,21 @@
         android:id="@+id/btn_level_up"
         style="@style/OD.Button"
         android:layout_width="wrap_content"
-        android:layout_height="@dimen/touch_min"
+        android:layout_height="32dp"
+        android:minHeight="0dp"
+        android:minWidth="0dp"
+        android:paddingStart="@dimen/space_sm"
+        android:paddingEnd="@dimen/space_sm"
         android:layout_below="@id/top_hud"
         android:layout_alignParentStart="true"
         android:layout_marginStart="68dp"
+        android:layout_marginTop="@dimen/space_xs"
         android:text="Level up!"
-        android:textSize="@dimen/text_small"
+        android:textSize="@dimen/text_caption"
+        android:letterSpacing="0.04"
         app:icon="@drawable/ic_level"
+        app:iconSize="@dimen/icon_sm"
+        app:iconPadding="@dimen/space_xs"
         android:visibility="gone"
         tools:ignore="HardcodedText"/>
 
@@ -259,7 +267,7 @@
         android:layout_marginBottom="@dimen/space_lg"
         android:layout_marginStart="@dimen/space_xl"/>
 
-    <!-- Attack stick with dash, spin and potion on an arc ~100dp from its centre -->
+    <!-- Attack stick with dash, heavy, spin and potion on an arc ~100dp from its centre -->
     <FrameLayout
         android:id="@+id/action_buttons"
         android:layout_width="188dp"
@@ -332,13 +340,48 @@
 
         </FrameLayout>
 
+        <!-- Heavy attack: hold to charge, release to strike; breaks guards -->
+        <FrameLayout
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="125dp"
+            android:layout_marginBottom="70dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_heavy"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:backgroundTint="@null"
+                android:background="@drawable/icon_btn_circle"
+                android:contentDescription="Heavy attack"
+                app:icon="@drawable/ic_anvil"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconSize="@dimen/icon_lg"
+                app:iconTint="@color/gold_bright"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                app:strokeWidth="0dp"
+                tools:ignore="HardcodedText"/>
+
+            <com.example.obliviondescent.DashCooldownView
+                android:id="@+id/heavy_cooldown_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:translationZ="10dp"/>
+
+        </FrameLayout>
+
         <!-- Spin special with cooldown arc -->
         <FrameLayout
             android:layout_width="56dp"
             android:layout_height="56dp"
             android:layout_gravity="bottom|end"
-            android:layout_marginEnd="108dp"
-            android:layout_marginBottom="96dp">
+            android:layout_marginEnd="88dp"
+            android:layout_marginBottom="115dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_spin"

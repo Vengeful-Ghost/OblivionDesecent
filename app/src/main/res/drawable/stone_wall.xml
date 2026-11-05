@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Old dungeon wall behind the menus: faint mortar joints, a few cracks and moss near the floor -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="640dp"
+    android:height="360dp"
+    android:viewportWidth="640"
+    android:viewportHeight="360">
+    <path
+        android:strokeColor="#1AEAE0CA"
+        android:strokeWidth="2"
+        android:pathData="M0,40H640M0,80H640M0,120H640M0,160H640M0,200H640M0,240H640M0,280H640M0,320H640"/>
+    <path
+        android:strokeColor="#1AEAE0CA"
+        android:strokeWidth="2"
+        android:pathData="M120,0v40M200,0v40M320,0v40M440,0v40M520,0v40M600,0v40M40,40v40M120,40v40M200,40v40M280,40v40M360,40v40M440,40v40M560,40v40M80,80v40M160,80v40M280,80v40M360,80v40M440,80v40M520,80v40M600,80v40M40,120v40M120,120v40M200,120v40M280,120v40M360,120v40M440,120v40M520,120v40M600,120v40M80,160v40M160,160v40M280,160v40M400,160v40M480,160v40M600,160v40M40,200v40M120,200v40M200,200v40M320,200v40M440,200v40M520,200v40M600,200v40M120,240v40M200,240v40M320,240v40M400,240v40M480,240v40M560,240v40M40,280v40M160,280v40M240,280v40M360,280v40M440,280v40M520,280v40M600,280v40M80,320v40M200,320v40M280,320v40M360,320v40M440,320v40M520,320v40M600,320v40"/>
+    <path
+        android:strokeColor="#40000000"
+        android:strokeWidth="1.5"
+        android:strokeLineJoin="round"
+        android:pathData="M323,240L340,238L351,234L359,231L361,229M497,301L494,307L490,305L488,297L506,292M399,66L404,68L401,76L416,83L431,90M477,108L471,103L467,94L476,89L488,89M433,96L448,91L451,98L448,98L442,105M402,315L397,322L396,330L404,333L404,328M145,201L140,206L151,210L157,202L154,210"/>
+    <!-- Damp moss creeping up from the floor -->
+    <path
+        android:fillColor="#183E4A2A"
+        android:pathData="M0,360V318C40,300 70,322 110,310C150,296 170,330 220,322C260,316 300,340 360,330C420,318 450,340 500,326C560,310 600,330 640,316V360Z"/>
+</vector>

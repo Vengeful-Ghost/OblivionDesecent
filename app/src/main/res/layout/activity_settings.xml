@@ -52,80 +52,344 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- Settings card: three columns, so everything fits without scrolling -->
+    <!-- Settings card: section tabs on the left, the chosen section on the right; nothing scrolls -->
     <LinearLayout
         android:id="@+id/settingsCard"
         style="@style/OD.Card"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:layout_marginHorizontal="@dimen/space_xl"
-        app:layout_constraintWidth_max="760dp"
+        app:layout_constraintWidth_max="720dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <TextView
-            style="@style/OD.Text.Title"
-            android:layout_width="match_parent"
+        <!-- Sections, with Back under them -->
+        <LinearLayout
+            android:layout_width="150dp"
             android:layout_height="wrap_content"
-            android:text="Settings"
-            android:textAllCaps="true"
-            android:gravity="center"
-            android:maxLines="1"
-            android:shadowColor="@color/gold_glow"
-            android:shadowRadius="18"
-            android:animation="@anim/glow_pulse"
-            tools:ignore="HardcodedText"/>
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/OD.Text.Title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:text="Settings"
+                android:textAllCaps="true"
+                android:textSize="@dimen/text_heading"
+                android:maxLines="1"
+                android:shadowColor="@color/gold_glow"
+                android:shadowRadius="12"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/tab_audio"
+                style="@style/OD.Text.Tab"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/touch_min"
+                android:gravity="center_vertical|start"
+                android:text="Audio"
+                android:drawableStart="@drawable/ic_volume"
+                android:drawablePadding="@dimen/space_sm"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/tab_controls"
+                style="@style/OD.Text.Tab"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/touch_min"
+                android:gravity="center_vertical|start"
+                android:text="Controls"
+                android:drawableStart="@drawable/ic_crossed_swords"
+                android:drawablePadding="@dimen/space_sm"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/tab_effects"
+                style="@style/OD.Text.Tab"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/touch_min"
+                android:gravity="center_vertical|start"
+                android:text="Effects"
+                android:drawableStart="@drawable/ic_skull"
+                android:drawablePadding="@dimen/space_sm"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/tab_account"
+                style="@style/OD.Text.Tab"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/touch_min"
+                android:gravity="center_vertical|start"
+                android:text="Account"
+                android:drawableStart="@drawable/ic_flag"
+                android:drawablePadding="@dimen/space_sm"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_back"
+                style="@style/OD.Button"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/touch_min"
+                android:layout_marginTop="@dimen/space_sm"
+                android:text="Back"
+                app:icon="@drawable/ic_back"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
 
         <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="@drawable/divider_gold"
-            android:layout_marginTop="@dimen/space_sm"
-            android:layout_marginBottom="@dimen/space_md"/>
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginHorizontal="@dimen/space_lg"
+            android:background="@color/divider_gold"/>
 
-        <LinearLayout
-            android:layout_width="match_parent"
+        <FrameLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:layout_weight="1">
 
-            <!-- CONTROLS -->
+            <!-- AUDIO: each slider with a line saying what it changes -->
             <LinearLayout
-                android:layout_width="0dp"
+                android:id="@+id/pane_audio"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:orientation="vertical">
-
-                <TextView
-                    style="@style/OD.Text.Label"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="CONTROLS"
-                    android:textColor="@color/gold_bright"
-                    android:letterSpacing="0.24"
-                    android:layout_marginBottom="@dimen/space_sm"
-                    tools:ignore="HardcodedText"/>
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/touch_min"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
                     android:orientation="horizontal"
                     android:gravity="center_vertical">
 
-                    <TextView
-                        style="@style/OD.Text"
+                    <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Vibration"
-                        android:textStyle="bold"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:drawableStart="@drawable/ic_vibration"
-                        android:drawablePadding="@dimen/space_sm"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/OD.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Sound effects"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText"/>
+
+                        <TextView
+                            style="@style/OD.Text.Caption"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Hits, spells, doors and menus"
+                            android:textSize="@dimen/text_caption"
+                            tools:ignore="HardcodedText"/>
+
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/seekbar_sfx_volume"
+                        android:layout_width="0dp"
+                        android:layout_height="@dimen/touch_min"
+                        android:layout_weight="1.2"
+                        android:max="100"
+                        android:progress="100"
+                        android:progressTint="@color/gold_bright"
+                        android:thumbTint="@color/gold_bright"
+                        android:progressBackgroundTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/OD.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Menu music"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText"/>
+
+                        <TextView
+                            style="@style/OD.Text.Caption"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="On the main menu screens"
+                            android:textSize="@dimen/text_caption"
+                            tools:ignore="HardcodedText"/>
+
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/seekbar_menu_music_volume"
+                        android:layout_width="0dp"
+                        android:layout_height="@dimen/touch_min"
+                        android:layout_weight="1.2"
+                        android:max="100"
+                        android:progress="85"
+                        android:progressTint="@color/gold_bright"
+                        android:thumbTint="@color/gold_bright"
+                        android:progressBackgroundTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/OD.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Game music"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText"/>
+
+                        <TextView
+                            style="@style/OD.Text.Caption"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Dungeon, boss and game over themes"
+                            android:textSize="@dimen/text_caption"
+                            tools:ignore="HardcodedText"/>
+
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/seekbar_game_music_volume"
+                        android:layout_width="0dp"
+                        android:layout_height="@dimen/touch_min"
+                        android:layout_weight="1.2"
+                        android:max="100"
+                        android:progress="85"
+                        android:progressTint="@color/gold_bright"
+                        android:thumbTint="@color/gold_bright"
+                        android:progressBackgroundTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- CONTROLS -->
+            <LinearLayout
+                android:id="@+id/pane_controls"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    style="@style/OD.Text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Attack direction"
+                    android:textStyle="bold"
+                    tools:ignore="HardcodedText"/>
+
+                <TextView
+                    style="@style/OD.Text.Caption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Aim: drag the attack stick to aim, or let it pick the nearest enemy. Facing: you strike the way you walk."
+                    android:textSize="@dimen/text_caption"
+                    tools:ignore="HardcodedText"/>
+
+                <!-- Aim with the attack stick, or attack where the player faces -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:orientation="horizontal"
+                    android:background="@drawable/dialog_bg"
+                    android:padding="@dimen/space_xs">
+
+                    <TextView
+                        android:id="@+id/attack_mode_aim"
+                        style="@style/OD.Text.Tab"
+                        android:layout_width="0dp"
+                        android:layout_height="@dimen/touch_min"
+                        android:layout_weight="1"
+                        android:text="Aim"
+                        android:textColor="@color/gold_bright"
+                        android:clickable="true"
+                        android:focusable="true"
                         tools:ignore="HardcodedText"/>
+
+                    <TextView
+                        android:id="@+id/attack_mode_facing"
+                        style="@style/OD.Text.Tab"
+                        android:layout_width="0dp"
+                        android:layout_height="@dimen/touch_min"
+                        android:layout_weight="1"
+                        android:text="Facing"
+                        android:clickable="true"
+                        android:focusable="true"
+                        tools:ignore="HardcodedText"/>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_sm"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/OD.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Vibration"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText"/>
+
+                        <TextView
+                            style="@style/OD.Text.Caption"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Buzz on hits, blocks and dodges"
+                            android:textSize="@dimen/text_caption"
+                            tools:ignore="HardcodedText"/>
+
+                    </LinearLayout>
 
                     <androidx.appcompat.widget.SwitchCompat
                         android:id="@+id/switch_vibration"
@@ -144,7 +408,6 @@
                     style="@style/OD.Text.Caption"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/space_sm"
                     android:text="Battery savers can block vibration. If it doesn't work, check this app's permissions."
                     android:textSize="@dimen/text_caption"
                     android:textColor="@color/warning_amber"
@@ -154,194 +417,242 @@
                     android:visibility="gone"
                     tools:ignore="HardcodedText"/>
 
+            </LinearLayout>
+
+            <!-- EFFECTS: what the screen shows during a fight -->
+            <LinearLayout
+                android:id="@+id/pane_effects"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/OD.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Screen shake"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText"/>
+
+                        <TextView
+                            style="@style/OD.Text.Caption"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="The view shakes on heavy hits and slams"
+                            android:textSize="@dimen/text_caption"
+                            tools:ignore="HardcodedText"/>
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_shake"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="@dimen/touch_min"
+                        android:checked="true"
+                        app:thumbTint="@color/gold_bright"
+                        app:trackTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/OD.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Damage numbers"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText"/>
+
+                        <TextView
+                            style="@style/OD.Text.Caption"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Numbers pop up when you hit or get hit"
+                            android:textSize="@dimen/text_caption"
+                            tools:ignore="HardcodedText"/>
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_numbers"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="@dimen/touch_min"
+                        android:checked="true"
+                        app:thumbTint="@color/gold_bright"
+                        app:trackTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/OD.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Blood and bodies"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText"/>
+
+                        <TextView
+                            style="@style/OD.Text.Caption"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Blood stains and fallen enemies stay on the floor"
+                            android:textSize="@dimen/text_caption"
+                            tools:ignore="HardcodedText"/>
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_gore"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="@dimen/touch_min"
+                        android:checked="true"
+                        app:thumbTint="@color/gold_bright"
+                        app:trackTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/OD.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Low health warning"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText"/>
+
+                        <TextView
+                            style="@style/OD.Text.Caption"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Red edges and a heartbeat when near death in a fight"
+                            android:textSize="@dimen/text_caption"
+                            tools:ignore="HardcodedText"/>
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_danger"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="@dimen/touch_min"
+                        android:checked="true"
+                        app:thumbTint="@color/gold_bright"
+                        app:trackTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/OD.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Camera lean"
+                            android:textStyle="bold"
+                            tools:ignore="HardcodedText"/>
+
+                        <TextView
+                            style="@style/OD.Text.Caption"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="The view leans toward where you attack"
+                            android:textSize="@dimen/text_caption"
+                            tools:ignore="HardcodedText"/>
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_lean"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="@dimen/touch_min"
+                        android:checked="true"
+                        app:thumbTint="@color/gold_bright"
+                        app:trackTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- ACCOUNT -->
+            <LinearLayout
+                android:id="@+id/pane_account"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
                 <TextView
                     style="@style/OD.Text.Caption"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/space_xs"
-                    android:text="Attack direction"
+                    android:text="Signing out keeps your saves, Souls and stats on your account."
                     android:textSize="@dimen/text_caption"
-                    tools:ignore="HardcodedText"/>
-
-                <!-- Aim with the attack stick, or attack where the player faces -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:background="@drawable/dialog_bg"
-                    android:padding="@dimen/space_xs">
-
-                    <TextView
-                        android:id="@+id/attack_mode_aim"
-                        style="@style/OD.Text.Tab"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/touch_min"
-                        android:layout_weight="1"
-                        android:paddingStart="@dimen/space_xs"
-                        android:paddingEnd="@dimen/space_xs"
-                        android:text="Aim"
-                        android:textColor="@color/gold_bright"
-                        android:clickable="true"
-                        android:focusable="true"
-                        tools:ignore="HardcodedText"/>
-
-                    <TextView
-                        android:id="@+id/attack_mode_facing"
-                        style="@style/OD.Text.Tab"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/touch_min"
-                        android:layout_weight="1"
-                        android:paddingStart="@dimen/space_xs"
-                        android:paddingEnd="@dimen/space_xs"
-                        android:text="Facing"
-                        android:clickable="true"
-                        android:focusable="true"
-                        tools:ignore="HardcodedText"/>
-
-                </LinearLayout>
-
-            </LinearLayout>
-
-            <View
-                android:layout_width="1dp"
-                android:layout_height="match_parent"
-                android:layout_marginHorizontal="@dimen/space_lg"
-                android:background="@color/divider_gold"/>
-
-            <!-- AUDIO: label and slider share a row -->
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1.5"
-                android:orientation="vertical">
-
-                <TextView
-                    style="@style/OD.Text.Label"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="AUDIO"
-                    android:textColor="@color/gold_bright"
-                    android:letterSpacing="0.24"
-                    android:layout_marginBottom="@dimen/space_sm"
-                    tools:ignore="HardcodedText"/>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/touch_min"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        style="@style/OD.Text"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Effects"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:drawableStart="@drawable/ic_volume"
-                        android:drawablePadding="@dimen/space_sm"
-                        tools:ignore="HardcodedText"/>
-
-                    <SeekBar
-                        android:id="@+id/seekbar_sfx_volume"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/touch_min"
-                        android:layout_weight="1.3"
-                        android:max="100"
-                        android:progress="100"
-                        android:progressTint="@color/gold_bright"
-                        android:thumbTint="@color/gold_bright"
-                        android:progressBackgroundTint="@color/border_gold_outer"/>
-
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/touch_min"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        style="@style/OD.Text"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Menu music"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:drawableStart="@drawable/ic_music"
-                        android:drawablePadding="@dimen/space_sm"
-                        tools:ignore="HardcodedText"/>
-
-                    <SeekBar
-                        android:id="@+id/seekbar_menu_music_volume"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/touch_min"
-                        android:layout_weight="1.3"
-                        android:max="100"
-                        android:progress="85"
-                        android:progressTint="@color/gold_bright"
-                        android:thumbTint="@color/gold_bright"
-                        android:progressBackgroundTint="@color/border_gold_outer"/>
-
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/touch_min"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        style="@style/OD.Text"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Game music"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:drawableStart="@drawable/ic_music"
-                        android:drawablePadding="@dimen/space_sm"
-                        android:drawableTint="@color/crimson_glow"
-                        tools:ignore="HardcodedText"/>
-
-                    <SeekBar
-                        android:id="@+id/seekbar_game_music_volume"
-                        android:layout_width="0dp"
-                        android:layout_height="@dimen/touch_min"
-                        android:layout_weight="1.3"
-                        android:max="100"
-                        android:progress="85"
-                        android:progressTint="@color/gold_bright"
-                        android:thumbTint="@color/gold_bright"
-                        android:progressBackgroundTint="@color/border_gold_outer"/>
-
-                </LinearLayout>
-
-            </LinearLayout>
-
-            <View
-                android:layout_width="1dp"
-                android:layout_height="match_parent"
-                android:layout_marginHorizontal="@dimen/space_lg"
-                android:background="@color/divider_gold"/>
-
-            <!-- ACCOUNT -->
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    style="@style/OD.Text.Label"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="ACCOUNT"
-                    android:textColor="@color/gold_bright"
-                    android:letterSpacing="0.24"
-                    android:layout_marginBottom="@dimen/space_sm"
                     tools:ignore="HardcodedText"/>
 
                 <com.google.android.material.button.MaterialButton
@@ -349,6 +660,7 @@
                     style="@style/OD.Button.Danger"
                     android:layout_width="match_parent"
                     android:layout_height="@dimen/touch_min"
+                    android:layout_marginTop="@dimen/space_sm"
                     android:text="Sign Out"
                     tools:ignore="HardcodedText"/>
 
@@ -364,32 +676,20 @@
                     android:visibility="gone"
                     tools:ignore="HardcodedText"/>
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_back"
-                    style="@style/OD.Button"
+                <TextView
+                    style="@style/OD.Text.Caption"
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/button_height"
+                    android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/space_md"
-                    android:text="Back"
-                    app:icon="@drawable/ic_back"
-                    android:stateListAnimator="@animator/button_elevation_anim"
-                    android:translationZ="6dp"
+                    android:gravity="center"
+                    android:text="Icons by Lorc, Delapouite and Skoll · game-icons.net · CC BY 3.0&#10;Fonts: Cinzel, Crimson Pro · SIL Open Font License 1.1"
+                    android:textSize="@dimen/text_caption"
+                    android:textColor="@color/bone_muted"
                     tools:ignore="HardcodedText"/>
 
             </LinearLayout>
 
-        </LinearLayout>
-
-        <TextView
-            style="@style/OD.Text.Caption"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_md"
-            android:gravity="center"
-            android:text="Icons by Lorc, Delapouite and Skoll · game-icons.net · CC BY 3.0&#10;Fonts: Cinzel, Crimson Pro · SIL Open Font License 1.1"
-            android:textSize="@dimen/text_caption"
-            android:textColor="@color/bone_muted"
-            tools:ignore="HardcodedText"/>
+        </FrameLayout>
 
     </LinearLayout>
 

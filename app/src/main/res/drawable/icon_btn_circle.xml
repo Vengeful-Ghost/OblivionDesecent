@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Circular gold-rimmed icon button frame (HUD menu/bag, settings cogs) -->
+<!-- Round icon button (HUD menu/bag, actions): a stone disc in an iron ring, cracked near the top -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="@color/gold_translucent_strong">
 
@@ -13,12 +13,12 @@
         <layer-list>
             <item>
                 <shape android:shape="oval">
-                    <solid android:color="@color/border_gold"/>
+                    <solid android:color="@color/stone_crack"/>
                 </shape>
             </item>
-            <item android:left="2dp" android:top="2dp" android:right="2dp" android:bottom="2dp">
+            <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="1dp">
                 <shape android:shape="oval">
-                    <solid android:color="@color/gold_deep"/>
+                    <solid android:color="@color/border_gold"/>
                 </shape>
             </item>
             <item android:left="3dp" android:top="3dp" android:right="3dp" android:bottom="3dp">
@@ -26,10 +26,13 @@
                     <gradient
                         android:type="radial"
                         android:gradientRadius="32dp"
-                        android:startColor="@color/bg_surface_alt"
+                        android:centerY="0.35"
+                        android:startColor="@color/stone_face"
                         android:endColor="@color/bg_deepest"/>
                 </shape>
             </item>
+            <item android:drawable="@drawable/wear_crack" android:gravity="top|center_horizontal"
+                android:top="5dp" android:width="16dp" android:height="9dp"/>
         </layer-list>
     </item>
 

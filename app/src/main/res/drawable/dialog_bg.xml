@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Secondary panel / row background: single gold hairline, darker interior -->
+<!-- Secondary panel / row background: a recessed stone panel with a hairline crack -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item>
         <shape android:shape="rectangle">
             <solid android:color="@color/border_gold_inner"/>
-            <corners android:radius="8dp"/>
+            <corners android:radius="3dp"/>
         </shape>
     </item>
 
@@ -18,10 +18,13 @@
             <gradient
                 android:type="linear"
                 android:angle="270"
-                android:startColor="@color/bg_surface_alt"
-                android:endColor="@color/bg_base"/>
-            <corners android:radius="7dp"/>
+                android:startColor="@color/bg_base"
+                android:endColor="@color/bg_surface_alt"/>
+            <corners android:radius="2dp"/>
         </shape>
     </item>
+
+    <item android:drawable="@drawable/wear_crack" android:gravity="bottom|end"
+        android:right="8dp" android:bottom="1dp" android:width="26dp" android:height="14dp"/>
 
 </layer-list>

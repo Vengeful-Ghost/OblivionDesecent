@@ -102,6 +102,8 @@ public class MenuActivity extends AppCompatActivity {
         findViewById(R.id.btn_tutorial).setOnClickListener(v -> { click(); showTutorial(); });
         findViewById(R.id.btn_altar).setOnClickListener(v -> { click(); showAltar(); });
         findViewById(R.id.btn_daily).setOnClickListener(v -> { click(); showDaily(); });
+        findViewById(R.id.btn_quests).setOnClickListener(v -> { click(); showQuests(); });
+        findViewById(R.id.btn_history).setOnClickListener(v -> { click(); showHistory(); });
         Ads.gatherConsent(this);
     }
 
@@ -227,6 +229,85 @@ public class MenuActivity extends AppCompatActivity {
         hideSystemUIOnWindow(dialog);
     }
 
+    /** A titled list card (dialog_list) with a close button. */
+    private Dialog listDialog(String title, String note) {
+        Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dialog.setContentView(R.layout.dialog_list);
+        if (dialog.getWindow() != null)
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        ((TextView) dialog.findViewById(R.id.txt_list_title)).setText(title);
+        ((TextView) dialog.findViewById(R.id.txt_list_note)).setText(note);
+        dialog.findViewById(R.id.btn_close_list).setOnClickListener(v -> { click(); dialog.dismiss(); });
+        return dialog;
+    }
+
+    /** Today's three quests: progress made in any mode, and Souls to claim once each is done. */
+    private void showQuests() {
+        if (userId == null) return;
+        Dialog dialog = listDialog("DAILY QUESTS", "New ones at 00:00 UTC");
+        LinearLayout rows = dialog.findViewById(R.id.list_rows);
+        for (Quests q : Quests.ofDay(Quests.today())) {
+            View row = getLayoutInflater().inflate(R.layout.item_quest, rows, false);
+            int done = Quests.progress(this, q);
+            ((TextView) row.findViewById(R.id.quest_title)).setText(q.title());
+            ((TextView) row.findViewById(R.id.quest_progress)).setText(done + " / " + q.goal);
+            android.widget.ProgressBar bar = row.findViewById(R.id.quest_bar);
+            bar.setMax(q.goal);
+            bar.setProgress(done);
+            MaterialButton claim = row.findViewById(R.id.quest_claim);
+            boolean claimed = Quests.claimed(this, q);
+            claim.setText(claimed ? "Claimed" : "+" + q.souls + " Souls");
+            claim.setEnabled(!claimed && done >= q.goal);
+            claim.setAlpha(claim.isEnabled() ? 1f : 0.45f);
+            claim.setOnClickListener(v -> {
+                claim.setEnabled(false);
+                claim.setAlpha(0.45f);
+                claim.setText("Claimed");
+                Quests.markClaimed(this, q);
+                dbManager.addSouls(userId, q.souls);
+                sounds.play(SoundManager.Sfx.PURCHASE);
+            });
+            rows.addView(row);
+        }
+        dialog.show();
+        hideSystemUIOnWindow(dialog);
+    }
+
+    /** The last runs played on this phone, newest first (GameActivity.recordRun). */
+    private void showHistory() {
+        Dialog dialog = listDialog("RUN HISTORY", "Last 10 runs");
+        LinearLayout rows = dialog.findViewById(R.id.list_rows);
+        java.text.SimpleDateFormat when = new java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.US);
+        org.json.JSONArray list;
+        try {
+            list = new org.json.JSONArray(getSharedPreferences("runs_" + userId, MODE_PRIVATE).getString("list", "[]"));
+        } catch (org.json.JSONException e) {
+            list = new org.json.JSONArray();
+        }
+        for (int i = 0; i < list.length(); i++) {
+            org.json.JSONObject r = list.optJSONObject(i);
+            if (r == null) continue;
+            long secs = r.optLong("secs");
+            View line = getLayoutInflater().inflate(R.layout.item_stat_row, rows, false);
+            TextView label = line.findViewById(R.id.stat_label);
+            label.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, getResources().getDimension(R.dimen.text_small));
+            label.setText(when.format(new java.util.Date(r.optLong("t"))) + "   " + r.optString("mode")
+                    + "   " + r.optString("weapon") + "   Lv " + r.optInt("level"));
+            ((TextView) line.findViewById(R.id.stat_value)).setText("Floor " + r.optInt("floor") + "   "
+                    + r.optInt("kills") + " kills   " + secs / 60 + ":"
+                    + String.format(java.util.Locale.US, "%02d", secs % 60));
+            rows.addView(line);
+        }
+        if (list.length() == 0) {
+            View line = getLayoutInflater().inflate(R.layout.item_stat_row, rows, false);
+            ((TextView) line.findViewById(R.id.stat_label)).setText("No runs yet. Your fallen runs will show here.");
+            ((TextView) line.findViewById(R.id.stat_value)).setText("");
+            rows.addView(line);
+        }
+        dialog.show();
+        hideSystemUIOnWindow(dialog);
+    }
+
     private void hideSystemUIOnWindow(Dialog dialog) {
         if (dialog.getWindow() != null) dialog.getWindow().getDecorView().setSystemUiVisibility(
                 getWindow().getDecorView().getSystemUiVisibility());
@@ -246,12 +327,13 @@ public class MenuActivity extends AppCompatActivity {
                     + "time slows, the dash recharges and your next hits are sure crits."},
             {"Attack",
                     "Hold ATK to keep attacking. It aims at the nearest enemy; drag it to aim yourself.\n\n"
-                    + "Keep swinging for a 3-hit combo: the third hit is wider and stronger. Gold numbers are critical hits.\n\n"
-                    + "SPIN hits everything around you, then needs a few seconds to recharge."},
+                    + "Every weapon swings its own way: daggers are quick, axes sweep wide, spears reach far and "
+                    + "hammers end their combo with a slam. Gold numbers are critical hits.\n\n"
+                    + "Hold the anvil to charge a HEAVY blow, let go to strike. SPIN hits everything around you."},
             {"Read the Enemy",
                     "A red ! means an enemy is about to strike. The red cone or circle shows where it lands, so step out or dash.\n\n"
-                    + "A combo finisher or critical hit during that wind-up staggers the enemy (bosses can't be staggered).\n\n"
-                    + "Glowing elites are tougher, but always drop a key."},
+                    + "A bright arc means it is guarding: hit it from behind, or break the guard with a heavy blow.\n\n"
+                    + "A finisher or critical hit during a wind-up staggers the enemy. Glowing elites always drop a key."},
             {"Floors & Shop",
                     "Defeat the enemies on a floor to open the purple EXIT portal. Edge arrows point the way.\n\n"
                     + "The gold SHOP portal sells gear for the coins you collect. Every 5th floor has a boss.\n\n"

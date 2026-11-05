@@ -41,12 +41,19 @@
             android:layout_height="@dimen/touch_min"
             android:layout_marginBottom="@dimen/space_sm">
 
+            <!-- Gold, and an opt-in ad that restocks the shop once a floor -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start|center_vertical"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
             <TextView
                 android:id="@+id/shop_gold_display"
                 style="@style/OD.Text.Value"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="start|center_vertical"
                 android:gravity="center_vertical"
                 android:paddingHorizontal="@dimen/space_md"
                 android:paddingVertical="@dimen/space_sm"
@@ -61,12 +68,28 @@
                 android:background="@drawable/hud_panel"
                 tools:ignore="HardcodedText"/>
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_shop_restock"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/touch_min"
+                android:layout_marginStart="@dimen/space_xs"
+                android:minWidth="0dp"
+                android:paddingStart="@dimen/space_sm"
+                android:paddingEnd="@dimen/space_sm"
+                android:text="Restock (ad)"
+                android:textSize="@dimen/text_caption"
+                android:visibility="gone"
+                tools:ignore="HardcodedText"/>
+
+            </LinearLayout>
+
             <TextView
                 style="@style/OD.Text.Title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:paddingHorizontal="120dp"
+                android:paddingHorizontal="190dp"
                 android:text="The Void Market"
                 android:textAllCaps="true"
                 android:textColor="@color/shadow_soft"
@@ -86,7 +109,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
-                android:paddingHorizontal="120dp"
+                android:paddingHorizontal="190dp"
                 android:text="The Void Market"
                 android:textAllCaps="true"
                 android:gravity="center"

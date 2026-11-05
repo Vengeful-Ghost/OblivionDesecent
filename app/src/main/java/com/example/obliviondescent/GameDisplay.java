@@ -62,6 +62,12 @@ public class GameDisplay extends View {
     private Paint tileShadePaint;
     private Paint wallShadowPaint;
     private final Paint vignettePaint = new Paint();
+    // Brick front faces under north walls, so the walls read as standing up
+    private static final float WALL_FACE = 44f;
+    private final Paint wallFacePaint = new Paint(), mortarPaint = new Paint(), wallFootPaint = new Paint();
+    // Low health in a fight: red edges that throb with each heartbeat (0 = off)
+    private final Paint dangerPaint = new Paint();
+    private volatile long heartbeatAt = 0;
 
     // Dungeon darkness: everything dims, then lights cut soft holes back out of it
     private static final int AMBIENT_DARK = Color.argb(150, 6, 5, 12);
@@ -203,23 +209,28 @@ public class GameDisplay extends View {
         wallShadowPaint.setStyle(Paint.Style.STROKE);
         wallShadowPaint.setStrokeWidth(24f);
 
+        wallFacePaint.setColor(Color.rgb(62, 53, 46));
+        mortarPaint.setColor(Color.rgb(26, 21, 17));
+        mortarPaint.setStrokeWidth(2f);
+        wallFootPaint.setColor(Color.argb(130, 0, 0, 0));
+
         minimapBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         minimapBgPaint.setColor(Color.argb(200, 10, 8, 7));
         minimapBgPaint.setStyle(Paint.Style.FILL);
 
-        // Frame: dark bronze band, gold line inside it, faint gold highlight
+        // Frame: dark iron band, worn iron line inside it, faint bone highlight
         minimapRimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        minimapRimPaint.setColor(Color.rgb(60, 45, 26));
+        minimapRimPaint.setColor(Color.rgb(34, 31, 27));
         minimapRimPaint.setStyle(Paint.Style.STROKE);
         minimapRimPaint.setStrokeWidth(4f * density);
 
         minimapBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        minimapBorderPaint.setColor(Color.rgb(139, 111, 44));
+        minimapBorderPaint.setColor(Color.rgb(90, 82, 68));
         minimapBorderPaint.setStyle(Paint.Style.STROKE);
         minimapBorderPaint.setStrokeWidth(2f * density);
 
         minimapHighlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        minimapHighlightPaint.setColor(Color.argb(128, 212, 175, 55));
+        minimapHighlightPaint.setColor(Color.argb(90, 216, 200, 160));
         minimapHighlightPaint.setStyle(Paint.Style.STROKE);
         minimapHighlightPaint.setStrokeWidth(density);
 
@@ -371,6 +382,11 @@ public class GameDisplay extends View {
         zoomUntil = zoomStart + ms;
     }
 
+    /** Time of the latest heartbeat while low on health in a fight, or 0 to clear the red edges. */
+    public void setHeartbeat(long at) {
+        heartbeatAt = at;
+    }
+
     /** Tapping the minimap opens the whole-floor map; any tap closes it. */
     @Override
     public boolean onTouchEvent(MotionEvent event) {
@@ -424,6 +440,8 @@ public class GameDisplay extends View {
         vignettePaint.setShader(new android.graphics.RadialGradient(w / 2f, h / 2f, radius,
                 new int[]{0x00000000, 0x00000000, 0xC0000000}, new float[]{0f, 0.5f, 1f},
                 android.graphics.Shader.TileMode.CLAMP));
+        dangerPaint.setShader(new RadialGradient(w / 2f, h / 2f, radius,
+                new int[]{0x00000000, 0x00000000, 0xD0B00010}, new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
         layoutMinimap(w);
     }
 
@@ -475,6 +493,7 @@ public class GameDisplay extends View {
             drawPortal(canvas);
             drawShopPortal(canvas);
         }
+        if (effects != null && !inShopRoom) effects.drawFloor(canvas, camera);
 
         // Draw gold coins
         if (goldCoins != null) {
@@ -526,6 +545,12 @@ public class GameDisplay extends View {
 
         if (vignettePaint.getShader() != null)
             canvas.drawRect(0, 0, getWidth(), getHeight(), vignettePaint);
+        long beat = heartbeatAt;
+        if (beat > 0 && dangerPaint.getShader() != null) {
+            float throb = (float) Math.exp(-(nowMs - beat) / 220.0);
+            dangerPaint.setAlpha((int) (255 * (0.45f + 0.55f * throb)));
+            canvas.drawRect(0, 0, getWidth(), getHeight(), dangerPaint);
+        }
 
         // 4. Minimap HUD overlay (always on top, hidden in shop), or the whole floor when tapped
         if (!inShopRoom) {
@@ -701,6 +726,7 @@ public class GameDisplay extends View {
             float bottom = c.y + c.height - offY;
             if (c.width >= c.height) {
                 // Horizontal corridor — top and bottom walls only
+                wallFace(canvas, left, right, top);
                 wall(canvas, left, top,    right, top);
                 wall(canvas, left, bottom, right, bottom);
             } else {
@@ -765,6 +791,22 @@ public class GameDisplay extends View {
         canvas.drawLine(x1, y1, x2, y2, wallPaint);
     }
 
+    /** The brick front of a wall along y, seen from slightly above; bricks are anchored to the world. */
+    private void wallFace(Canvas canvas, float x1, float x2, float y) {
+        if (x2 <= x1 || y > getHeight() || y + WALL_FACE < 0) return;
+        float row = WALL_FACE / 2f, brick = 48f, offX = camera.getOffsetX();
+        canvas.drawRect(x1, y, x2, y + WALL_FACE, wallFacePaint);
+        canvas.drawLine(x1, y + row, x2, y + row, mortarPaint);
+        for (int r = 0; r < 2; r++) {
+            float shift = r * brick / 2f;
+            float bx = (float) Math.floor((x1 + offX - shift) / brick) * brick - offX + shift;
+            for (; bx < x2; bx += brick) {
+                if (bx > x1) canvas.drawLine(bx, y + r * row, bx, y + (r + 1) * row, mortarPaint);
+            }
+        }
+        canvas.drawRect(x1, y + WALL_FACE - 6f, x2, y + WALL_FACE, wallFootPaint);
+    }
+
     /**
      * Stone tiles anchored to world space (so rooms and corridors line up): a faint checker
      * plus grout lines, drawn only over the visible part of the area.
@@ -818,9 +860,12 @@ public class GameDisplay extends View {
         // NORTH wall (top edge)
         if (r.sideUsed[Room.NORTH]) {
             float door = left + r.width * 0.5f;
+            wallFace(canvas, left, door - hw, top);
+            wallFace(canvas, door + hw, right, top);
             wall(canvas, left, top, door - hw, top);
             wall(canvas, door + hw, top, right, top);
         } else {
+            wallFace(canvas, left, right, top);
             wall(canvas, left, top, right, top);
         }
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Background particle: faint gold ember -->
+<!-- Background particle: a drifting torch ember -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
     <size android:width="6dp" android:height="6dp"/>
-    <solid android:color="@color/gold_glow"/>
+    <solid android:color="@color/torch"/>
     <alpha android:value="0.35"/>
 </shape>

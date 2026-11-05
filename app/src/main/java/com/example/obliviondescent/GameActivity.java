@@ -120,6 +120,32 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private volatile boolean spinQueued = false;
     // Settings: attack where the player faces (a plain button) instead of aiming with the attack stick
     private volatile boolean attackFacing = false;
+    // Reach of the current swing, set by the weapon's moveset
+    private float swingReach = 0f;
+
+    // Heavy attack: hold the heavy button to charge, let go to strike; it breaks guards
+    private static final long HEAVY_CHARGE = 700, HEAVY_COOLDOWN = 1500;
+    private volatile long heavyDownAt = 0; // 0 = not charging
+    private volatile boolean heavyReleased = false;
+    private volatile long lastHeavyTime = 0;
+    private boolean chargeFull = false;
+    private DashCooldownView heavyCooldownView;
+    private int heavyStepShown = -1;
+
+    // The camera leans toward the fight; the low-health heartbeat only plays in combat
+    private float leanX = 0f, leanY = 0f;
+    private long lastHurtAt = 0, lastHeartbeat = 0, lastBuzz = 0;
+    // Settings (SettingsActivity.KEY_*), re-read in onResume
+    private volatile boolean showDamageNumbers = true, lowHealthEffects = true, cameraLean = true;
+    private static final int BLOOD = Color.rgb(150, 18, 24), BLOOD_STAIN = Color.argb(150, 96, 10, 14);
+
+    // Potions share a cooldown, and their healing flows in over a couple of seconds
+    private static final long POTION_COOLDOWN = 8000, HEAL_TIME = 2000;
+    private volatile long lastPotionAt = 0;
+    private volatile int healLeft = 0, healPerStep = 0;
+    private long nextHealStep = 0;
+    // Where enemies fell this floor; necromancers raise them (logic thread only)
+    private final List<float[]> deathSpots = new ArrayList<>();
 
     private int   checkpointFloor  = 1;
     private int   checkpointHealth = 100;
@@ -213,6 +239,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private boolean inShopRoom = false;
 
     private boolean shopDialogOpen = false;
+    // An ad restock replaces this floor's stock once
+    private List<ShopItem> restockedShop;
+    private int restockedFloor = -1;
 
     // Tracks Firestore document IDs for purchased items
     private List<String> inventoryWeaponIds = new ArrayList<>();
@@ -436,6 +465,26 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         findViewById(R.id.btn_spin).setOnClickListener(v -> {
             if (System.currentTimeMillis() - lastSpinTime >= spinCooldown()) spinQueued = true;
         });
+        // Heavy: charges while held, strikes on release; tick() reads these
+        heavyCooldownView = findViewById(R.id.heavy_cooldown_view);
+        findViewById(R.id.btn_heavy).setOnTouchListener((v, event) -> {
+            int action = event.getActionMasked();
+            if (action == android.view.MotionEvent.ACTION_DOWN) {
+                v.setPressed(true);
+                if (playerHealth > 0 && heavyDownAt == 0
+                        && System.currentTimeMillis() - lastHeavyTime >= HEAVY_COOLDOWN) {
+                    heavyReleased = false;
+                    heavyDownAt = System.currentTimeMillis();
+                    soundManager.play(SoundManager.Sfx.HEAVY_CHARGE);
+                }
+            } else if (action == android.view.MotionEvent.ACTION_UP
+                    || action == android.view.MotionEvent.ACTION_CANCEL) {
+                v.setPressed(false);
+                if (heavyDownAt > 0) heavyReleased = true;
+                if (action == android.view.MotionEvent.ACTION_UP) v.performClick();
+            }
+            return true;
+        });
         btnPotion.setOnClickListener(v -> quickHeal());
         menuBtn.setOnClickListener(v -> showMenuDialog());
         btnInventory.setOnClickListener(v -> showInventoryDialog());
@@ -638,7 +687,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
     }
 
-    /** Host: applies the damage guests dealt ("uid,enemyId,damage,pushX,pushY,stagger"). */
+    /** Host: applies the damage guests dealt ("uid,enemyId,damage,pushX,pushY,hitKind": 1 stagger, 2 heavy). */
     private void applyCoopHits() {
         String hit;
         while ((hit = coop.hits.poll()) != null) {
@@ -648,11 +697,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     Enemy e = findEnemy(Integer.parseInt(f[1]));
                     if (e == null || e.isDead) continue;
                     int damage = Math.max(0, Integer.parseInt(f[2]));
+                    float pushX = Float.parseFloat(f[3]), pushY = Float.parseFloat(f[4]);
+                    float push = Math.max(0.01f, (float) Math.sqrt(pushX * pushX + pushY * pushY));
                     e.takeDamage(damage);
-                    e.knockbackVX = Float.parseFloat(f[3]);
-                    e.knockbackVY = Float.parseFloat(f[4]);
-                    showEnemyHit(e, damage, false);
-                    if ("1".equals(f[5])) staggerEnemy(e);
+                    e.knockbackVX = pushX;
+                    e.knockbackVY = pushY;
+                    showEnemyHit(e, damage, false, pushX / push, pushY / push);
+                    if ("2".equals(f[5]) && e.isGuarding()) e.breakGuard();
+                    else if (!"0".equals(f[5])) staggerEnemy(e);
+                    e.maybeGuard();
                 }
             } catch (RuntimeException ex) {
                 Log.e("Coop", "Bad hit: " + hit);
@@ -668,6 +721,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             effects.burst(r.body.x + (float) Math.cos(a) * reach, r.body.y + (float) Math.sin(a) * reach,
                     r.weaponColor, 6, 5f);
         } else {
+            r.body.startSwing(r.angle, 55f, false, 150, false);
             effects.slash(r.body.x, r.body.y, r.angle, r.body.radius + 60f, 55f, Color.WHITE);
         }
     }
@@ -845,7 +899,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 isDashing = false;
             }
         } else if (playerHealth > 0) {
-            player.update(joystick.getDX(), joystick.getDY());
+            // Charging a heavy attack slows the walk
+            float pace = heavyDownAt > 0 ? 0.45f : 1f;
+            player.update(joystick.getDX() * pace, joystick.getDY() * pace);
         }
         // Bulwark: slow regeneration out of combat, up to half health
         if (has(Synergy.BULWARK) && now - lastRegen >= 5000 && playerHealth > 0 && playerHealth < maxHealth / 2) {
@@ -853,6 +909,18 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             runOnUiThread(() -> {
                 if (playerHealth <= 0 || playerHealth >= maxHealth / 2) return;
                 playerHealth++;
+                playerHealthBar.setProgress(playerHealth);
+                if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
+            });
+        }
+        // A drunk healing potion flows in over HEAL_TIME
+        if (healLeft > 0 && now >= nextHealStep) {
+            nextHealStep = now + HEAL_TIME / 16;
+            int step = Math.min(healLeft, healPerStep);
+            healLeft -= step;
+            runOnUiThread(() -> {
+                if (playerHealth <= 0) return;
+                playerHealth = Math.min(maxHealth, playerHealth + step);
                 playerHealthBar.setProgress(playerHealth);
                 if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
             });
@@ -865,19 +933,24 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
         player.setInvulnerable(now < invulnerableUntil);
 
-        // Update dash and spin cooldown arcs, only when they visibly change
+        // Update dash, spin and heavy cooldown arcs, only when they visibly change
         float dashProgress = Math.min(1f, (float) (now - lastDashTime) / dashCooldown());
         float spinProgress = Math.min(1f, (float) (now - lastSpinTime) / spinCooldown());
+        float heavyProgress = Math.min(1f, (float) (now - lastHeavyTime) / HEAVY_COOLDOWN);
         int dashStep = (int) (dashProgress * 50);
         int spinStep = (int) (spinProgress * 50);
-        if (dashStep != dashStepShown || spinStep != spinStepShown) {
+        int heavyStep = (int) (heavyProgress * 50);
+        if (dashStep != dashStepShown || spinStep != spinStepShown || heavyStep != heavyStepShown) {
             dashStepShown = dashStep;
             spinStepShown = spinStep;
+            heavyStepShown = heavyStep;
             runOnUiThread(() -> {
                 if (dashCooldownView != null)
                     dashCooldownView.setProgress(dashProgress);
                 if (spinCooldownView != null)
                     spinCooldownView.setProgress(spinProgress);
+                if (heavyCooldownView != null)
+                    heavyCooldownView.setProgress(heavyProgress);
             });
         }
 
@@ -916,6 +989,27 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             spinQueued = false;
             if (alive) spinAttack(now);
         }
+        // Heavy attack: the charge builds while the button is held and strikes on release
+        float charge = 0f;
+        long chargeStart = heavyDownAt;
+        if (chargeStart > 0 && !alive) {
+            heavyDownAt = 0;
+            chargeFull = false;
+        } else if (chargeStart > 0) {
+            charge = Math.min(1f, (float) (now - chargeStart) / HEAVY_CHARGE);
+            if (charge >= 1f && !chargeFull) {
+                chargeFull = true;
+                effects.burst(player.x, player.y, Color.rgb(255, 214, 90), 12, 6f);
+                buzz(15, 100);
+            }
+            if (heavyReleased) {
+                heavyDownAt = 0;
+                heavyReleased = false;
+                heavyAttack(now, charge);
+                charge = 0f;
+            }
+        }
+        player.setCharge(charge);
         // Face the aimed direction while aiming, the last attack for a moment, otherwise the walk
         if (alive && aimJoystick.isAiming())
             lookAngle = (float) Math.toDegrees(Math.atan2(aimJoystick.getAimY(), aimJoystick.getAimX()));
@@ -932,9 +1026,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
 
         // --- 2. Update Camera --- (a fallen co-op player watches a teammate until the next floor)
+        // While fighting, the camera leans toward where the player is looking
+        boolean fighting = cameraLean && alive
+                && (aimJoystick.isAiming() || now - lastAttackTime < 600 || chargeStart > 0);
+        double look = Math.toRadians(lookAngle);
+        leanX += ((fighting ? (float) Math.cos(look) * 70f : 0f) - leanX) * 0.06f;
+        leanY += ((fighting ? (float) Math.sin(look) * 70f : 0f) - leanY) * 0.06f;
         CoopSession.RemotePlayer watched = playerHealth <= 0 ? livingTeammate() : null;
         if (watched != null) camera.update(watched.body.x, watched.body.y);
-        else camera.update(player.getX(), player.getY());
+        else camera.update(player.getX() + leanX, player.getY() + leanY);
         gameDisplay.setSpectating(watched != null ? watched.name : null);
 
         if (coop != null) coopTick(now);
@@ -950,6 +1050,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 if (!nearestTarget(e)) continue; // every player is down
                 if (!e.isAwake) {
                     e.tryWake(target[0], target[1]);
+                    if (e.isAwake && e == activeBoss) announceBoss(); // someone walked into the arena
                     continue;
                 }
                 float prevEX = e.x, prevEY = e.y;
@@ -957,6 +1058,16 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 if (currentLayout != null && !inShopRoom) {
                     float[] resolved = currentLayout.resolveCollision(
                             prevEX, prevEY, e.x, e.y, e.radius);
+                    // Thrown hard into a wall or a pillar, it slams; a charger running into one is dazed
+                    float kick = Math.abs(e.knockbackVX) + Math.abs(e.knockbackVY);
+                    boolean blocked = Math.abs(resolved[0] - e.x) + Math.abs(resolved[1] - e.y) > 1f;
+                    if (kick > 7f && blocked) wallSlam(e);
+                    else if (blocked && e.crash()) {
+                        effects.burst(e.x, e.y, Color.rgb(150, 140, 125), 16, 7f);
+                        effects.number(e.x, e.y - e.radius - 20f, "CRASH", Color.rgb(255, 170, 90));
+                        soundManager.play(SoundManager.Sfx.THUD);
+                        if (camera != null) camera.startShake(140, 8f);
+                    }
                     e.x = resolved[0];
                     e.y = resolved[1];
                 }
@@ -975,6 +1086,21 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
         }
         SoundManager.setGameIntensity(inShopRoom ? 0f : Math.min(1f, fight / 3f));
+        // A living boss that has noticed you gets its own theme
+        boolean bossAlive = activeBoss != null && !activeBoss.isDead && activeBoss.isAwake && !inShopRoom;
+        SoundManager.setGameTrack(this, bossAlive ? R.raw.boss_music : R.raw.game_music);
+
+        // Low on health in a fight: the heart pounds and the screen edges throb red
+        boolean danger = lowHealthEffects && alive && playerHealth <= maxHealth / 4
+                && (fight > 0f || now - lastHurtAt < 4000);
+        if (danger && now - lastHeartbeat >= 850) {
+            lastHeartbeat = now;
+            soundManager.play(SoundManager.Sfx.HEARTBEAT);
+            gameDisplay.setHeartbeat(now);
+        } else if (!danger && lastHeartbeat != 0) {
+            lastHeartbeat = 0;
+            gameDisplay.setHeartbeat(0);
+        }
 
         // --- 4. Enemy strikes and shots that finished their wind-up ---
         resolveEnemyAttacks(now);
@@ -1060,11 +1186,25 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         enemy.makeElite();
                         elites++;
                     }
+                    // Shield-bearers from floor 3: fighters that close in behind a raised shield
+                    if (floor >= 3 && (type == Enemy.Type.GRUNT || type == Enemy.Type.BRUTE || type == Enemy.Type.TANK)
+                            && Math.random() < 0.2) enemy.makeShield();
                     enemy.ascend(ascension());
                     enemy.setBehaviorTracker(behaviorTracker);
                     enemy.setLayout(layout);
                     // isAwake = false — enemy waits for player to enter trigger radius
                     enemies.add(enemy);
+                    // Bats come in swarms
+                    for (int b = 0; type == Enemy.Type.BAT && b < 2; b++) {
+                        Enemy bat = new Enemy(enemy.x + (float) (Math.random() * 120 - 60),
+                                enemy.y + (float) (Math.random() * 120 - 60), Enemy.Type.BAT);
+                        bat.applyFloorScaling(floor);
+                        bat.scaleHealth(partyHealth());
+                        bat.ascend(ascension());
+                        bat.setBehaviorTracker(behaviorTracker);
+                        bat.setLayout(layout);
+                        enemies.add(bat);
+                    }
                 }
             }
         }
@@ -1072,29 +1212,43 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /**
-     * Picks a random enemy type appropriate for the current floor.
-     * Early floors only introduce GRUNT; archers join from floor 3, later floors add TANK and BRUTE.
+     * Picks a random enemy type for the floor from SPAWN_TABLE: each type joins on its own floor and its
+     * chance grows a little every floor down to a cap; grunts fill whatever is left (at least 15%).
      * @param floor the current floor number
      * @return the selected enemy type
      */
     private Enemy.Type pickEnemyType(int floor) {
-        double roll = Math.random();
-        if (floor <= 2) return Enemy.Type.GRUNT;
-        if (Math.random() < 0.15) return Enemy.Type.ARCHER;
-        if (floor <= 5) return (roll < 0.65) ? Enemy.Type.GRUNT : Enemy.Type.SPEEDER;
-        if (floor <= 9) {
-            if (roll < 0.40) return Enemy.Type.GRUNT;
-            if (roll < 0.75) return Enemy.Type.SPEEDER;
-            return Enemy.Type.BRUTE;
+        float[] chance = new float[SPAWN_TABLE.length];
+        float total = 0f;
+        for (int i = 0; i < SPAWN_TABLE.length; i++) {
+            float[] row = SPAWN_TABLE[i];
+            if (floor < row[0]) continue;
+            chance[i] = Math.min(row[3], row[1] + row[2] * (floor - row[0]));
+            total += chance[i];
         }
-        float tankChance    = Math.min(0.20f, 0.05f + (floor - 10) * 0.015f);
-        float bruteChance   = 0.30f;
-        float speederChance = 0.25f;
-        if (roll < tankChance)                               return Enemy.Type.TANK;
-        if (roll < tankChance + bruteChance)                 return Enemy.Type.BRUTE;
-        if (roll < tankChance + bruteChance + speederChance) return Enemy.Type.SPEEDER;
+        // Deep floors would crowd grunts out entirely; scale the rest back so grunts keep 15%
+        float scale = total > 85f ? 85f / total : 1f;
+        float roll = (float) (Math.random() * 100.0);
+        for (int i = 0; i < SPAWN_TABLE.length; i++) {
+            roll -= chance[i] * scale;
+            if (roll < 0f) return SPAWN_TYPES[i];
+        }
         return Enemy.Type.GRUNT;
     }
+
+    // Spawn chances in percent: {first floor, chance there, extra per floor, cap}; grunts take the rest
+    private static final Enemy.Type[] SPAWN_TYPES = {Enemy.Type.SPEEDER, Enemy.Type.ARCHER, Enemy.Type.BRUTE,
+            Enemy.Type.TANK, Enemy.Type.BAT, Enemy.Type.BOMBER, Enemy.Type.CHARGER, Enemy.Type.NECROMANCER};
+    private static final float[][] SPAWN_TABLE = {
+            {3, 15f, 1.0f, 25f},   // speeder
+            {3, 8f, 0.5f, 15f},    // archer
+            {6, 10f, 1.0f, 20f},   // brute
+            {10, 5f, 0.75f, 15f},  // tank
+            {2, 0.5f, 0.5f, 15f},  // bat
+            {4, 0.5f, 0.5f, 15f},  // bomber
+            {6, 0.5f, 0.5f, 15f},  // charger
+            {8, 0.5f, 0.5f, 15f},  // necromancer
+    };
 
     /**
      * Checks melee attack collisions against all enemies in range.
@@ -1111,8 +1265,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             lastKnownSwingTime = attackStartTime;
         }
 
-        float attackRange = player.radius + w.range;
         float aimAngle = (float) Math.toDegrees(Math.atan2(aimDY, aimDX));
+        Weapon.Kind kind = w.kind();
 
         synchronized (enemies) {
             for (Enemy e : enemies) {
@@ -1121,31 +1275,35 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 // Each enemy can only be hit once per swing AND must respect weapon cooldown
                 if (hitThisSwing.contains(e)) continue;
                 if (now - e.lastHitTime < attackCooldown(w)) continue;
-
-                float dist = getDistance(player.x, player.y, e.x, e.y);
-                if (dist > attackRange + e.radius) continue;
+                if (!inArc(e, swingReach, aimAngle, swingArc)) continue;
 
                 float dx = e.x - player.x;
                 float dy = e.y - player.y;
-                float angleToEnemy = (float) Math.toDegrees(Math.atan2(dy, dx));
-                float angleDiff = Math.abs((angleToEnemy - aimAngle + 540) % 360 - 180);
-                // Big bodies are easier to clip with the edge of the swing
-                float allowance = (float) Math.toDegrees(Math.atan2(e.radius, Math.max(1f, dist)));
-
-                if (angleDiff > swingArc + allowance) continue;
+                float dist = (float) Math.sqrt(dx * dx + dy * dy);
                 behaviorTracker.recordAttack(dist);
 
-                boolean finisher = comboStep == 3;
+                boolean finisher = comboStep == kind.combo;
                 boolean crit = Math.random() < critChance();
                 int damage = Math.round(w.damage * damageMultiplier()
-                        * (finisher ? 1.5f : 1f) * (crit ? 2f : 1f));
+                        * (finisher ? kind.finisherDamage : 1f) * (crit ? 2f : 1f));
                 e.lastHitTime = now;
                 hitThisSwing.add(e);
-                float d = (float) Math.sqrt(dx * dx + dy * dy);
-                float push = d > 0 ? w.knockback * 25f * (finisher ? 2f : 1f) / d : 0f;
-                damageEnemy(e, damage, crit, dx * push, dy * push, finisher || crit);
+                float push = dist > 0 ? w.knockback * 25f * (finisher ? kind.finisherPush : 1f) / dist : 0f;
+                damageEnemy(e, damage, crit, dx * push, dy * push, finisher || crit, false);
+                if (finisher) gameDisplay.punchZoom(160, 0.03f);
             }
         }
+    }
+
+    /** True when an enemy is within reach and inside a swing's cone; big bodies are easier to clip. */
+    private boolean inArc(Enemy e, float reach, float angle, float arc) {
+        float dx = e.x - player.x;
+        float dy = e.y - player.y;
+        float dist = (float) Math.sqrt(dx * dx + dy * dy);
+        if (dist > reach + e.radius) return false;
+        if (arc >= 180f) return true;
+        float angleDiff = Math.abs(((float) Math.toDegrees(Math.atan2(dy, dx)) - angle + 540) % 360 - 180);
+        return angleDiff <= arc + (float) Math.toDegrees(Math.atan2(e.radius, Math.max(1f, dist)));
     }
 
     /**
@@ -1353,13 +1511,17 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     effects.burst(e.x, e.y, Color.rgb(140, 190, 255), 26, 10f);
                     soundManager.play(SoundManager.Sfx.BLINK);
                 }
-                if (e.justWoundUp) {
-                    e.justWoundUp = false;
-                    if (getDistance(player.x, player.y, e.x, e.y) < 900f) soundManager.play(SoundManager.Sfx.WINDUP);
+                if (e.justFrenzied) {
+                    e.justFrenzied = false;
+                    effects.banner(e.x, e.y - e.radius - 60f, "FINAL FURY", Color.rgb(255, 120, 40));
+                    soundManager.play(SoundManager.Sfx.ENRAGE);
+                    if (camera != null) camera.startShake(300, 12f);
                 }
                 if (e.pendingSummons > 0) {
-                    raiseThralls(e, e.pendingSummons, raised);
-                    soundManager.play(SoundManager.Sfx.SUMMON);
+                    int before = raised.size();
+                    if (e.type == Enemy.Type.NECROMANCER) raiseDead(e, e.pendingSummons, raised);
+                    else raiseThralls(e, e.pendingSummons, raised);
+                    if (raised.size() > before) soundManager.play(SoundManager.Sfx.SUMMON);
                     e.pendingSummons = 0;
                 }
 
@@ -1374,7 +1536,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 e.pendingShots.clear();
 
                 if (e.strikeDamage > 0) {
-                    boolean slam = e.type == Enemy.Type.BOSS && e.strikeReach > e.radius * 2f;
+                    boolean bomb = e.type == Enemy.Type.BOMBER;
+                    boolean slam = bomb || (e.type == Enemy.Type.BOSS && e.strikeReach > e.radius * 2f);
+                    if (bomb) blastEnemies(e);
                     float knockback = e.getWeapon().knockback;
                     resolveStrike(e.x, e.y, e.strikeDirX, e.strikeDirY, e.strikeReach, e.strikeArc,
                             e.strikeDamage, knockback, e.radius, slam, now);
@@ -1386,6 +1550,48 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
             enemies.addAll(raised);
         }
+    }
+
+    /** Necromancer: the nearest fallen bodies rise again as thralls, at most five alive at once. */
+    private void raiseDead(Enemy necro, int count, List<Enemy> out) {
+        int alive = 0;
+        for (Enemy e : enemies) if (e.summoned && !e.isDead) alive++;
+        int floor = floorManager.getCurrentFloor();
+        for (int i = 0; i < count && alive + i < 5; i++) {
+            float[] spot = null;
+            float best = 700f;
+            for (float[] s : deathSpots) {
+                float d = getDistance(necro.x, necro.y, s[0], s[1]);
+                if (d < best) { best = d; spot = s; }
+            }
+            if (spot == null) return;
+            deathSpots.remove(spot);
+            Enemy thrall = new Enemy(spot[0], spot[1], Enemy.Type.GRUNT);
+            thrall.applyFloorScaling(floor);
+            thrall.scaleHealth(partyHealth());
+            thrall.makeThrall();
+            thrall.ascend(ascension());
+            thrall.isAwake = true;
+            thrall.setBehaviorTracker(behaviorTracker);
+            thrall.setLayout(currentLayout);
+            out.add(thrall);
+            effects.burst(spot[0], spot[1], Color.rgb(140, 255, 170), 18, 8f);
+        }
+    }
+
+    /** A bomber's blast also hurts and throws the enemies around it. Host only, enemies lock held. */
+    private void blastEnemies(Enemy bomber) {
+        for (Enemy o : enemies) {
+            if (o == bomber || o.isDead) continue;
+            float dx = o.x - bomber.x, dy = o.y - bomber.y;
+            float d = Math.max(1f, (float) Math.sqrt(dx * dx + dy * dy));
+            if (d > bomber.strikeReach + o.radius) continue;
+            o.takeDamage(Math.max(1, bomber.strikeDamage / 2));
+            o.knockbackVX = dx / d * 14f;
+            o.knockbackVY = dy / d * 14f;
+        }
+        effects.stain(bomber.x, bomber.y, 110f, Color.argb(120, 14, 11, 9));
+        if (camera != null) camera.startShake(200, 10f);
     }
 
     /** Summoner boss: raises thralls around itself, at most five alive at once. */
@@ -1422,11 +1628,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         soundManager.play(SoundManager.Sfx.ENEMY_SHOT);
     }
 
-    /** An enemy strike landing: shows it and hurts this phone's player if they stand inside it. */
+    /** A slam on the floor leaves a scorch mark; a melee strike shows its arc. Hurts this phone's player if inside. */
     private void resolveStrike(float x, float y, float dirX, float dirY, float reach, float arc,
                                int damage, float knockback, float bodyRadius, boolean slam, long now) {
         if (slam) {
             effects.burst(x, y, Color.rgb(255, 120, 40), 40, 16f); // slam shockwave
+            effects.stain(x, y, 90f, Color.argb(110, 14, 11, 9));
             soundManager.play(SoundManager.Sfx.THUD);
         } else {
             if (arc < 180f)
@@ -1466,9 +1673,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         hitStop(60);
         player.flashUntil = now + 150;
         damagePlayer(damage);
-        effects.number(player.x, player.y - player.radius, "-" + damage, Color.rgb(255, 80, 80));
+        if (showDamageNumbers)
+            effects.number(player.x, player.y - player.radius, "-" + damage, Color.rgb(255, 80, 80));
         if (camera != null) camera.startShake(250, 14f);
-        runOnUiThread(this::vibrateOnHit);
+        buzz(80, 255);
+        lastHurtAt = now;
 
         float dx = player.x - fromX;
         float dy = player.y - fromY;
@@ -1487,14 +1696,95 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
     }
 
-    /** Damage number and sparks when the player hits an enemy; crits show gold with a "!". */
-    private void showEnemyHit(Enemy e, int damage, boolean crit) {
+    /**
+     * Damage number and sparks when the player hits an enemy; crits show gold with a "!".
+     * Blood flies out of the far side (nx, ny) and some of it stays on the floor.
+     */
+    private void showEnemyHit(Enemy e, int damage, boolean crit, float nx, float ny) {
         if (crit) {
-            effects.number(e.x, e.y - e.radius, damage + "!", Color.rgb(255, 200, 40));
+            if (showDamageNumbers) effects.number(e.x, e.y - e.radius, damage + "!", Color.rgb(255, 200, 40));
             effects.burst(e.x, e.y, Color.rgb(255, 200, 40), 14, 10f);
         } else {
-            effects.number(e.x, e.y - e.radius, String.valueOf(damage), Color.WHITE);
+            if (showDamageNumbers) effects.number(e.x, e.y - e.radius, String.valueOf(damage), Color.WHITE);
             effects.burst(e.x, e.y, Color.rgb(255, 230, 150), 6, 6f);
+        }
+        int blood = e.mimic ? Color.rgb(120, 84, 48) : effects.gore ? BLOOD : Color.rgb(255, 230, 150);
+        effects.spray(e.x + nx * e.radius * 0.5f, e.y + ny * e.radius * 0.5f, nx, ny, blood,
+                crit ? 14 : 7, crit ? 12f : 8f, 0.5f);
+        if (!e.mimic && Math.random() < (crit ? 0.8 : 0.35)) {
+            float d = e.radius + 20f + (float) Math.random() * 40f;
+            effects.stain(e.x + nx * d, e.y + ny * d, 6f + (float) Math.random() * 8f, BLOOD_STAIN);
+        }
+    }
+
+    /** A hit glances off a raised guard: sparks, a clang and a small recoil, but no damage. */
+    private void showBlocked(Enemy e, float nx, float ny) {
+        effects.spray(e.x - nx * e.radius, e.y - ny * e.radius, -nx, -ny, Color.rgb(255, 230, 160), 10, 9f, 0.7f);
+        effects.number(e.x, e.y - e.radius - 30f, "BLOCKED", Color.rgb(200, 220, 255));
+        soundManager.play(SoundManager.Sfx.BLOCK);
+        hitStop(40);
+        buzz(20, 120);
+        if (getDistance(player.x, player.y, e.x, e.y) > e.radius + player.radius + 160f) return; // a shot
+        float oldX = player.x, oldY = player.y;
+        player.x -= nx * 18f;
+        player.y -= ny * 18f;
+        if (currentLayout != null && !inShopRoom) {
+            float[] r = currentLayout.resolveWallCollision(oldX, oldY, player.x, player.y, player.radius);
+            player.x = r[0];
+            player.y = r[1];
+        }
+    }
+
+    /** Counts daily quest progress and cheers when one is done. */
+    private void quest(Quests q, int amount) {
+        if (!Quests.add(this, q, amount)) return;
+        effects.banner(player.x, player.y - player.radius - 90f, "QUEST COMPLETE", Color.rgb(244, 215, 122));
+        soundManager.play(SoundManager.Sfx.PERK_PICK);
+    }
+
+    /** A heavy blow smashes through a raised guard. */
+    private void showGuardBreak(Enemy e) {
+        quest(Quests.GUARDS, 1);
+        effects.banner(e.x, e.y - e.radius - 50f, "GUARD BREAK", Color.rgb(255, 210, 90));
+        effects.burst(e.x, e.y, Color.rgb(176, 150, 96), 18, 11f);
+        soundManager.play(SoundManager.Sfx.GUARD_BREAK);
+        hitStop(110);
+        buzz(45, 230);
+    }
+
+    /** An enemy thrown into a wall or a pillar: extra damage, dust, a thud and a moment dazed. Host only. */
+    private void wallSlam(Enemy e) {
+        quest(Quests.SLAMS, 1);
+        e.knockbackVX = 0f;
+        e.knockbackVY = 0f;
+        int damage = Math.max(1, Math.round(player.getWeapon().damage * damageMultiplier() * 0.6f));
+        e.takeDamage(damage);
+        e.stun(500);
+        statsManager.onDamageGiven(damage);
+        effects.number(e.x, e.y - e.radius - 20f, damage + " SLAM", Color.rgb(255, 170, 90));
+        effects.burst(e.x, e.y, Color.rgb(150, 140, 125), 16, 7f);
+        effects.stain(e.x, e.y, e.radius * 0.5f, BLOOD_STAIN);
+        soundManager.play(SoundManager.Sfx.THUD);
+        if (camera != null) camera.startShake(140, 8f);
+        buzz(25, 160);
+        hitStop(50);
+    }
+
+    /** Crates and barrels caught in a swing break apart, now and then spilling coins. Solo only. */
+    private void smashProps(float reach, float angle, float arc) {
+        if (coop != null || currentLayout == null || inShopRoom) return;
+        for (Props.Decor d : currentLayout.decor) {
+            if (!Props.breakable(d)) continue;
+            float dx = d.x - player.x, dy = d.y - player.y;
+            if (dx * dx + dy * dy > (reach + d.a) * (reach + d.a)) continue;
+            float angleDiff = Math.abs(((float) Math.toDegrees(Math.atan2(dy, dx)) - angle + 540) % 360 - 180);
+            if (arc < 180f && angleDiff > arc + 15f) continue;
+            d.broken = true;
+            quest(Quests.CRATES, 1);
+            effects.burst(d.x, d.y, Color.rgb(120, 84, 48), 14, 8f);
+            soundManager.play(SoundManager.Sfx.CRATE_SMASH);
+            buzz(15, 90);
+            if (Math.random() < 0.3) spawnGoldCoins(d.x, d.y, 1 + (int) (Math.random() * 3));
         }
     }
 
@@ -1520,7 +1810,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 phantomHits.add(e);
                 e.lastHitTime = now;
                 int damage = Math.max(1, Math.round(w.damage * damageMultiplier() * 0.5f));
-                damageEnemy(e, damage, false, dashDX * 12f, dashDY * 12f, false);
+                damageEnemy(e, damage, false, dashDX * 12f, dashDY * 12f, false, false);
                 effects.slash(e.x, e.y, (float) Math.toDegrees(Math.atan2(dashDY, dashDX)), e.radius + 30f, 40f,
                         Color.rgb(160, 112, 232));
             }
@@ -1534,6 +1824,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void checkPerfectDodge(long now) {
         if (now - dashStartTime > DASH_DURATION + 80 || now - lastPerfectDodge < 1000) return;
         lastPerfectDodge = now;
+        quest(Quests.DODGES, 1);
         lastDashTime = 0;
         perfectCritUntil = now + 1500;
         // Slow-mo must not leave the player standing in the attack once the dash ends
@@ -1543,30 +1834,46 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         effects.burst(player.x, player.y, blue, 24, 9f);
         effects.slash(player.x, player.y, 0f, player.radius + 90f, 180f, blue);
         soundManager.play(SoundManager.Sfx.PERFECT_DODGE);
+        buzz(30, 200);
         slowMo(600, 0.35f);
     }
 
     /**
-     * Deals the player's damage to an enemy. A co-op guest only shows the hit and reports it;
-     * the host applies it to the real enemy.
+     * Deals the player's damage to an enemy. A raised guard stops it unless the hit is heavy, which breaks
+     * the guard. A co-op guest only shows the hit and reports it; the host applies it to the real enemy.
      */
-    private void damageEnemy(Enemy e, int damage, boolean crit, float pushX, float pushY, boolean stagger) {
+    private void damageEnemy(Enemy e, int damage, boolean crit, float pushX, float pushY, boolean stagger,
+                             boolean heavy) {
+        float dx = e.x - player.x, dy = e.y - player.y;
+        float d = Math.max(1f, (float) Math.sqrt(dx * dx + dy * dy));
+        boolean guardBroken = false;
+        if (e.blocks(player.x, player.y)) {
+            if (!heavy) {
+                showBlocked(e, dx / d, dy / d);
+                return;
+            }
+            showGuardBreak(e);
+            guardBroken = true;
+        }
         if (crit) soundManager.play(SoundManager.Sfx.CRIT);
         else soundManager.playHitEnemy();
         statsManager.onDamageGiven(damage);
-        showEnemyHit(e, damage, crit);
+        showEnemyHit(e, damage, crit, dx / d, dy / d);
         if (crit || stagger) hitStop(crit ? 70 : 45);
+        buzz(crit || heavy ? 30 : 12, crit || heavy ? 180 : 70);
         if (crit && has(Synergy.MIDAS) && Math.random() < 0.25) spawnGoldCoins(e.x, e.y, 1);
         if (isGuest()) {
             e.predictHit(damage);
             if (e.isDead) deadEnemyAt.put(e.id, System.currentTimeMillis());
-            coop.sendHit(e.id + "," + damage + "," + pushX + "," + pushY + "," + (stagger ? 1 : 0));
+            coop.sendHit(e.id + "," + damage + "," + pushX + "," + pushY + "," + (heavy ? 2 : stagger ? 1 : 0));
             return;
         }
         e.takeDamage(damage);
         e.knockbackVX = pushX;
         e.knockbackVY = pushY;
-        if (stagger) staggerEnemy(e);
+        if (guardBroken) e.breakGuard();
+        else if (stagger) staggerEnemy(e);
+        e.maybeGuard();
     }
 
     /**
@@ -1743,6 +2050,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         spawnRoomChest();
         effects.clear();
         invulnerableUntil = 0;
+        healLeft = 0;
+        deathSpots.clear();
         statsManager.startRun();
         secondWindUsed = false;
         adReviveUsed = false;
@@ -1772,7 +2081,17 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     // Guests copy the host's count; mimics and thralls don't count at all
                     if (!isGuest() && !e.mimic && !e.summoned) floorManager.onEnemyKilled(player.x, player.y);
                     statsManager.onEnemyKilled();
+                    if (!e.summoned) quest(Quests.KILLS, 1);
+                    if (e.elite) quest(Quests.ELITES, 1);
+                    if (e.type == Enemy.Type.BAT) quest(Quests.BATS, 1);
                     effects.burst(e.x, e.y, e.getColor(), e.type == Enemy.Type.BOSS ? 60 : 16, 9f);
+                    // The body lies a while over a pool of blood
+                    effects.corpse(e.x, e.y, e.radius, e.getColor());
+                    if (!e.mimic) effects.stain(e.x, e.y, e.radius * 0.8f, BLOOD_STAIN);
+                    if (!e.mimic && !e.summoned && e.type != Enemy.Type.BOSS && e.type != Enemy.Type.BOMBER) {
+                        deathSpots.add(new float[]{e.x, e.y});
+                        if (deathSpots.size() > 20) deathSpots.remove(0);
+                    }
                     hitStop(50);
                     soundManager.play(SoundManager.Sfx.ENEMY_DEATH);
                     if (e.mimic) dropLootChest(e.x, e.y);
@@ -1794,6 +2113,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (floorManager.isPortalOpen() && !enemiesKilledOnPortalOpen) {
             enemiesKilledOnPortalOpen = true;
             killAllActiveEnemies();
+            soundManager.play(SoundManager.Sfx.PORTAL_OPEN);
         }
 
         updateFloorHUD();
@@ -1831,7 +2151,41 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void tryAttack(long now) {
         Weapon w = player.getWeapon();
         if (now - lastAttackTime < attackCooldown(w)) return;
+        if (!aimAtTarget(w)) return;
+        swingCount++;
 
+        if (w.isProjectile) {
+            fireProjectile(aimDX, aimDY);
+            return;
+        }
+        // Each kind of weapon has its own combo length, arcs and reach
+        Weapon.Kind kind = w.kind();
+        comboStep = now - lastAttackTime <= attackCooldown(w) + COMBO_WINDOW ? comboStep % kind.combo + 1 : 1;
+        boolean finisher = comboStep == kind.combo;
+        swingArc = finisher ? kind.finisherArc : kind.arc;
+        swingReach = player.radius + w.range * kind.reach;
+        lastAttackTime = now;
+        attackStartTime = now;
+        isAttacking = true;
+        soundManager.playSwingMelee();
+        float angle = (float) Math.toDegrees(Math.atan2(aimDY, aimDX));
+        player.startSwing(angle, Math.min(swingArc, 110f), kind == Weapon.Kind.SPEAR, finisher ? 190 : 150, false);
+        effects.slash(player.x, player.y, angle, swingReach, swingArc,
+                finisher ? Color.rgb(255, 210, 90) : Color.WHITE);
+        if (finisher && kind == Weapon.Kind.HAMMER) {
+            // The hammer's finisher slams the ground all around
+            effects.burst(player.x, player.y, Color.rgb(150, 140, 125), 16, 8f);
+            if (camera != null) camera.startShake(120, 6f);
+            soundManager.play(SoundManager.Sfx.THUD);
+        }
+        smashProps(swingReach, angle, swingArc);
+    }
+
+    /**
+     * Aims where the attack stick is dragged, otherwise at the nearest awake enemy in reach, otherwise
+     * straight ahead (always straight ahead in facing mode). Sets aimDX/aimDY; false if there is no direction.
+     */
+    private boolean aimAtTarget(Weapon w) {
         if (aimJoystick.isAiming()) {
             aimDX = aimJoystick.getAimX();
             aimDY = aimJoystick.getAimY();
@@ -1847,24 +2201,61 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
         }
         float len = (float) Math.sqrt(aimDX * aimDX + aimDY * aimDY);
-        if (len < 0.01f) return;
+        if (len < 0.01f) return false;
         aimDX /= len;
         aimDY /= len;
-        swingCount++;
+        return true;
+    }
 
+    /**
+     * Heavy attack: a slow, wide blow that grows with the charge (1.5x to 3x damage), throws enemies hard
+     * and breaks guards. A ranged weapon looses a big charged shot instead. Runs on the logic thread.
+     */
+    private void heavyAttack(long now, float charge) {
+        lastHeavyTime = now;
+        chargeFull = false;
+        Weapon w = player.getWeapon();
+        if (!aimAtTarget(w)) return;
+        Weapon.Kind kind = w.kind();
+        float power = 1.5f + 1.5f * charge;
+        float angle = (float) Math.toDegrees(Math.atan2(aimDY, aimDX));
+        lastAttackTime = now;
+        swingCount++;
+        soundManager.play(SoundManager.Sfx.HEAVY_SWING);
+        buzz(40, 200);
         if (w.isProjectile) {
-            fireProjectile(aimDX, aimDY);
+            Projectile p = new Projectile(player.x, player.y, aimDX, aimDY, 22f, w.range * 1.2f,
+                    Math.round(w.damage * damageMultiplier() * power), w.knockback * 3f, 24f, Color.rgb(255, 210, 90));
+            p.heavy = true;
+            projectiles.add(p);
+            soundManager.playFireProjectile();
             return;
         }
-        comboStep = now - lastAttackTime <= attackCooldown(w) + COMBO_WINDOW ? comboStep % 3 + 1 : 1;
-        boolean finisher = comboStep == 3;
-        swingArc = finisher ? 80f : 55f;
-        lastAttackTime = now;
-        attackStartTime = now;
-        isAttacking = true;
-        soundManager.playSwingMelee();
-        effects.slash(player.x, player.y, (float) Math.toDegrees(Math.atan2(aimDY, aimDX)),
-                player.radius + w.range, swingArc, finisher ? Color.rgb(255, 210, 90) : Color.WHITE);
+        float reach = player.radius + w.range * kind.reach * 1.25f + 20f;
+        float arc = kind == Weapon.Kind.SPEAR ? 30f : Math.max(70f, kind.finisherArc);
+        player.startSwing(angle, Math.min(arc, 120f), kind == Weapon.Kind.SPEAR, 220, true);
+        effects.slash(player.x, player.y, angle, reach, arc, Color.rgb(255, 210, 90));
+        if (camera != null) camera.startShake(160, 7f);
+        smashProps(reach, angle, arc);
+        boolean landed = false;
+        synchronized (enemies) {
+            for (Enemy e : enemies) {
+                if (e.isDead || !inArc(e, reach, angle, arc)) continue;
+                landed = true;
+                e.lastHitTime = now;
+                boolean crit = Math.random() < critChance();
+                int damage = Math.round(w.damage * damageMultiplier() * power * (crit ? 2f : 1f));
+                float dx = e.x - player.x, dy = e.y - player.y;
+                float push = Math.max(w.knockback, 0.25f) * 75f / Math.max(1f, (float) Math.sqrt(dx * dx + dy * dy));
+                damageEnemy(e, damage, crit, dx * push, dy * push, true, true);
+            }
+        }
+        if (landed) {
+            quest(Quests.HEAVY, 1);
+            hitStop(90);
+            gameDisplay.punchZoom(200, 0.05f);
+            soundManager.play(SoundManager.Sfx.THUD);
+        }
     }
 
     /** Closest awake enemy within the given distance, or null. */
@@ -1898,6 +2289,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         effects.slash(player.x, player.y, 0f, reach, 180f, color);
         soundManager.play(SoundManager.Sfx.SPIN);
         invulnerableUntil = Math.max(invulnerableUntil, now + 450);
+        smashProps(reach, 0f, 180f);
 
         synchronized (enemies) {
             for (Enemy e : enemies) {
@@ -1908,7 +2300,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 if (dist > reach + e.radius) continue;
                 e.lastHitTime = now;
                 float push = dist > 0 ? SPIN_PUSH / dist : 0f;
-                damageEnemy(e, damage, false, dx * push, dy * push, true);
+                damageEnemy(e, damage, false, dx * push, dy * push, true, false);
             }
         }
     }
@@ -2060,7 +2452,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                             float dy = e.y - p.y;
                             float d = (float) Math.sqrt(dx * dx + dy * dy);
                             float push = d > 0 ? p.knockback * 25f / d : 0f;
-                            damageEnemy(e, crit ? p.damage * 2 : p.damage, crit, dx * push, dy * push, crit);
+                            damageEnemy(e, crit ? p.damage * 2 : p.damage, crit, dx * push, dy * push, crit || p.heavy,
+                                    p.heavy);
 
                             p.isDead = true;
                             break;
@@ -2414,6 +2807,23 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             populateShopGridFromItems(dialog, container, goldDisplay, items);
         }
 
+        // Opt-in ad: a fresh stock, once a floor
+        MaterialButton restock = dialog.findViewById(R.id.btn_shop_restock);
+        int floor = floorManager.getCurrentFloor();
+        if (Ads.isReady() && restockedFloor != floor) restock.setVisibility(View.VISIBLE);
+        restock.setOnClickListener(v -> Ads.show(this, () -> {
+            restockedShop = BatchGenerator.freshStock(floor, System.nanoTime());
+            restockedFloor = floor;
+            shopBoughtIndices.clear();
+            loading.setVisibility(View.GONE);
+            container.setVisibility(View.VISIBLE);
+            populateShopGridFromItems(dialog, container, goldDisplay, restockedShop);
+            soundManager.play(SoundManager.Sfx.PURCHASE);
+        }, () -> {
+            restock.setVisibility(View.GONE);
+            hideSystemUIOnWindow(dialog.getWindow());
+        }));
+
         dialog.show();
         hideSystemUIOnWindow(dialog.getWindow());
     }
@@ -2492,7 +2902,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 addStatRow(box, R.drawable.ic_range, "Range", String.valueOf((int) item.range));
                 addStatRow(box, R.drawable.ic_hourglass, "Cooldown", item.cooldown + "ms");
                 addStatRow(box, R.drawable.ic_knockback, "Knockback", String.valueOf(item.knockback));
-                addStatRow(box, R.drawable.ic_target, "Attack", item.isProjectile ? "Projectile" : "Melee");
+                addStatRow(box, R.drawable.ic_target, "Style", Weapon.kindOf(item.name, item.isProjectile).title());
                 break;
             case ARMOR:
                 String slot = String.valueOf(item.armorSlot);
@@ -2566,6 +2976,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (shopDialog != null && shopDialog.isShowing()) shopDialog.dismiss();
         shopDialogOpen = false;
         statsManager.onFloorCleared(floorManager.getCurrentFloor());
+        quest(Quests.FLOORS, 1);
         statsManager.flush();
         setCheckpoint(floorManager.getCurrentFloor());
 
@@ -2577,6 +2988,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         synchronized (treasureChests){ treasureChests.clear(); }
         synchronized (projectiles)   { projectiles.clear(); }
         effects.clear();
+        deathSpots.clear();
 
         enemiesKilledOnPortalOpen = false;
         enteringShop = false;
@@ -2669,6 +3081,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         floorManager.onBossDefeated(player.x, player.y);
         soundManager.playBossDeath();
         statsManager.onBossKilled();
+        quest(Quests.BOSS, 1);
         behaviorTracker.onBossKilled();
         // The killing blow lingers: slow motion (solo) and a camera punch-in
         slowMo(1300, 0.25f);
@@ -2700,7 +3113,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         activeBoss = new Enemy(spawnX, spawnY, Enemy.Type.BOSS);
         activeBoss.setBossKind(currentBossKind);
-        activeBoss.isAwake = true; // Boss is always immediately active
+        // It waits in its arena until a player walks in, instead of wandering to the door
+        activeBoss.arena = currentLayout != null ? currentLayout.bossRoom : null;
+        activeBoss.isAwake = activeBoss.arena == null;
         activeBoss.applyFloorScaling(floorManager.getCurrentFloor());
         BatchResult bossData = getBossDataForFloor(floorManager.getCurrentFloor());
         int floor = floorManager.getCurrentFloor();
@@ -2718,7 +3133,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
 
         enemies.add(activeBoss);
-        announceBoss();
+        if (activeBoss.isAwake) announceBoss();
     }
 
     /** Sweeps the boss title card across the screen: label, gold rules, name slam, title. */
@@ -2932,6 +3347,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 float dist = getDistance(player.x, player.y, chest.x, chest.y);
                 if (dist < player.radius + TreasureChest.OPEN_RADIUS) {
                     chest.opened = true;
+                    quest(Quests.CHESTS, 1);
                     if (chest.rewardItem == null) pickChestReward(chest);
                     soundManager.playChestOpen();
                     effects.burst(chest.x, chest.y - 10, chest.rewardItemColor, 28, 11f);
@@ -3425,7 +3841,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         int rarityColor = getRarityColor(stack.item.rarity);
         nameView.setText(stack.item.name);
         nameView.setTextColor(rarityColor);
-        subView.setText("+" + stack.item.effectValue + (heal ? " HP" : " AR"));
+        subView.setText("+" + BatchGenerator.potionPercent(stack.item) + (heal ? "% HP" : "% AR"));
         quantityView.setVisibility(View.VISIBLE);
         quantityView.setText("x" + stack.quantity);
 
@@ -3685,18 +4101,24 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      */
     private void useConsumable(ConsumableStack stack, Dialog inventoryDialog) {
         if (playerHealth <= 0) return; // a fallen co-op player waits for the next floor
+        long now = System.currentTimeMillis();
+        if (now - lastPotionAt < POTION_COOLDOWN) {
+            effects.number(player.x, player.y - player.radius, "Not ready (" + ((POTION_COOLDOWN - (now - lastPotionAt)) / 1000 + 1) + "s)",
+                    Color.rgb(200, 190, 170));
+            soundManager.play(SoundManager.Sfx.GATE_LOCKED);
+            return;
+        }
+        lastPotionAt = now;
         ShopItem item = stack.item;
+        int percent = BatchGenerator.potionPercent(item);
         soundManager.play(SoundManager.Sfx.POTION);
         if ("heal".equals(item.effect)) {
-            int newHp = Math.min(maxHealth, playerHealth + item.effectValue);
-            effects.number(player.x, player.y - player.radius, "+" + (newHp - playerHealth),
-                    Color.rgb(90, 230, 110));
-            runOnUiThread(() -> {
-                animateHealthBar(playerHealth, newHp);
-                playerHealth = newHp;
-            });
+            int amount = Math.max(1, Math.round(maxHealth * percent / 100f));
+            healPerStep = Math.max(1, Math.round(amount / 16f));
+            healLeft = amount;
+            effects.number(player.x, player.y - player.radius, "+" + amount, Color.rgb(90, 230, 110));
         } else if ("armor_restore".equals(item.effect)) {
-            int newArmor = Math.min(maxArmor, playerArmor + item.effectValue);
+            int newArmor = Math.min(maxArmor, playerArmor + Math.max(1, Math.round(maxArmor * percent / 100f)));
             runOnUiThread(() -> {
                 animateArmorBar(playerArmor, newArmor);
                 playerArmor = newArmor;
@@ -3719,7 +4141,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         addStatRow(box, R.drawable.ic_range, "Range", String.valueOf((int) weapon.range));
         addStatRow(box, R.drawable.ic_hourglass, "Cooldown", weapon.cooldown + "ms");
         addStatRow(box, R.drawable.ic_knockback, "Knockback", String.valueOf(weapon.knockback));
-        addStatRow(box, R.drawable.ic_target, "Attack", weapon.isProjectile ? "Projectile" : "Melee");
+        addStatRow(box, R.drawable.ic_target, "Style", weapon.kind().title());
     }
 
     private void showArmorStats(LinearLayout box, Armor armor) {
@@ -3730,8 +4152,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     private void showConsumableStats(LinearLayout box, ShopItem item) {
         boolean heal = "heal".equals(item.effect);
+        int percent = BatchGenerator.potionPercent(item);
         addStatRow(box, heal ? R.drawable.ic_heart : R.drawable.ic_shield, "Restores",
-                "+" + item.effectValue + (heal ? " HP" : " Armor"));
+                heal ? percent + "% HP over 2s" : percent + "% armor");
+        addStatRow(box, R.drawable.ic_hourglass, "Cooldown", (POTION_COOLDOWN / 1000) + "s, all potions");
     }
 
     private void applyRarityBorder(View view, int color) {
@@ -3748,6 +4172,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * In co-op (a reason given) the whole run is over, so it only offers the menu.
      */
     private void showGameOverDialog(String coopReason) {
+        // The dungeon falls silent and a lament begins
+        SoundManager.setGameTrack(this, R.raw.game_over_music);
+        gameDisplay.setHeartbeat(0);
         final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         dialog.setContentView(R.layout.dialog_game_over);
         dialog.setCancelable(false);
@@ -3764,6 +4191,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 statsManager.getRunBosses()) * (1f + 0.25f * ascension()))};
         TextView txtSouls = dialog.findViewById(R.id.txt_souls);
         txtSouls.setText("+" + souls[0] + " Souls");
+        recordRun();
         Runnable payout = () -> { if (userId != null) dbManager.addSouls(userId, souls[0]); };
         if (dailySeed != 0 && userId != null && dailyDay != null)
             dbManager.submitDailyScore(dailyDay, userId, username, floorManager.getCurrentFloor(),
@@ -3822,6 +4250,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         btnMenu.setOnClickListener(v -> {
             payout.run();
             dialog.dismiss();
+            SoundManager.stopGameMusic();
             if (gameId != null && userId != null) {
                 dbManager.deleteGame(userId, gameId, success ->
                         runOnUiThread(() -> {
@@ -3837,6 +4266,26 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         dialog.show();
         hideSystemUIOnWindow(dialog.getWindow());
+    }
+
+    /** Keeps the last 10 lives on this phone for the menu's run history (MenuActivity.showHistory). */
+    private void recordRun() {
+        SharedPreferences prefs = getSharedPreferences("runs_" + userId, MODE_PRIVATE);
+        try {
+            org.json.JSONArray old = new org.json.JSONArray(prefs.getString("list", "[]"));
+            org.json.JSONArray list = new org.json.JSONArray().put(new org.json.JSONObject()
+                    .put("t", System.currentTimeMillis())
+                    .put("mode", coop != null ? "Co-op" : dailySeed != 0 ? "Daily" : "Solo")
+                    .put("floor", floorManager.getCurrentFloor())
+                    .put("kills", statsManager.getRunKills())
+                    .put("secs", statsManager.getRunSeconds())
+                    .put("level", playerLevel)
+                    .put("weapon", player.getWeapon().name));
+            for (int i = 0; i < old.length() && list.length() < 10; i++) list.put(old.get(i));
+            prefs.edit().putString("list", list.toString()).apply();
+        } catch (org.json.JSONException e) {
+            prefs.edit().remove("list").apply();
+        }
     }
 
     /** Ad revive: back up where you fell at half health, briefly untouchable. */
@@ -4097,10 +4546,32 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         ((TextView) dialog.findViewById(R.id.txt_perk_title)).setText("Level " + playerLevel);
 
-        List<Perk> offer = new ArrayList<>(java.util.Arrays.asList(Perk.values()));
-        Collections.shuffle(offer);
         LinearLayout row = dialog.findViewById(R.id.perk_cards);
         boolean[] ready = {false};
+        dealPerkCards(dialog, row, ready);
+        // Opt-in ad: one fresh hand per level-up, once the cards have turned
+        MaterialButton reroll = dialog.findViewById(R.id.btn_perk_reroll);
+        if (Ads.isReady()) reroll.setVisibility(View.VISIBLE);
+        reroll.setOnClickListener(v -> {
+            if (!ready[0]) return;
+            Ads.show(this, () -> {
+                reroll.setVisibility(View.GONE);
+                row.removeAllViews();
+                ready[0] = false;
+                dealPerkCards(dialog, row, ready);
+            }, () -> {
+                reroll.setVisibility(View.GONE);
+                hideSystemUIOnWindow(dialog.getWindow());
+            });
+        });
+        dialog.show();
+        hideSystemUIOnWindow(dialog.getWindow());
+    }
+
+    /** Three random perk cards grow in face down, then flip left to right; ready[0] turns true after the last. */
+    private void dealPerkCards(Dialog dialog, LinearLayout row, boolean[] ready) {
+        List<Perk> offer = new ArrayList<>(java.util.Arrays.asList(Perk.values()));
+        Collections.shuffle(offer);
         float cameraDistance = 8000f * getResources().getDisplayMetrics().density;
         for (int i = 0; i < 3; i++) {
             Perk perk = offer.get(i);
@@ -4116,8 +4587,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     .setInterpolator(new android.view.animation.OvershootInterpolator(1.2f)).start();
             card.postDelayed(() -> flipCard(card, () -> { if (last) ready[0] = true; }), 650 + i * 380L);
         }
-        dialog.show();
-        hideSystemUIOnWindow(dialog.getWindow());
     }
 
     private void bindPerkCard(View card, Perk perk) {
@@ -4188,16 +4657,17 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     /** Drinks the healing potion that best fits the missing HP, without opening the inventory. */
     private void quickHeal() {
         if (isGamePaused || playerHealth <= 0 || playerHealth >= maxHealth) return;
-        int missing = maxHealth - playerHealth;
+        int missing = (maxHealth - playerHealth) * 100 / maxHealth; // in percent, like the potions
         ConsumableStack best = null;
         for (ConsumableStack stack : consumableInventory) {
             if (!"heal".equals(stack.item.effect)) continue;
             if (best == null) { best = stack; continue; }
             // Prefer the smallest potion that still fills the gap, so big potions aren't wasted
-            boolean fits = stack.item.effectValue >= missing;
-            boolean bestFits = best.item.effectValue >= missing;
-            if (fits && (!bestFits || stack.item.effectValue < best.item.effectValue)) best = stack;
-            else if (!fits && !bestFits && stack.item.effectValue > best.item.effectValue) best = stack;
+            int pct = BatchGenerator.potionPercent(stack.item), bestPct = BatchGenerator.potionPercent(best.item);
+            boolean fits = pct >= missing;
+            boolean bestFits = bestPct >= missing;
+            if (fits && (!bestFits || pct < bestPct)) best = stack;
+            else if (!fits && !bestFits && pct > bestPct) best = stack;
         }
         if (best != null) useConsumable(best, null);
     }
@@ -4247,6 +4717,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     soundManager.playCoinPickup();
                     effects.burst(coin.x, coin.y, Color.rgb(255, 215, 0), 4, 3f);
                     playerGold++;
+                    quest(Quests.GOLD, 1);
                     runOnUiThread(this::updateGoldHUD);
                 }
             }
@@ -4296,9 +4767,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         SoundManager.setGameMusicVolume(gameVol);
 
         // Re-apply the attack direction mode in case it changed in Settings
-        attackFacing = getSharedPreferences(SettingsActivity.PREFS_NAME, MODE_PRIVATE)
-                .getBoolean(SettingsActivity.KEY_ATTACK_FACING, false);
+        SharedPreferences settings = getSharedPreferences(SettingsActivity.PREFS_NAME, MODE_PRIVATE);
+        attackFacing = settings.getBoolean(SettingsActivity.KEY_ATTACK_FACING, false);
         aimJoystick.setAimEnabled(!attackFacing);
+        GameCamera.shakeEnabled = settings.getBoolean(SettingsActivity.KEY_SHAKE, true);
+        effects.gore = settings.getBoolean(SettingsActivity.KEY_GORE, true);
+        showDamageNumbers = settings.getBoolean(SettingsActivity.KEY_NUMBERS, true);
+        lowHealthEffects = settings.getBoolean(SettingsActivity.KEY_DANGER, true);
+        cameraLean = settings.getBoolean(SettingsActivity.KEY_LEAN, true);
 
         // CHECK IF WE CAME BACK FROM SETTINGS
         if (showMenuOnResume) {
@@ -4347,40 +4823,26 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /**
-     * Fixed Vibration System.
-     * Removed the forced '255' amplitude which causes invisible crashes on devices
-     * that don't support amplitude control. Now uses DEFAULT_AMPLITUDE safely.
+     * A short buzz, ms long, at a strength of 1-255 where the phone supports it; skipped when vibration
+     * is off or another buzz just started.
      */
-    private void vibrateOnHit() {
-        SharedPreferences prefs = getSharedPreferences("gameSettings", MODE_PRIVATE);
-        if (!prefs.getBoolean("vibration_enabled", true)) return;
-
+    private void buzz(long ms, int strength) {
+        long now = System.currentTimeMillis();
+        if (now - lastBuzz < 50) return;
+        lastBuzz = now;
+        if (!getSharedPreferences("gameSettings", MODE_PRIVATE).getBoolean("vibration_enabled", true)) return;
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                android.os.VibratorManager vm = (android.os.VibratorManager)
-                        getSystemService(VIBRATOR_MANAGER_SERVICE);
-                if (vm != null) {
-                    vm.getDefaultVibrator().vibrate(
-                            android.os.VibrationEffect.createOneShot(
-                                    80, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
-                    return;
-                }
-            }
-            // Fallback for older Android / MIUI
-            android.os.Vibrator v = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
-            if (v != null) {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    v.vibrate(android.os.VibrationEffect.createOneShot(
-                            80, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
-                } else {
-                    v.vibrate(80);
-                }
-            }
+            android.os.Vibrator v = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                    ? ((android.os.VibratorManager) getSystemService(VIBRATOR_MANAGER_SERVICE)).getDefaultVibrator()
+                    : (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (v == null || !v.hasVibrator()) return;
+            v.vibrate(android.os.VibrationEffect.createOneShot(ms,
+                    v.hasAmplitudeControl() ? strength : android.os.VibrationEffect.DEFAULT_AMPLITUDE));
         } catch (Exception e) {
-            // Last resort — haptic feedback on the game view
-            gameDisplay.performHapticFeedback(
+            // Last resort: haptic feedback on the game view
+            gameDisplay.post(() -> gameDisplay.performHapticFeedback(
                     android.view.HapticFeedbackConstants.VIRTUAL_KEY,
-                    android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
+                    android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING));
         }
     }
 
@@ -4390,6 +4852,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * @return list of shop items (empty if the batch is not yet available)
      */
     private List<ShopItem> getShopItemsForFloor(int floor) {
+        if (floor == restockedFloor && restockedShop != null) return restockedShop;
         int rangeStart = getRangeStart(floor);
         BatchResult result = batchCache.get(rangeStart);
         if (result == null || result.shopByFloor == null) return new ArrayList<>();

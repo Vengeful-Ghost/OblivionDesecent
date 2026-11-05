@@ -28,9 +28,9 @@ enum Altar {
         return baseCost * (rank + 1);
     }
 
-    /** Souls a run earns: deep floors and bosses count most. */
+    /** Souls a run earns: deep floors and bosses count most; kills only add a little. */
     static int souls(int floors, int kills, int bosses) {
-        return floors * 6 + kills + bosses * 30;
+        return floors * 2 + kills / 5 + bosses * 10;
     }
 
     /** Ranks by ordinal from the player document's "altar" map (missing = 0). */
