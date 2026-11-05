@@ -252,7 +252,7 @@ public class Player {
             t = 1f - (1f - t) * (1f - t) * (1f - t);
             return swingFrom + (swingTo - swingFrom) * t;
         }
-        float rest = aimAngle + 35f - 120f * charge;
+        float rest = aimAngle - 120f * charge; // points straight where the player faces
         if (!thrust && since < swingTime + RECOVER_TIME) {
             float t = (float) (since - swingTime) / RECOVER_TIME;
             float delta = ((rest - swingTo) % 360f + 540f) % 360f - 180f;

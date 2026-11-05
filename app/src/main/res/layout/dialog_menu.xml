@@ -27,6 +27,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
+        android:tag="stone"
         android:padding="@dimen/space_xl"
         android:layout_gravity="center"
         android:animation="@anim/dialog_open">

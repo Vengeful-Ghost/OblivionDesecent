@@ -332,6 +332,7 @@
                     android:layout_marginTop="@dimen/space_xs"
                     android:orientation="horizontal"
                     android:background="@drawable/dialog_bg"
+                    android:tag="stone"
                     android:padding="@dimen/space_xs">
 
                     <TextView

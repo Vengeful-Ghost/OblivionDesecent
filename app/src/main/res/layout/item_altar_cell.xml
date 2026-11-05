@@ -7,7 +7,8 @@
     android:orientation="horizontal"
     android:gravity="center_vertical"
     android:padding="@dimen/space_sm"
-    android:background="@drawable/dialog_bg">
+    android:background="@drawable/dialog_bg"
+    android:tag="stone">
 
     <ImageView
         android:id="@+id/altar_icon"

@@ -36,30 +36,32 @@
             android:name=".SignUpActivity"
             android:screenOrientation="sensorLandscape" />
 
+        <!-- configChanges: a rewarded ad (often portrait) must not recreate the game and reload the floor-start save -->
         <activity
             android:name=".GameActivity"
             android:screenOrientation="sensorLandscape"
-            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:theme="@style/Theme.OblivionDescent.Screen" />
 
         <activity
             android:name=".MenuActivity"
             android:screenOrientation="sensorLandscape"
-            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"/>
+            android:theme="@style/Theme.OblivionDescent.Screen"/>
 
         <activity
             android:name=".SettingsActivity"
             android:screenOrientation="sensorLandscape"
-            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"/>
+            android:theme="@style/Theme.OblivionDescent.Screen"/>
 
         <activity
             android:name=".StatsActivity"
             android:screenOrientation="sensorLandscape"
-            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"/>
+            android:theme="@style/Theme.OblivionDescent.Screen"/>
 
         <activity
             android:name=".LobbyActivity"
             android:screenOrientation="sensorLandscape"
-            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"/>
+            android:theme="@style/Theme.OblivionDescent.Screen"/>
 
     </application>
 

@@ -33,6 +33,7 @@
         android:paddingTop="@dimen/space_sm"
         android:paddingBottom="@dimen/space_sm"
         android:background="@drawable/hud_panel"
+        android:tag="stone"
         android:shadowColor="@color/ink_shadow"
         android:shadowDx="0"
         android:shadowDy="1"
@@ -117,39 +118,57 @@
         android:orientation="vertical"
         android:gravity="center"
         android:layout_marginTop="@dimen/space_lg"
+        android:layout_marginStart="@dimen/space_md"
+        android:layout_marginEnd="@dimen/space_md"
+        app:layout_constraintWidth_max="360dp"
         app:layout_constraintTop_toBottomOf="@id/MainMenu"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="@+id/GameTitleFront"
         app:layout_constraintEnd_toEndOf="@+id/GameTitleFront">
 
+        <!-- Rows share the column's width, so the pairs never spill past a narrow screen -->
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_altar"
                 style="@style/OD.Button.Secondary"
-                android:layout_width="164dp"
+                android:layout_width="0dp"
+                android:layout_weight="1"
                 android:layout_height="@dimen/touch_min"
-                android:layout_marginEnd="@dimen/space_md"
+                android:layout_marginEnd="@dimen/space_sm"
+                android:paddingStart="@dimen/space_sm"
+                android:paddingEnd="@dimen/space_sm"
+                android:maxLines="1"
+                android:textSize="@dimen/text_small"
                 android:text="Soul Altar"
                 app:icon="@drawable/ic_level"
+                app:iconSize="@dimen/icon_sm"
+                app:iconPadding="@dimen/space_xs"
                 tools:ignore="HardcodedText" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_daily"
                 style="@style/OD.Button.Secondary"
-                android:layout_width="164dp"
+                android:layout_width="0dp"
+                android:layout_weight="1"
                 android:layout_height="@dimen/touch_min"
+                android:paddingStart="@dimen/space_sm"
+                android:paddingEnd="@dimen/space_sm"
+                android:maxLines="1"
+                android:textSize="@dimen/text_small"
                 android:text="Daily Run"
                 app:icon="@drawable/ic_trophy"
+                app:iconSize="@dimen/icon_sm"
+                app:iconPadding="@dimen/space_xs"
                 tools:ignore="HardcodedText" />
 
         </LinearLayout>
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/space_sm"
             android:orientation="horizontal">
@@ -157,20 +176,34 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_quests"
                 style="@style/OD.Button.Secondary"
-                android:layout_width="164dp"
+                android:layout_width="0dp"
+                android:layout_weight="1"
                 android:layout_height="@dimen/touch_min"
-                android:layout_marginEnd="@dimen/space_md"
+                android:layout_marginEnd="@dimen/space_sm"
+                android:paddingStart="@dimen/space_sm"
+                android:paddingEnd="@dimen/space_sm"
+                android:maxLines="1"
+                android:textSize="@dimen/text_small"
                 android:text="Quests"
                 app:icon="@drawable/ic_flag"
+                app:iconSize="@dimen/icon_sm"
+                app:iconPadding="@dimen/space_xs"
                 tools:ignore="HardcodedText" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_history"
                 style="@style/OD.Button.Secondary"
-                android:layout_width="164dp"
+                android:layout_width="0dp"
+                android:layout_weight="1"
                 android:layout_height="@dimen/touch_min"
+                android:paddingStart="@dimen/space_sm"
+                android:paddingEnd="@dimen/space_sm"
+                android:maxLines="1"
+                android:textSize="@dimen/text_small"
                 android:text="Runs"
                 app:icon="@drawable/ic_hourglass"
+                app:iconSize="@dimen/icon_sm"
+                app:iconPadding="@dimen/space_xs"
                 tools:ignore="HardcodedText" />
 
         </LinearLayout>

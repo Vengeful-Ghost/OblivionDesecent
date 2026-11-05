@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Primary button: a worn stone slab in an iron frame, a corner broken off, cracked and mossy -->
+<!-- Primary button: a stone slab in an iron frame; Wear adds its own cracks and broken corners -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="@color/gold_translucent_strong">
 
@@ -41,10 +41,6 @@
                             <corners android:radius="2dp"/>
                         </shape>
                     </item>
-                    <item android:drawable="@drawable/wear_chip" android:gravity="top|end"
-                        android:width="22dp" android:height="16dp"/>
-                    <item android:drawable="@drawable/wear_crack" android:gravity="bottom|start"
-                        android:left="8dp" android:width="30dp" android:height="16dp"/>
                 </layer-list>
             </item>
 
@@ -84,12 +80,6 @@
                             <solid android:color="#2EEAE0CA"/>
                         </shape>
                     </item>
-                    <item android:drawable="@drawable/wear_chip" android:gravity="top|end"
-                        android:width="22dp" android:height="16dp"/>
-                    <item android:drawable="@drawable/wear_crack" android:gravity="bottom|start"
-                        android:left="8dp" android:width="30dp" android:height="16dp"/>
-                    <item android:drawable="@drawable/wear_moss" android:gravity="bottom|center_horizontal"
-                        android:bottom="2dp" android:width="48dp" android:height="10dp"/>
                 </layer-list>
             </item>
         </selector>

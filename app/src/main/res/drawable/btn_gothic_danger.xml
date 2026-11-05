@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Danger button: rust-and-blood iron frame on dark stone, chipped and cracked (respawn, delete, etc.) -->
+<!-- Danger button: rust-and-blood iron frame on dark stone (respawn, delete, etc.) -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="#66E04848">
 
@@ -38,10 +38,6 @@
                     <corners android:radius="2dp"/>
                 </shape>
             </item>
-            <item android:drawable="@drawable/wear_chip" android:gravity="top|end"
-                android:width="22dp" android:height="16dp"/>
-            <item android:drawable="@drawable/wear_crack" android:gravity="bottom|start"
-                android:left="10dp" android:width="30dp" android:height="16dp"/>
         </layer-list>
     </item>
 

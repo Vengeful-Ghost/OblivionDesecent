@@ -64,6 +64,7 @@ public class StatsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_stats);
         hideSystemUI();
+        Wear.apply(findViewById(android.R.id.content));
 
         // Keep buttons clear of the camera cutout
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {
@@ -166,6 +167,7 @@ public class StatsActivity extends AppCompatActivity {
             lifetimeData = data;
             runOnUiThread(() -> {
                 if (showingLifetime) populateStats(data, true);
+                else if (currentGameData != null) populateStats(currentGameData, false); // Altar ranks feed max HP
             });
         });
     }
@@ -223,8 +225,17 @@ public class StatsActivity extends AppCompatActivity {
                     safeInt(data, "currentFloor") + "");
             int level = Math.max(1, safeInt(data, "level"));
             addStatRow(R.drawable.ic_level, "Level", level + "");
-            addStatRow(R.drawable.ic_heart, "Health",
-                    safeInt(data, "health") + " / " + (100 + (level - 1) * 10));
+            int vigor = 0;
+            Object perks = data.get("perks");
+            int vigorIndex = GameActivity.Perk.VIGOR.ordinal();
+            if (perks instanceof List && ((List<?>) perks).size() > vigorIndex
+                    && ((List<?>) perks).get(vigorIndex) instanceof Number)
+                vigor = ((Number) ((List<?>) perks).get(vigorIndex)).intValue();
+            int maxHp = GameActivity.maxHealth(vigor, Altar.ranks(lifetimeData)[Altar.VITALITY.ordinal()]);
+            // Same rule as loading the save: a run at its very start has full health
+            boolean fresh = safeInt(data, "currentFloor") == 1 && level == 1 && safeInt(data, "xp") == 0;
+            int hp = fresh ? maxHp : Math.min(safeInt(data, "health"), maxHp);
+            addStatRow(R.drawable.ic_heart, "Health", hp + " / " + maxHp);
             addStatRow(R.drawable.ic_shield, "Armor",
                     safeInt(data, "armorValue") + "");
             addStatRow(R.drawable.ic_coin, "Gold",
@@ -451,6 +462,7 @@ public class StatsActivity extends AppCompatActivity {
 
     private void hideSystemUIOnWindow(android.view.Window window) {
         if (window == null) return;
+        Wear.apply(window.getDecorView());
         window.getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                         | View.SYSTEM_UI_FLAG_FULLSCREEN

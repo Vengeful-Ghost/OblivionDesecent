@@ -68,6 +68,7 @@ public class LobbyActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_lobby);
         hideSystemUI();
+        Wear.apply(findViewById(android.R.id.content));
 
         // Keep buttons clear of the camera cutout
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {
@@ -427,6 +428,7 @@ public class LobbyActivity extends AppCompatActivity {
 
     private void hideSystemUIOnWindow(android.view.Window window) {
         if (window == null) return;
+        Wear.apply(window.getDecorView());
         window.getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                         | View.SYSTEM_UI_FLAG_FULLSCREEN

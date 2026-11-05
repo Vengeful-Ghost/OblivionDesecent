@@ -67,6 +67,7 @@ public class SignUpActivity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_signup);
         hideSystemUI();
+        Wear.apply(findViewById(android.R.id.content));
 
         // Keep buttons clear of the camera cutout
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {

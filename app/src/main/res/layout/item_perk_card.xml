@@ -13,7 +13,8 @@
         android:id="@+id/perk_back"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/rounded_dialog_bg">
+        android:background="@drawable/rounded_dialog_bg"
+        android:tag="stone">
 
         <ImageView
             android:layout_width="72dp"
@@ -33,6 +34,7 @@
         android:gravity="center"
         android:padding="@dimen/space_lg"
         android:background="@drawable/rounded_dialog_bg"
+        android:tag="stone"
         android:visibility="invisible">
 
         <ImageView

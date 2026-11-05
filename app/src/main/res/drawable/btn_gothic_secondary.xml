@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Secondary button: a darker, thinner slab, cracked across the top and chipped at the bottom -->
+<!-- Secondary button: a darker, thinner slab; Wear adds its own cracks and broken corners -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="@color/gold_translucent">
 
@@ -30,10 +30,6 @@
                     <corners android:radius="2dp"/>
                 </shape>
             </item>
-            <item android:drawable="@drawable/wear_crack" android:gravity="top|end"
-                android:right="12dp" android:width="30dp" android:height="16dp"/>
-            <item android:drawable="@drawable/wear_chip_bl" android:gravity="bottom|start"
-                android:width="22dp" android:height="16dp"/>
         </layer-list>
     </item>
 

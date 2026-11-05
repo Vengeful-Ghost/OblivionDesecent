@@ -14,6 +14,7 @@
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
+        android:tag="stone"
         android:padding="@dimen/space_lg"
         android:layout_marginEnd="@dimen/space_md">
 
@@ -238,6 +239,7 @@
         android:layout_weight="1"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
+        android:tag="stone"
         android:padding="@dimen/space_lg">
 
         <!-- Header: filter tabs + sort, one row so the grid gets the height -->

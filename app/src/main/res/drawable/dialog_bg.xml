@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Secondary panel / row background: a recessed stone panel with a hairline crack -->
+<!-- Secondary panel / row background: a recessed stone panel -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item>
@@ -23,8 +23,5 @@
             <corners android:radius="2dp"/>
         </shape>
     </item>
-
-    <item android:drawable="@drawable/wear_crack" android:gravity="bottom|end"
-        android:right="8dp" android:bottom="1dp" android:width="26dp" android:height="14dp"/>
 
 </layer-list>

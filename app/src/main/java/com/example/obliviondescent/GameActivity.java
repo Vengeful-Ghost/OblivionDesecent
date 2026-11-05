@@ -51,7 +51,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private GameDisplay gameDisplay;
     private JoystickView joystick;
 
-    private MaterialButton btnAttack;
     private MaterialButton btnInventory;
     private MaterialButton menuBtn;
     private MaterialButton btnDash;
@@ -324,6 +323,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_game);
         hideSystemUI();
+        Wear.apply(findViewById(android.R.id.content));
 
         // Keep the HUD clear of the camera cutout; the world itself still fills the screen
         View hudLayer = findViewById(R.id.hud_layer);
@@ -349,7 +349,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         txtArmorValue   = findViewById(R.id.txt_armor_value);
         gameDisplay = findViewById(R.id.game_display);
         joystick = findViewById(R.id.joystick);
-        btnAttack = findViewById(R.id.btn_attack);
         btnInventory = findViewById(R.id.btn_inventory);
         menuBtn = findViewById(R.id.btn_menu);
         btnDash = findViewById(R.id.btn_dash);
@@ -460,7 +459,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
         });
 
-        btnAttack.setOnClickListener(v -> attack());
         btnDash.setOnClickListener(v -> dash());
         findViewById(R.id.btn_spin).setOnClickListener(v -> {
             if (System.currentTimeMillis() - lastSpinTime >= spinCooldown()) spinQueued = true;
@@ -2306,20 +2304,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /**
-     * Handles a tap on the melee attack button.
-     * Triggers an attack only if the current weapon's cooldown has expired.
-     */
-    private void attack() {
-        long now = System.currentTimeMillis();
-        if (player.getWeapon().isProjectile) return;
-        if (now - lastAttackTime > player.getWeapon().cooldown) {
-            isAttacking = true;
-            attackStartTime = now;
-            lastAttackTime = now;
-        }
-    }
-
-    /**
      * Handles a tap on the dash button.
      * Dashes in the joystick direction, or the facing direction when standing still.
      */
@@ -2668,12 +2652,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             TextView priceView = card.findViewById(R.id.item_price);
 
             int rarityColor = getRarityColor(item.rarity);
-            android.graphics.drawable.GradientDrawable border =
-                    new android.graphics.drawable.GradientDrawable();
-            border.setColor(ContextCompat.getColor(this, R.color.bg_surface));
-            border.setCornerRadius(12f);
-            border.setStroke(3, rarityColor);
-            card.setBackground(border);
+            applyRarityBorder(card, rarityColor);
 
             nameView.setText(item.name);
             nameView.setTextColor(rarityColor);
@@ -3193,10 +3172,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * Refreshes the attack UI — always shows AimJoystick for all weapon types.
      */
     private void refreshAttackUI() {
-        runOnUiThread(() -> {
-            btnAttack.setVisibility(View.GONE);
-            aimJoystick.setVisibility(View.VISIBLE);
-        });
+        runOnUiThread(() -> aimJoystick.setVisibility(View.VISIBLE));
     }
 
     /** Spawns 3 chests at 120° intervals around the boss death position on walkable floor. */
@@ -4158,13 +4134,16 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         addStatRow(box, R.drawable.ic_hourglass, "Cooldown", (POTION_COOLDOWN / 1000) + "s, all potions");
     }
 
+    /** A stone cell edged in its rarity colour, worn like the rest of the UI. */
     private void applyRarityBorder(View view, int color) {
-        android.graphics.drawable.GradientDrawable border =
-                new android.graphics.drawable.GradientDrawable();
-        border.setColor(ContextCompat.getColor(this, R.color.bg_surface));
-        border.setCornerRadius(10f);
-        border.setStroke(2, color);
+        float dp = getResources().getDisplayMetrics().density;
+        android.graphics.drawable.GradientDrawable border = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.rgb(42, 38, 33), Color.rgb(20, 18, 16)});
+        border.setCornerRadius(3 * dp);
+        border.setStroke(Math.round(2 * dp), color);
         view.setBackground(border);
+        Wear.wrap(view, false, false);
     }
 
     /**
@@ -4367,7 +4346,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /** Level-up blessings: small on purpose, they add up over a long run. The stat word shows in its colour. */
-    private enum Perk {
+    enum Perk {
         MIGHT("Might", 1f, "%", "damage", 0xFFE04848, R.drawable.ic_crossed_swords),
         VIGOR("Vigor", 5f, "", "max HP", 0xFF7AB85C, R.drawable.ic_heart),
         SWIFTNESS("Swiftness", 1f, "%", "move speed", 0xFF4F8FFF, R.drawable.ic_boots),
@@ -4441,7 +4420,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Max HP: 100, +5 per Vigor, +5 per Altar Vitality. */
     private int computeMaxHealth() {
-        return 100 + 5 * stacks(Perk.VIGOR) + 5 * altar[Altar.VITALITY.ordinal()];
+        return maxHealth(stacks(Perk.VIGOR), altar[Altar.VITALITY.ordinal()]);
+    }
+
+    static int maxHealth(int vigor, int vitality) {
+        return 100 + 5 * vigor + 5 * vitality;
     }
 
     /** New Altar ranks: refresh max HP, topping up a player who was at full health. */
@@ -4450,6 +4433,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         int oldMax = maxHealth;
         maxHealth = computeMaxHealth();
         if (playerHealth >= oldMax) playerHealth = maxHealth;
+        if (checkpointHealth >= oldMax) checkpointHealth = maxHealth;
         playerHealthBar.setMax(maxHealth);
         playerHealthBar.setProgress(playerHealth);
         if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
@@ -4578,6 +4562,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             boolean last = i == 2;
             View card = getLayoutInflater().inflate(R.layout.item_perk_card, row, false);
             bindPerkCard(card, perk);
+            Wear.apply(card);
             card.setCameraDistance(cameraDistance);
             card.setScaleX(0f);
             card.setScaleY(0f);
@@ -4791,6 +4776,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     private void hideSystemUIOnWindow(android.view.Window window) {
         if (window == null) return;
+        Wear.apply(window.getDecorView());
         window.getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                         | View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -5024,7 +5010,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 applySpeedPerk();
                 updateLevelBadge();
                 maxHealth = computeMaxHealth();
-                playerHealth = Math.min(playerHealth, maxHealth); // saves from before levels stopped adding HP
+                // A run still at its very start begins at full health; older saves are capped
+                if (savedFloor == 1 && playerLevel == 1 && playerXp == 0) playerHealth = maxHealth;
+                else playerHealth = Math.min(playerHealth, maxHealth);
 
                 if (data.get("playtimeSeconds") != null)
                     gameStartTime -= ((Number) data.get("playtimeSeconds")).longValue() * 1000L;

@@ -563,63 +563,6 @@ public class DBManager {
                 .addOnFailureListener(e -> listener.onLoaded(null));
     }
 
-    /* ============================================================
-       GENERATED ENEMIES
-       Schema matches Enemy constructor fields.
-       Stored separately so AI can generate new enemy types
-       without touching the Enemy.java hardcoded switch block.
-       ============================================================ */
-
-    /**
-     * Saves an AI-generated enemy template.
-     * colorR/G/B stored separately so Firestore can hold the int
-     * without Android Color dependency on the backend.
-     */
-    public void saveGeneratedEnemy(String name,
-                                   String type,          // "GRUNT" / "SPEEDER" / etc. or custom
-                                   int maxHealth,
-                                   float speed,
-                                   float radius,
-                                   String weaponName,
-                                   int weaponDamage,
-                                   float weaponRange,
-                                   long weaponCooldown,
-                                   float weaponKnockback,
-                                   boolean weaponIsProjectile,
-                                   int colorR,
-                                   int colorG,
-                                   int colorB,
-                                   int floorIntroduced,
-                                   String description,
-                                   OnStringResultListener listener) {
-        Map<String, Object> doc = new HashMap<>();
-        doc.put("name",              name);
-        doc.put("type",              type);
-        doc.put("maxHealth",         maxHealth);
-        doc.put("speed",             speed);
-        doc.put("radius",            radius);
-        doc.put("weaponName",        weaponName);
-        doc.put("weaponDamage",      weaponDamage);
-        doc.put("weaponRange",       weaponRange);
-        doc.put("weaponCooldown",    weaponCooldown);
-        doc.put("weaponKnockback",   weaponKnockback);
-        doc.put("weaponIsProjectile", weaponIsProjectile);
-        doc.put("colorR",            colorR);
-        doc.put("colorG",            colorG);
-        doc.put("colorB",            colorB);
-        doc.put("floorIntroduced",   floorIntroduced);
-        doc.put("description",       description);
-        doc.put("createdAt",         Timestamp.now());
-
-        db.collection("generated_enemies")
-                .add(doc)
-                .addOnSuccessListener(ref -> listener.onResult(ref.getId()))
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "saveGeneratedEnemy failed", e);
-                    listener.onResult(null);
-                });
-    }
-
     /**
      * Keeps only the most recently saved game slot and deletes the rest.
      * Called once on login to enforce the single-slot rule.

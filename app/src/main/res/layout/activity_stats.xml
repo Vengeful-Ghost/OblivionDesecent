@@ -15,6 +15,7 @@
         android:layout_weight="1"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
+        android:tag="stone"
         android:padding="@dimen/space_lg"
         android:layout_marginEnd="@dimen/space_sm">
 
@@ -99,6 +100,7 @@
         android:layout_weight="1"
         android:orientation="vertical"
         android:background="@drawable/rounded_dialog_bg"
+        android:tag="stone"
         android:padding="@dimen/space_lg">
 
         <!-- Title -->

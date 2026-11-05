@@ -46,6 +46,7 @@ public class MenuActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_menu);
         hideSystemUI();
+        Wear.apply(findViewById(android.R.id.content));
 
         // Keep buttons clear of the camera cutout
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {
@@ -175,6 +176,7 @@ public class MenuActivity extends AppCompatActivity {
             lp.setMargins(gap, gap, gap, gap);
             row.addView(cell, lp);
         }
+        Wear.apply(grid);
     }
 
     /** Today's Daily Run: the same seeded dungeon for everyone, with today's top five. */
@@ -309,8 +311,10 @@ public class MenuActivity extends AppCompatActivity {
     }
 
     private void hideSystemUIOnWindow(Dialog dialog) {
-        if (dialog.getWindow() != null) dialog.getWindow().getDecorView().setSystemUiVisibility(
+        if (dialog.getWindow() == null) return;
+        dialog.getWindow().getDecorView().setSystemUiVisibility(
                 getWindow().getDecorView().getSystemUiVisibility());
+        Wear.apply(dialog.getWindow().getDecorView());
     }
 
     // Icon of each tutorial page

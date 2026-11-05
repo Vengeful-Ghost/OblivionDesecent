@@ -106,6 +106,7 @@ public class GameDisplay extends View {
     private Paint minimapRimPaint;
     private Paint minimapBorderPaint;
     private Paint minimapHighlightPaint;
+    private Wear.Stone minimapWear; // cracks and a chip in the frame, like the rest of the UI
     private Paint minimapRoomPaint;
     private Paint minimapEntryPaint;
     private Paint minimapExitPaint;
@@ -934,6 +935,10 @@ public class GameDisplay extends View {
         canvas.drawCircle(mapCx, mapCy, band, minimapRimPaint);
         canvas.drawCircle(mapCx, mapCy, band, minimapBorderPaint);
         canvas.drawCircle(mapCx, mapCy, mapRadius - 4.5f * density, minimapHighlightPaint);
+        if (minimapWear == null) minimapWear = new Wear.Stone(System.identityHashCode(this), density, false, true);
+        minimapWear.setBounds((int) (mapCx - mapRadius), (int) (mapCy - mapRadius),
+                (int) (mapCx + mapRadius), (int) (mapCy + mapRadius));
+        minimapWear.draw(canvas);
         for (int i = 0; i < 12; i++) {
             double a = Math.toRadians(i * 30);
             float cos = (float) Math.cos(a), sin = (float) Math.sin(a);

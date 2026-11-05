@@ -105,6 +105,7 @@
     <!-- Round gold-rimmed icon button (ImageButton, 48dp) -->
     <style name="OD.IconButton" parent="">
         <item name="android:background">@drawable/icon_btn_circle</item>
+        <item name="android:tag">stone</item>
         <item name="android:padding">@dimen/space_md</item>
         <item name="android:scaleType">fitCenter</item>
         <item name="android:tint">@color/gold_bright</item>
@@ -124,6 +125,7 @@
     <!-- Dialog card: double gold trim -->
     <style name="OD.Card" parent="">
         <item name="android:background">@drawable/rounded_dialog_bg</item>
+        <item name="android:tag">stone</item>
         <item name="android:paddingStart">@dimen/space_xl</item>
         <item name="android:paddingEnd">@dimen/space_xl</item>
         <item name="android:paddingTop">@dimen/space_lg</item>

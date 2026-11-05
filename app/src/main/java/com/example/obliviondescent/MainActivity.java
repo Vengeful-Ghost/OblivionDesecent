@@ -69,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
         hideSystemUI();
+        Wear.apply(findViewById(android.R.id.content));
 
         // Handle edge-to-edge padding
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.loginRoot), (v, insets) -> {

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Round icon button (HUD menu/bag, actions): a stone disc in an iron ring, cracked near the top -->
+<!-- Round icon button (HUD menu/bag, actions): a stone disc in an iron ring -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="@color/gold_translucent_strong">
 
@@ -31,8 +31,6 @@
                         android:endColor="@color/bg_deepest"/>
                 </shape>
             </item>
-            <item android:drawable="@drawable/wear_crack" android:gravity="top|center_horizontal"
-                android:top="5dp" android:width="16dp" android:height="9dp"/>
         </layer-list>
     </item>
 

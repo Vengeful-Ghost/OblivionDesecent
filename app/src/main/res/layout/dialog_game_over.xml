@@ -28,6 +28,7 @@
         android:gravity="center_vertical"
         android:padding="@dimen/space_xl"
         android:background="@drawable/rounded_dialog_bg"
+        android:tag="stone"
         android:layout_gravity="center"
         android:animation="@anim/dialog_open">
 

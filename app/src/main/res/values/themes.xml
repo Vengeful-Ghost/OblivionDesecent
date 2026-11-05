@@ -20,6 +20,11 @@
 
     <style name="Theme.OblivionDescent" parent="Base.Theme.OblivionDescent" />
 
+    <!-- Game screens: the window behind the cutout padding is dark, not the default grey -->
+    <style name="Theme.OblivionDescent.Screen" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/bg_deepest</item>
+    </style>
+
     <!-- Loading dialog: transparent so our custom drawable shows through -->
     <style name="LoadingDialogStyle" parent="Theme.AppCompat.Dialog">
         <item name="android:windowBackground">@android:color/transparent</item>

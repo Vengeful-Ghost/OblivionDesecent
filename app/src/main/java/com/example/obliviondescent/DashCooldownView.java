@@ -25,11 +25,11 @@ public class DashCooldownView extends View {
         super(context, attrs);
         float dp = context.getResources().getDisplayMetrics().density;
 
-        // Arc paint — thick gold stroke
+        // Arc paint — thick torch-amber stroke
         arcPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         arcPaint.setStyle(Paint.Style.STROKE);
-        arcPaint.setStrokeWidth(6f * dp);
-        arcPaint.setColor(Color.argb(255, 255, 200, 50));
+        arcPaint.setStrokeWidth(5f * dp);
+        arcPaint.setColor(Color.rgb(217, 163, 90));
         arcPaint.setStrokeCap(Paint.Cap.ROUND);
 
         // Dim paint — dark fill to grey out the button while on cooldown
