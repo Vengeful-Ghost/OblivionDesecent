@@ -35,6 +35,7 @@ public class MenuActivity extends AppCompatActivity {
     private MaterialButton btnStats;
     private MaterialButton btnSettings;
     private ListenerRegistration inviteListener;
+    private SoundManager sounds;
 
     /**
      * Initialises the main menu, loads user data and checks for an existing save.
@@ -54,6 +55,8 @@ public class MenuActivity extends AppCompatActivity {
         });
 
         dbManager = new DBManager();
+        sounds = new SoundManager(this);
+        sounds.setVolume(getSharedPreferences("gameSettings", MODE_PRIVATE).getFloat("sfx_volume", 1.0f));
 
         SharedPreferences prefs = getSharedPreferences("loginPrefs", MODE_PRIVATE);
         userId = prefs.getString("user_id", null);
@@ -70,31 +73,46 @@ public class MenuActivity extends AppCompatActivity {
         setLoadGameEnabled(false);
         checkForExistingGame(true);
 
-        btnNewGame.setOnClickListener(v -> showNewGameConfirmation());
+        btnNewGame.setOnClickListener(v -> { click(); showNewGameConfirmation(); });
 
         btnLoadGame.setOnClickListener(v -> {
+            click();
             if (existingGameId != null) {
                 launchGame(existingGameId);
             }
         });
 
         btnStats.setOnClickListener(v -> {
+            click();
             Intent intent = new Intent(this, StatsActivity.class);
             startActivity(intent);
         });
 
         btnSettings.setOnClickListener(v -> {
+            click();
             Intent intent = new Intent(this, SettingsActivity.class);
             startActivity(intent);
         });
 
-        findViewById(R.id.btn_coop).setOnClickListener(v ->
-                startActivity(new Intent(this, LobbyActivity.class)));
+        findViewById(R.id.btn_coop).setOnClickListener(v -> {
+            click();
+            startActivity(new Intent(this, LobbyActivity.class));
+        });
 
-        findViewById(R.id.btn_tutorial).setOnClickListener(v -> showTutorial());
-        findViewById(R.id.btn_altar).setOnClickListener(v -> showAltar());
-        findViewById(R.id.btn_daily).setOnClickListener(v -> showDaily());
+        findViewById(R.id.btn_tutorial).setOnClickListener(v -> { click(); showTutorial(); });
+        findViewById(R.id.btn_altar).setOnClickListener(v -> { click(); showAltar(); });
+        findViewById(R.id.btn_daily).setOnClickListener(v -> { click(); showDaily(); });
         Ads.gatherConsent(this);
+    }
+
+    private void click() {
+        sounds.play(SoundManager.Sfx.CLICK);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        sounds.release();
     }
 
     /** Soul Altar: spend Souls from past runs on permanent upgrades. */
@@ -104,7 +122,7 @@ public class MenuActivity extends AppCompatActivity {
         dialog.setContentView(R.layout.dialog_altar);
         if (dialog.getWindow() != null)
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        dialog.findViewById(R.id.btn_close_altar).setOnClickListener(v -> dialog.dismiss());
+        dialog.findViewById(R.id.btn_close_altar).setOnClickListener(v -> { click(); dialog.dismiss(); });
         dbManager.loadPlayerStats(userId, data -> renderAltar(dialog, data));
         dialog.show();
         hideSystemUIOnWindow(dialog);
@@ -117,17 +135,6 @@ public class MenuActivity extends AppCompatActivity {
         long souls = soulsValue instanceof Number ? ((Number) soulsValue).longValue() : 0;
         int[] ranks = Altar.ranks(data);
         ((TextView) dialog.findViewById(R.id.txt_altar_souls)).setText(String.valueOf(souls));
-
-        // Ascension: chosen here, used by the next new solo game
-        int unlocked = data != null && data.get("ascensionUnlocked") instanceof Number
-                ? ((Number) data.get("ascensionUnlocked")).intValue() : 0;
-        int chosen = data != null && data.get("ascension") instanceof Number
-                ? Math.min(unlocked, ((Number) data.get("ascension")).intValue()) : 0;
-        dialog.findViewById(R.id.altar_ascension_row).setVisibility(unlocked > 0 ? View.VISIBLE : View.GONE);
-        ((TextView) dialog.findViewById(R.id.txt_ascension)).setText("ASCENSION " + chosen + " / " + unlocked
-                + "   enemies +" + (15 * chosen) + "% HP, Souls +" + (25 * chosen) + "%");
-        dialog.findViewById(R.id.btn_ascension_down).setOnClickListener(v -> setAscension(dialog, data, chosen - 1, unlocked));
-        dialog.findViewById(R.id.btn_ascension_up).setOnClickListener(v -> setAscension(dialog, data, chosen + 1, unlocked));
 
         LinearLayout grid = dialog.findViewById(R.id.altar_grid);
         grid.removeAllViews();
@@ -156,23 +163,16 @@ public class MenuActivity extends AppCompatActivity {
                 buy.setAlpha(afford ? 1f : 0.4f);
                 buy.setOnClickListener(v -> {
                     buy.setEnabled(false);
-                    dbManager.buyAltarRank(userId, a.name(), rank, cost, ok ->
-                            dbManager.loadPlayerStats(userId, fresh -> renderAltar(dialog, fresh)));
+                    dbManager.buyAltarRank(userId, a.name(), rank, cost, ok -> {
+                        sounds.play(ok ? SoundManager.Sfx.PURCHASE : SoundManager.Sfx.GATE_LOCKED);
+                        dbManager.loadPlayerStats(userId, fresh -> renderAltar(dialog, fresh));
+                    });
                 });
             }
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
             lp.setMargins(gap, gap, gap, gap);
             row.addView(cell, lp);
         }
-    }
-
-    /** Saves the picked Ascension (clamped to what's unlocked) and redraws the altar. */
-    private void setAscension(Dialog dialog, java.util.Map<String, Object> data, int level, int unlocked) {
-        level = Math.max(0, Math.min(unlocked, level));
-        dbManager.setAscension(userId, level);
-        java.util.Map<String, Object> updated = new java.util.HashMap<>(data);
-        updated.put("ascension", level);
-        renderAltar(dialog, updated);
     }
 
     /** Today's Daily Run: the same seeded dungeon for everyone, with today's top five. */
@@ -190,9 +190,10 @@ public class MenuActivity extends AppCompatActivity {
         dialog.setContentView(R.layout.dialog_daily);
         if (dialog.getWindow() != null)
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        dialog.findViewById(R.id.btn_close_daily).setOnClickListener(v -> dialog.dismiss());
+        dialog.findViewById(R.id.btn_close_daily).setOnClickListener(v -> { click(); dialog.dismiss(); });
         ((TextView) dialog.findViewById(R.id.txt_daily_date)).setText(shownFormat.format(now));
         dialog.findViewById(R.id.btn_daily_play).setOnClickListener(v -> {
+            click();
             dialog.dismiss();
             SoundManager.stopMenuMusic();
             Intent intent = new Intent(this, GameActivity.class);
@@ -261,7 +262,7 @@ public class MenuActivity extends AppCompatActivity {
                     + "Keys drop from elites, mimics and now and then other enemies."},
             {"Grow Stronger",
                     "Kills give XP. When you level up, tap the glowing badge and pick a perk. "
-                    + "Two perks at 2 stacks each awaken a synergy.\n\n"
+                    + "Two perks at 3 stacks each awaken a synergy.\n\n"
                     + "Every run earns Souls, even the ones you lose: spend them at the Soul Altar on lasting upgrades.\n\n"
                     + "Your run saves at the start of every floor. Try the Daily Run to race everyone on the same dungeon."}
     };
@@ -272,7 +273,7 @@ public class MenuActivity extends AppCompatActivity {
         dialog.setContentView(R.layout.dialog_tutorial);
         if (dialog.getWindow() != null)
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        dialog.findViewById(R.id.btn_close_tutorial).setOnClickListener(v -> dialog.dismiss());
+        dialog.findViewById(R.id.btn_close_tutorial).setOnClickListener(v -> { click(); dialog.dismiss(); });
 
         // One dot per page, the current one lit
         LinearLayout dots = dialog.findViewById(R.id.tutorial_dots);
@@ -301,10 +302,12 @@ public class MenuActivity extends AppCompatActivity {
                         .setColor(getColor(i == p ? R.color.gold_bright : R.color.bone_faint));
         };
         dialog.findViewById(R.id.btn_tutorial_back).setOnClickListener(v -> {
+            sounds.play(SoundManager.Sfx.CARD_FLIP);
             page[0]--;
             render.run();
         });
         dialog.findViewById(R.id.btn_tutorial_next).setOnClickListener(v -> {
+            sounds.play(SoundManager.Sfx.CARD_FLIP);
             if (page[0] + 1 >= TUTORIAL.length) {
                 dialog.dismiss();
                 return;

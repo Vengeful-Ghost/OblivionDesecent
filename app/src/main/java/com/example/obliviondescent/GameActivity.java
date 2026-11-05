@@ -197,10 +197,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private long dailySeed = 0;
     private String dailyDay;
 
-    // Ascension (solo saves only): tougher enemies and more Souls; a save keeps the level it started with
-    static final int MAX_ASCENSION = 10;
-    private int ascension = 0;
-    private boolean ascensionFromSave = false;
+    // Ascension: every 10th-floor boss raises it, so floors 11-20 are level 1, 21-30 level 2 and so on
+    private int ascension() {
+        return Math.max(0, (floorManager.getCurrentFloor() - 1) / 10);
+    }
 
     private Enemy activeBoss = null;
     private boolean bossSpawnHandled = false;
@@ -386,12 +386,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         statsManager = new StatsManager(dbManager, userId, gameId);
         Ads.preload(this);
         if (userId != null)
-            dbManager.loadPlayerStats(userId, data -> runOnUiThread(() -> {
-                applyAltar(Altar.ranks(data));
-                Object chosen = data != null ? data.get("ascension") : null;
-                if (!oneOffRun() && !ascensionFromSave && chosen instanceof Number)
-                    ascension = Math.min(MAX_ASCENSION, ((Number) chosen).intValue());
-            }));
+            dbManager.loadPlayerStats(userId, data -> runOnUiThread(() -> applyAltar(Altar.ranks(data))));
 
         if (gameId == null && userId != null && !oneOffRun()) {
             // New game — create Firestore save, get back the ID
@@ -762,7 +757,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             effects.banner(player.x, player.y - player.radius - 50f,
                     "GIFT FROM " + (from != null ? from.name : "A TEAMMATE").toUpperCase(), Color.rgb(244, 215, 122));
             effects.number(player.x, player.y - player.radius - 10f, name, Color.WHITE);
-            soundManager.playCoinPickup();
+            soundManager.play(SoundManager.Sfx.PERK_PICK);
         } catch (org.json.JSONException | IllegalArgumentException e) {
             Log.e("Coop", "Bad gift: " + json, e);
         }
@@ -852,11 +847,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         } else if (playerHealth > 0) {
             player.update(joystick.getDX(), joystick.getDY());
         }
-        // Bulwark: slow regeneration while alive and hurt
-        if (has(Synergy.BULWARK) && now - lastRegen >= 2000 && playerHealth > 0 && playerHealth < maxHealth) {
+        // Bulwark: slow regeneration out of combat, up to half health
+        if (has(Synergy.BULWARK) && now - lastRegen >= 5000 && playerHealth > 0 && playerHealth < maxHealth / 2) {
             lastRegen = now;
             runOnUiThread(() -> {
-                if (playerHealth <= 0 || playerHealth >= maxHealth) return;
+                if (playerHealth <= 0 || playerHealth >= maxHealth / 2) return;
                 playerHealth++;
                 playerHealthBar.setProgress(playerHealth);
                 if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
@@ -1065,7 +1060,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         enemy.makeElite();
                         elites++;
                     }
-                    enemy.ascend(ascension);
+                    enemy.ascend(ascension());
                     enemy.setBehaviorTracker(behaviorTracker);
                     enemy.setLayout(layout);
                     // isAwake = false — enemy waits for player to enter trigger radius
@@ -1351,13 +1346,20 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 if (e.justEnraged) {
                     e.justEnraged = false;
                     effects.banner(e.x, e.y - e.radius - 60f, "ENRAGED", Color.rgb(255, 90, 40));
+                    soundManager.play(SoundManager.Sfx.ENRAGE);
                 }
                 if (e.justBlinked) {
                     e.justBlinked = false;
                     effects.burst(e.x, e.y, Color.rgb(140, 190, 255), 26, 10f);
+                    soundManager.play(SoundManager.Sfx.BLINK);
+                }
+                if (e.justWoundUp) {
+                    e.justWoundUp = false;
+                    if (getDistance(player.x, player.y, e.x, e.y) < 900f) soundManager.play(SoundManager.Sfx.WINDUP);
                 }
                 if (e.pendingSummons > 0) {
                     raiseThralls(e, e.pendingSummons, raised);
+                    soundManager.play(SoundManager.Sfx.SUMMON);
                     e.pendingSummons = 0;
                 }
 
@@ -1403,7 +1405,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             thrall.applyFloorScaling(floor);
             thrall.scaleHealth(partyHealth());
             thrall.makeThrall();
-            thrall.ascend(ascension);
+            thrall.ascend(ascension());
             thrall.isAwake = true;
             thrall.setBehaviorTracker(behaviorTracker);
             thrall.setLayout(currentLayout);
@@ -1417,15 +1419,20 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         Projectile p = new Projectile(x, y, dirX, dirY, speed, range, damage, 0.15f, radius, HOSTILE_SHOT_COLOR);
         p.hostile = true;
         projectiles.add(p);
+        soundManager.play(SoundManager.Sfx.ENEMY_SHOT);
     }
 
     /** An enemy strike landing: shows it and hurts this phone's player if they stand inside it. */
     private void resolveStrike(float x, float y, float dirX, float dirY, float reach, float arc,
                                int damage, float knockback, float bodyRadius, boolean slam, long now) {
-        if (slam)
+        if (slam) {
             effects.burst(x, y, Color.rgb(255, 120, 40), 40, 16f); // slam shockwave
-        else if (arc < 180f)
-            effects.slash(x, y, (float) Math.toDegrees(Math.atan2(dirY, dirX)), reach, arc, Color.rgb(255, 90, 60));
+            soundManager.play(SoundManager.Sfx.THUD);
+        } else {
+            if (arc < 180f)
+                effects.slash(x, y, (float) Math.toDegrees(Math.atan2(dirY, dirX)), reach, arc, Color.rgb(255, 90, 60));
+            soundManager.playEnemySwing();
+        }
         if (isInStrike(x, y, dirX, dirY, reach, arc, bodyRadius))
             hitPlayer(damage, x, y, knockback, now);
     }
@@ -1455,6 +1462,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
         damage = Math.max(1, Math.round(damage * (1f - 0.005f * perks[Perk.IRON_SKIN.ordinal()])));
         invulnerableUntil = now + HIT_INVULNERABILITY;
+        lastRegen = now + 5000; // Bulwark pauses for 10s after a hit
         hitStop(60);
         player.flashUntil = now + 150;
         damagePlayer(damage);
@@ -1492,11 +1500,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Interrupts an enemy's wind-up, so a well-timed heavy hit cancels its attack. */
     private void staggerEnemy(Enemy e) {
-        if (e.stagger())
+        if (e.stagger()) {
             effects.number(e.x, e.y - e.radius - 40f, "STAGGER", Color.rgb(120, 200, 255));
+            soundManager.play(SoundManager.Sfx.STAGGER);
+        }
     }
 
-    /** Phantom synergy: the dash cuts every enemy it passes through, once each. */
+    /** Phantom synergy: the dash grazes every enemy it passes through, once each, for half damage. */
     private void phantomCuts(long now) {
         if (phantomDash != dashStartTime) {
             phantomDash = dashStartTime;
@@ -1509,9 +1519,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         || getDistance(player.x, player.y, e.x, e.y) > player.radius + e.radius + 30f) continue;
                 phantomHits.add(e);
                 e.lastHitTime = now;
-                boolean crit = Math.random() < critChance();
-                int damage = Math.max(1, Math.round(w.damage * damageMultiplier() * (crit ? 2f : 1f)));
-                damageEnemy(e, damage, crit, dashDX * 12f, dashDY * 12f, false);
+                int damage = Math.max(1, Math.round(w.damage * damageMultiplier() * 0.5f));
+                damageEnemy(e, damage, false, dashDX * 12f, dashDY * 12f, false);
                 effects.slash(e.x, e.y, (float) Math.toDegrees(Math.atan2(dashDY, dashDX)), e.radius + 30f, 40f,
                         Color.rgb(160, 112, 232));
             }
@@ -1533,7 +1542,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         effects.banner(player.x, player.y - player.radius - 50f, "PERFECT", blue);
         effects.burst(player.x, player.y, blue, 24, 9f);
         effects.slash(player.x, player.y, 0f, player.radius + 90f, 180f, blue);
-        soundManager.playDash();
+        soundManager.play(SoundManager.Sfx.PERFECT_DODGE);
         slowMo(600, 0.35f);
     }
 
@@ -1542,11 +1551,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * the host applies it to the real enemy.
      */
     private void damageEnemy(Enemy e, int damage, boolean crit, float pushX, float pushY, boolean stagger) {
-        soundManager.playHitEnemy();
+        if (crit) soundManager.play(SoundManager.Sfx.CRIT);
+        else soundManager.playHitEnemy();
         statsManager.onDamageGiven(damage);
         showEnemyHit(e, damage, crit);
         if (crit || stagger) hitStop(crit ? 70 : 45);
-        if (crit && has(Synergy.MIDAS)) spawnGoldCoins(e.x, e.y, 1);
+        if (crit && has(Synergy.MIDAS) && Math.random() < 0.25) spawnGoldCoins(e.x, e.y, 1);
         if (isGuest()) {
             e.predictHit(damage);
             if (e.isDead) deadEnemyAt.put(e.id, System.currentTimeMillis());
@@ -1630,7 +1640,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 invulnerableUntil = System.currentTimeMillis() + 1500;
                 effects.banner(player.x, player.y - player.radius - 50f, "SECOND WIND", Color.rgb(244, 215, 122));
                 effects.burst(player.x, player.y, Color.rgb(244, 215, 122), 40, 12f);
+                soundManager.play(SoundManager.Sfx.REVIVE);
             }
+            if (playerHealth <= 0) soundManager.play(SoundManager.Sfx.PLAYER_DEATH);
 
             if (playerHealth <= 0 && coop != null) {
                 // Co-op: the run goes on; a fallen player revives on the next floor
@@ -1655,6 +1667,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void showArmorBreakPopup(String slotName) {
         android.view.ViewGroup root = (android.view.ViewGroup) findViewById(R.id.game_root);
         if (root == null) return;
+        soundManager.play(SoundManager.Sfx.ARMOR_BREAK);
 
         TextView popup = new TextView(this);
         popup.setText(slotName + " ARMOR BROKEN");
@@ -1761,6 +1774,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     statsManager.onEnemyKilled();
                     effects.burst(e.x, e.y, e.getColor(), e.type == Enemy.Type.BOSS ? 60 : 16, 9f);
                     hitStop(50);
+                    soundManager.play(SoundManager.Sfx.ENEMY_DEATH);
                     if (e.mimic) dropLootChest(e.x, e.y);
                     // Keys: elites, mimics and bosses always drop one, others now and then
                     if (e.elite || e.mimic || e.type == Enemy.Type.BOSS
@@ -1876,13 +1890,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         lastSpinTime = now;
         Weapon w = player.getWeapon();
         boolean storm = has(Synergy.BLADESTORM);
-        float reach = player.radius + (storm ? 300f : 200f);
-        int damage = Math.max(1, Math.round(Math.max(w.damage, 6) * damageMultiplier() * (storm ? 1f : 0.5f)));
+        float reach = player.radius + (storm ? 250f : 200f);
+        int damage = Math.max(1, Math.round(Math.max(w.damage, 6) * damageMultiplier() * (storm ? 0.75f : 0.5f)));
         int color = Color.rgb(140, 200, 255);
         player.startSpin(reach, color);
         effects.burst(player.x, player.y, color, 10, 6f);
         effects.slash(player.x, player.y, 0f, reach, 180f, color);
-        soundManager.playSwingMelee();
+        soundManager.play(SoundManager.Sfx.SPIN);
         invulnerableUntil = Math.max(invulnerableUntil, now + 450);
 
         synchronized (enemies) {
@@ -2339,6 +2353,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             updateGoldHUD();
 
             purchaseItem(item);
+            soundManager.play(SoundManager.Sfx.PURCHASE);
 
             boughtIndices.add(itemIndex);
             // Redraw every card: items that were affordable may not be any more
@@ -2536,6 +2551,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             if (playerHealth <= 0) {
                 // Fallen players rejoin at half health
                 player.resetDeathAnimation();
+                soundManager.play(SoundManager.Sfx.REVIVE);
                 playerHealth = maxHealth / 2;
                 secondWindUsed = false;
                 playerHealthBar.setProgress(playerHealth);
@@ -2658,11 +2674,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         slowMo(1300, 0.25f);
         gameDisplay.punchZoom(1300, 0.18f);
         if (camera != null) camera.startShake(400, 16f);
-        // Beating floor 10 or deeper opens the next Ascension
-        if (!oneOffRun() && userId != null && floorManager.getCurrentFloor() >= 10 && ascension < MAX_ASCENSION) {
-            dbManager.unlockAscension(userId, ascension + 1);
-            effects.banner(player.x, player.y - player.radius - 110f, "ASCENSION " + (ascension + 1) + " UNLOCKED",
+        // Every 10th floor's boss raises the Ascension for the floors after it
+        if (floorManager.getCurrentFloor() % 10 == 0) {
+            effects.banner(player.x, player.y - player.radius - 110f, "ASCENSION " + (ascension() + 1),
                     Color.rgb(176, 96, 255));
+            soundManager.play(SoundManager.Sfx.ENRAGE);
         }
         spawnTreasureChests(activeBoss.x, activeBoss.y);
     }
@@ -2691,7 +2707,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         activeBoss.applyBossScaling(
                 (bossData != null ? bossData.bossHpMultiplier : BatchGenerator.bossHpMultiplier(floor)) * partyHealth(),
                 bossData != null ? bossData.bossDmgMultiplier : BatchGenerator.bossDmgMultiplier(floor));
-        activeBoss.ascend(ascension);
+        activeBoss.ascend(ascension());
         activeBoss.setBehaviorTracker(behaviorTracker);
         activeBoss.setLayout(currentLayout);
 
@@ -2861,7 +2877,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         mimic.applyFloorScaling(floorManager.getCurrentFloor());
         mimic.scaleHealth(1.5f * partyHealth());
         mimic.makeMimic();
-        mimic.ascend(ascension);
+        mimic.ascend(ascension());
         mimic.isAwake = true;
         mimic.setBehaviorTracker(behaviorTracker);
         mimic.setLayout(currentLayout);
@@ -2875,7 +2891,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         effects.burst(x, y, Color.rgb(120, 84, 48), 30, 12f);
         effects.banner(x, y - 90f, "MIMIC!", Color.rgb(224, 72, 72));
         if (camera != null) camera.startShake(250, 12f);
-        soundManager.playChestOpen();
+        soundManager.play(SoundManager.Sfx.MIMIC);
     }
 
     /** Returns all shop items for the 5-floor range that contains the given floor. */
@@ -2905,7 +2921,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     effects.burst(chest.x, chest.y + 20, Color.rgb(120, 100, 80), 10, 5f); // dust
                     effects.slash(chest.x, chest.y + 10, 0f, 60f, 180f, gold);
                     if (camera != null) camera.startShake(150, 6f);
-                    soundManager.playCoinPickup();
+                    soundManager.play(SoundManager.Sfx.THUD);
                 }
                 if (chest.opened) continue;
                 if (chest.mimic) {
@@ -2935,6 +2951,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     /** A key for vault gates; every phone gets its own. */
     private void gainKey(float x, float y) {
         keys++;
+        soundManager.play(SoundManager.Sfx.KEY);
         effects.banner(x, y - 70f, "+1 KEY", Color.rgb(244, 215, 122));
         updateKeysHUD();
     }
@@ -2959,6 +2976,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             if (now - lastLockedHint > 2500) {
                 lastLockedHint = now;
                 effects.banner(gx, gy - 60f, "NEEDS A KEY", Color.rgb(184, 172, 145));
+                soundManager.play(SoundManager.Sfx.GATE_LOCKED);
             }
             return;
         }
@@ -2968,11 +2986,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         effects.burst(gx, gy, gold, 30, 10f);
         effects.banner(gx, gy - 60f, "VAULT OPEN", gold);
         if (camera != null) camera.startShake(200, 8f);
-        soundManager.playChestOpen();
+        soundManager.play(SoundManager.Sfx.VAULT_UNLOCK);
     }
 
     // ─── DIALOGS ──────────────────────────────────────────────────────────────
     private void showMenuDialog() {
+        soundManager.play(SoundManager.Sfx.CLICK);
         if (coop == null) isGamePaused = true;
 
         final Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
@@ -2986,6 +3005,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         MaterialButton btnSettings = dialog.findViewById(R.id.btn_settings);
 
         btnResume.setOnClickListener(v -> {
+            soundManager.play(SoundManager.Sfx.CLICK);
             isGamePaused = false;
             hideSystemUI();
             dialog.dismiss();
@@ -3016,6 +3036,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void setupFilterTab(Dialog dialog, int viewId, String filter) {
         TextView tab = dialog.findViewById(viewId);
         tab.setOnClickListener(v -> {
+            soundManager.play(SoundManager.Sfx.CLICK);
             currentInventoryFilter = filter;
             inventoryPage = 0;
 
@@ -3173,7 +3194,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void earnGold(int amount) {
         playerGold += amount;
         updateGoldHUD();
-        soundManager.playCoinPickup();
+        soundManager.play(SoundManager.Sfx.SELL);
     }
 
     /** Co-op: a Gift button that hands the item (one, for a potion stack) to a teammate picked from a list. */
@@ -3246,6 +3267,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Pick-one card: options in rows of four, the current one (if any) lit gold. */
     private void showChoice(String title, String[] options, int selected, java.util.function.IntConsumer onPick) {
+        soundManager.play(SoundManager.Sfx.CLICK);
         Dialog picker = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         picker.setContentView(R.layout.dialog_choice);
         if (picker.getWindow() != null)
@@ -3300,6 +3322,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     private void showInventoryDialog() {
+        soundManager.play(SoundManager.Sfx.CLICK);
         if (coop == null) isGamePaused = true;
         currentInventoryFilter = "ALL";
 
@@ -3310,6 +3333,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
 
         dialog.findViewById(R.id.btn_close_inventory).setOnClickListener(v -> {
+            soundManager.play(SoundManager.Sfx.CLICK);
             dialog.dismiss();
             isGamePaused = false;
             hideSystemUI();
@@ -3321,10 +3345,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         inventoryPage = 0;
         dialog.findViewById(R.id.btn_page_prev).setOnClickListener(v -> {
+            soundManager.play(SoundManager.Sfx.CLICK);
             inventoryPage--;
             populateInventoryList(dialog);
         });
         dialog.findViewById(R.id.btn_page_next).setOnClickListener(v -> {
+            soundManager.play(SoundManager.Sfx.CLICK);
             inventoryPage++;
             populateInventoryList(dialog);
         });
@@ -3467,6 +3493,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         btn.setOnClickListener(v -> {
             player.equipWeapon(weapon);
+            soundManager.play(SoundManager.Sfx.EQUIP);
             refreshAttackUI();
             updateEquippedDisplay(parentDialog);
             populateInventoryList(parentDialog);
@@ -3619,6 +3646,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         int bonus = armor.worn ? 0 : armor.defense;
         armor.worn = true;
         equippedArmor.put(armor.slot, armor);
+        soundManager.play(SoundManager.Sfx.EQUIP);
         // Inline max recalculation to avoid intermediate UI flash from recalculateMaxArmor()
         maxArmor = 0;
         for (Armor a : equippedArmor.values()) maxArmor += a.defense;
@@ -3658,6 +3686,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void useConsumable(ConsumableStack stack, Dialog inventoryDialog) {
         if (playerHealth <= 0) return; // a fallen co-op player waits for the next floor
         ShopItem item = stack.item;
+        soundManager.play(SoundManager.Sfx.POTION);
         if ("heal".equals(item.effect)) {
             int newHp = Math.min(maxHealth, playerHealth + item.effectValue);
             effects.number(player.x, player.y - player.radius, "+" + (newHp - playerHealth),
@@ -3732,7 +3761,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         // Souls: the part of a lost life that carries over to the Soul Altar; paid when the card closes
         int[] souls = {Math.round(Altar.souls(statsManager.getRunFloors(), statsManager.getRunKills(),
-                statsManager.getRunBosses()) * (1f + 0.25f * ascension))};
+                statsManager.getRunBosses()) * (1f + 0.25f * ascension()))};
         TextView txtSouls = dialog.findViewById(R.id.txt_souls);
         txtSouls.setText("+" + souls[0] + " Souls");
         Runnable payout = () -> { if (userId != null) dbManager.addSouls(userId, souls[0]); };
@@ -3818,6 +3847,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
         invulnerableUntil = System.currentTimeMillis() + 2000;
         effects.burst(player.x, player.y, Color.rgb(244, 215, 122), 40, 12f);
+        soundManager.play(SoundManager.Sfx.REVIVE);
         effects.banner(player.x, player.y - player.radius - 50f, "REVIVED", Color.rgb(244, 215, 122));
         isGamePaused = false;
         hideSystemUI();
@@ -3928,12 +3958,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return perks[p.ordinal()];
     }
 
-    /** Two perks at two stacks each awaken a synergy with an effect of its own. */
+    /** Two perks at three stacks each awaken a synergy with an effect of its own. */
     private enum Synergy {
-        BLADESTORM("Bladestorm", Perk.WHIRLWIND, Perk.MIGHT, "Spin hits at full power and reaches further"),
-        PHANTOM("Phantom", Perk.SHADOW_STEP, Perk.KEEN_EYE, "Dashing through enemies cuts them"),
-        BULWARK("Bulwark", Perk.IRON_SKIN, Perk.VIGOR, "Regenerate 1 HP every 2 seconds"),
-        MIDAS("Midas Touch", Perk.GREED, Perk.QUICK_HANDS, "Critical hits shake loose a coin");
+        BLADESTORM("Bladestorm", Perk.WHIRLWIND, Perk.MIGHT, "Spin hits harder and reaches a little further"),
+        PHANTOM("Phantom", Perk.SHADOW_STEP, Perk.KEEN_EYE, "Dashing through enemies grazes them"),
+        BULWARK("Bulwark", Perk.IRON_SKIN, Perk.VIGOR, "Out of combat, regenerate 1 HP every 5 seconds up to half health"),
+        MIDAS("Midas Touch", Perk.GREED, Perk.QUICK_HANDS, "Critical hits sometimes shake loose a coin");
 
         final String title, effect;
         final Perk a, b;
@@ -3952,7 +3982,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     private boolean has(Synergy s) {
-        return stacks(s.a) >= 2 && stacks(s.b) >= 2;
+        return stacks(s.a) >= 3 && stacks(s.b) >= 3;
     }
 
     /** Player damage multiplier: +1% per Might, +2% per Altar Strength; levels give perks, not raw stats. */
@@ -4025,6 +4055,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             effects.banner(player.x, player.y - player.radius - 50f, "LEVEL " + playerLevel,
                     Color.rgb(255, 215, 0));
             effects.burst(player.x, player.y, Color.rgb(255, 215, 0), 30, 10f);
+            soundManager.play(SoundManager.Sfx.LEVEL_UP);
             pendingPerks += gained;
             updateLevelBadge();
         }
@@ -4097,13 +4128,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         ((TextView) card.findViewById(R.id.perk_desc)).setText(perk.describe(1));
         Synergy synergy = Synergy.of(perk);
         String hint = synergy == null || has(synergy) ? ""
-                : "\n" + synergy.title + ": 2x " + synergy.a.title + " + 2x " + synergy.b.title;
+                : "\n" + synergy.title + ": 3x " + synergy.a.title + " + 3x " + synergy.b.title;
         ((TextView) card.findViewById(R.id.perk_owned)).setText("Owned: " + stacks(perk) + hint);
     }
 
     /** Turns a card edge-on, swaps its back for its front, then turns it face up. */
     private void flipCard(View card, Runnable done) {
-        soundManager.playSwingMelee();
+        soundManager.play(SoundManager.Sfx.CARD_FLIP);
         card.animate().rotationY(90f).setStartDelay(0).setDuration(170)
                 .setInterpolator(new android.view.animation.AccelerateInterpolator())
                 .withEndAction(() -> {
@@ -4140,7 +4171,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     Color.rgb(244, 215, 122));
             effects.burst(player.x, player.y, Color.rgb(244, 215, 122), 40, 12f);
         }
-        soundManager.playCoinPickup();
+        soundManager.play(SoundManager.Sfx.PERK_PICK);
         if (coop == null) isGamePaused = false;
         hideSystemUI();
     }
@@ -4462,7 +4493,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         save.put("perks",                perkStacks);
         save.put("pendingPerks",         pendingPerks);
         save.put("keys",                 keys);
-        save.put("ascension",            ascension);
         dbManager.updateGameSave(gameId, save);
     }
 
@@ -4527,10 +4557,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 pendingPerks = data.get("pendingPerks") != null
                         ? ((Number) data.get("pendingPerks")).intValue() : 0;
                 keys = data.get("keys") != null ? ((Number) data.get("keys")).intValue() : 0;
-                if (data.get("ascension") instanceof Number) {
-                    ascension = ((Number) data.get("ascension")).intValue();
-                    ascensionFromSave = true;
-                }
                 updateKeysHUD();
                 applySpeedPerk();
                 updateLevelBadge();

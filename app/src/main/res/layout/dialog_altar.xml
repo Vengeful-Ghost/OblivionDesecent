@@ -81,48 +81,6 @@
             android:textSize="@dimen/text_caption"
             tools:ignore="HardcodedText"/>
 
-        <!-- Ascension picker for new solo games; shown once the first level is unlocked -->
-        <LinearLayout
-            android:id="@+id/altar_ascension_row"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/txt_ascension"
-                style="@style/OD.Text.Label"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:textColor="@color/arcane_glow"
-                android:text="ASCENSION 0 / 0"
-                tools:ignore="HardcodedText"/>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_ascension_down"
-                style="@style/OD.Button.Secondary"
-                android:layout_width="@dimen/touch_min"
-                android:layout_height="@dimen/touch_min"
-                android:minWidth="0dp"
-                android:paddingHorizontal="0dp"
-                android:text="-"
-                tools:ignore="HardcodedText"/>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_ascension_up"
-                style="@style/OD.Button.Secondary"
-                android:layout_width="@dimen/touch_min"
-                android:layout_height="@dimen/touch_min"
-                android:layout_marginStart="@dimen/space_sm"
-                android:minWidth="0dp"
-                android:paddingHorizontal="0dp"
-                android:text="+"
-                tools:ignore="HardcodedText"/>
-
-        </LinearLayout>
-
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"

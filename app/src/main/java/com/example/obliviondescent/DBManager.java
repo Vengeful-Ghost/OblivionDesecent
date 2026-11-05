@@ -264,23 +264,6 @@ public class DBManager {
                 });
     }
 
-    /** Raises the highest Ascension the player may pick; never lowers it. */
-    public void unlockAscension(String userId, int level) {
-        DocumentReference ref = db.collection("players").document(userId);
-        db.runTransaction(transaction -> {
-            Long unlocked = transaction.get(ref).getLong("ascensionUnlocked");
-            if (unlocked == null || unlocked < level) transaction.update(ref, "ascensionUnlocked", level);
-            return null;
-        }).addOnFailureListener(e -> Log.e(TAG, "unlockAscension failed", e));
-    }
-
-    /** The Ascension that new solo games start at. */
-    public void setAscension(String userId, int level) {
-        db.collection("players").document(userId)
-                .update("ascension", level)
-                .addOnFailureListener(e -> Log.e(TAG, "setAscension failed", e));
-    }
-
     /** Adds Souls earned by a run (Soul Altar currency). */
     public void addSouls(String userId, int souls) {
         if (souls <= 0) return;

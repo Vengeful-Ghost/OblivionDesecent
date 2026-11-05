@@ -205,6 +205,33 @@ public class SoundManager {
     private int idChestOpen;
     private int idCoinPickup;
 
+    /** The synthesised effects (tools/sfx/make-sfx.mjs), each with its volume and minimum gap between plays. */
+    public enum Sfx {
+        SPIN(R.raw.spin_attack, 1f, 0), PERFECT_DODGE(R.raw.perfect_dodge, 1f, 0),
+        LEVEL_UP(R.raw.level_up, 0.9f, 0), PERK_PICK(R.raw.perk_pick, 0.9f, 0), CARD_FLIP(R.raw.card_flip, 0.7f, 0),
+        KEY(R.raw.key_pickup, 0.9f, 0), VAULT_UNLOCK(R.raw.vault_unlock, 1f, 0), GATE_LOCKED(R.raw.gate_locked, 0.5f, 400),
+        MIMIC(R.raw.mimic_awaken, 1f, 0), POTION(R.raw.potion_drink, 0.8f, 0), PURCHASE(R.raw.purchase, 0.9f, 0),
+        SELL(R.raw.sell, 0.8f, 0), EQUIP(R.raw.equip, 0.8f, 0), CLICK(R.raw.ui_click, 0.5f, 40),
+        CRIT(R.raw.crit_hit, 0.9f, 80), ENEMY_DEATH(R.raw.enemy_death, 0.7f, 60), STAGGER(R.raw.stagger, 0.7f, 100),
+        WINDUP(R.raw.enemy_windup, 0.3f, 150), ENEMY_SHOT(R.raw.enemy_shot, 0.35f, 90),
+        ARMOR_BREAK(R.raw.armor_break, 1f, 0), PLAYER_DEATH(R.raw.player_death, 1f, 0), REVIVE(R.raw.revive, 1f, 0),
+        SUMMON(R.raw.summon, 0.8f, 300), ENRAGE(R.raw.enrage, 1f, 0), BLINK(R.raw.blink, 0.8f, 100),
+        THUD(R.raw.thud, 0.9f, 80);
+
+        final int res;
+        final float volume;
+        final long gapMs;
+
+        Sfx(int res, float volume, long gapMs) {
+            this.res = res;
+            this.volume = volume;
+            this.gapMs = gapMs;
+        }
+    }
+
+    private final int[] sfxIds = new int[Sfx.values().length];
+    private final long[] sfxLast = new long[Sfx.values().length];
+
     // Track long sounds to avoid overlap
     private int portalEnterStream = -1;
     private int shopEnterStream   = -1;
@@ -224,7 +251,7 @@ public class SoundManager {
                 .build();
 
         soundPool = new SoundPool.Builder()
-                .setMaxStreams(8)
+                .setMaxStreams(12)
                 .setAudioAttributes(attrs)
                 .build();
 
@@ -246,6 +273,7 @@ public class SoundManager {
         idBossSpawn      = soundPool.load(context, R.raw.boss_spawn,      1);
         idChestOpen      = soundPool.load(context, R.raw.chest_open,      1);
         idCoinPickup     = soundPool.load(context, R.raw.coin_pickup,     1);
+        for (Sfx s : Sfx.values()) sfxIds[s.ordinal()] = soundPool.load(context, s.res, 1);
 
         ready = true;
     }
@@ -330,14 +358,31 @@ public class SoundManager {
         play(idCoinPickup, 0.7f); // slightly quieter — plays frequently
     }
 
+    /** An enemy's melee strike: the player's swing, lower and quieter. */
+    public void playEnemySwing() {
+        play(idSwingMelee, 0.5f, 0.75f);
+    }
+
+    /** Plays one synthesised effect, skipped if the same one played within its gap. */
+    public void play(Sfx sfx) {
+        long now = System.currentTimeMillis();
+        if (sfx.gapMs > 0 && now - sfxLast[sfx.ordinal()] < sfx.gapMs) return;
+        sfxLast[sfx.ordinal()] = now;
+        play(sfxIds[sfx.ordinal()], sfx.volume);
+    }
+
     // ============================================================
     // INTERNAL
     // ============================================================
 
     private void play(int soundId, float relativeVolume) {
+        play(soundId, relativeVolume, 1.0f);
+    }
+
+    private void play(int soundId, float relativeVolume, float rate) {
         if (!ready || soundId == 0) return;
         float v = volume * relativeVolume;
-        soundPool.play(soundId, v, v, 0, 0, 1.0f);
+        soundPool.play(soundId, v, v, 0, 0, rate);
     }
 
     /**

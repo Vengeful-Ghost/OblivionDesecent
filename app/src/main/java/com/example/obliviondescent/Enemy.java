@@ -114,6 +114,7 @@ public class Enemy {
     public float strikeArc = 180f;                  // half-angle in degrees; 180 hits all around
     public final List<Shot> pendingShots = new ArrayList<>();
     public boolean justEnraged = false;
+    public boolean justWoundUp = false; // GameActivity plays the warning sound, then resets it
     private static final float STRIKE_ARC = 60f;  // melee cone half-angle
 
     // Boss move set
@@ -569,6 +570,7 @@ public class Enemy {
     }
 
     private void enterState(BehaviorState newState, long duration) {
+        if (newState == BehaviorState.WINDUP) justWoundUp = true;
         behaviorState = newState;
         stateStartTime = System.currentTimeMillis();
         stateDuration  = duration;
@@ -887,11 +889,11 @@ public class Enemy {
         health = maxHealth;
     }
 
-    /** Ascension: +15% health and +10% damage per level; call after every other scaling. */
+    /** Ascension: +50% health and +25% damage per level; call after every other scaling. */
     public void ascend(int level) {
         if (level <= 0) return;
-        scaleHealth(1f + 0.15f * level);
-        dmgMultiplier *= 1f + 0.10f * level;
+        scaleHealth(1f + 0.5f * level);
+        dmgMultiplier *= 1f + 0.25f * level;
     }
 
     /* ============================================================
