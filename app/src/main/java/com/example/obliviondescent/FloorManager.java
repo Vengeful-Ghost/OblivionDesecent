@@ -79,7 +79,9 @@ public class FloorManager {
      * not at some distant world coordinate they'd never find.
      */
     public void onEnemyKilled(float playerX, float playerY) {
-        killsThisFloor++;
+        // Extra foes (cursed chest elites, enemies cut down when the portal opens) can push the
+        // count past the target; it stops there so the HUD never reads 9 / 7
+        if (killsThisFloor < killsRequired) killsThisFloor++;
 
         if (killsThisFloor >= killsRequired && !portalOpen) {
             if (bossFloor && !bossSpawned) {
@@ -217,6 +219,8 @@ public class FloorManager {
     public int getKillsRequired()   { return killsRequired; }
     public boolean isBossFloor()    { return bossFloor; }
     public boolean shouldSpawnBoss(){ return bossSpawned && !bossDefeated; }
+    /** Boss floor with its kills done: the portal waits on the boss, not on more kills. */
+    public boolean isAwaitingBoss() { return bossFloor && bossSpawned && !bossDefeated && !portalOpen; }
     public boolean isBossDefeated() { return bossDefeated; }
     public boolean isShopPortalOpen() { return shopPortalOpen; }
     public float   getShopPortalX()   { return shopPortalX; }

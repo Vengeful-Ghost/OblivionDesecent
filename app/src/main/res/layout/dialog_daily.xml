@@ -9,8 +9,8 @@
     android:focusable="true"
     android:padding="@dimen/space_md">
 
-    <!-- Only scrolls if the card is taller than the screen -->
-    <ScrollView
+    <!-- Shrinks the card to fit the screen; scrolls only if it is far too tall -->
+    <com.example.obliviondescent.FitScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
@@ -153,6 +153,6 @@
 
     </FrameLayout>
 
-    </ScrollView>
+    </com.example.obliviondescent.FitScrollView>
 
 </FrameLayout>

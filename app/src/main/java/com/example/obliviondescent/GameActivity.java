@@ -2161,8 +2161,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             for (Enemy e : enemies) {
                 if (e.isDead && !e.counted) {
                     e.counted = true;
-                    // Guests copy the host's count; mimics and thralls don't count at all
-                    if (!isGuest() && !e.mimic && !e.summoned) floorManager.onEnemyKilled(player.x, player.y);
+                    // Guests copy the host's count; only the floor's initial enemies count (not mimics,
+                    // thralls, room-event spawns or the boss)
+                    if (!isGuest() && !e.mimic && !e.summoned && !e.extra) floorManager.onEnemyKilled(player.x, player.y);
                     statsManager.onEnemyKilled();
                     if (!e.summoned) quest(Quests.KILLS, 1);
                     bestiary(e, true);
@@ -3003,6 +3004,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     // One icon + label + value line, reusing the stats screen row
     private void addStatRow(LinearLayout box, int icon, String label, CharSequence value) {
         View row = getLayoutInflater().inflate(R.layout.item_stat_row, box, false);
+        // Item cards stack up to 7 of these; tighter rows keep the card within a landscape screen
+        int padV = Math.round(6 * getResources().getDisplayMetrics().density);
+        row.setPadding(row.getPaddingLeft(), padV, row.getPaddingRight(), padV);
         android.widget.ImageView iconView = row.findViewById(R.id.stat_icon);
         iconView.setImageResource(icon);
         iconView.setVisibility(View.VISIBLE);
@@ -3106,15 +3110,16 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * Refreshes the floor number and kill-progress HUD display.
      */
     private void updateFloorHUD() {
-        String shown = floorManager.getCurrentFloor() + ":" + floorManager.getKillsThisFloor()
-                + ":" + floorManager.getKillsRequired();
+        // On a boss floor the kills only wake the guardian; say so instead of a full counter that opens nothing
+        boolean awaitingBoss = floorManager.isAwaitingBoss();
+        String progress = awaitingBoss ? "Slay the guardian"
+                : floorManager.getKillsThisFloor() + " / " + floorManager.getKillsRequired();
+        String shown = floorManager.getCurrentFloor() + ":" + progress;
         if (shown.equals(floorHudShown)) return;
         floorHudShown = shown;
         runOnUiThread(() -> {
             txtFloorNumber.setText("Floor " + floorManager.getCurrentFloor());
-            txtKillProgress.setText(
-                    floorManager.getKillsThisFloor() + " / " + floorManager.getKillsRequired()
-            );
+            txtKillProgress.setText(progress);
         });
     }
 
@@ -3135,6 +3140,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         ensureBatchFor(floorManager.getCurrentFloor() + 1);
 
         spawnBoss();
+        // It sleeps in its arena until someone walks in, so tell the player where the portal went
+        if (activeBoss != null && !activeBoss.isAwake)
+            effects.banner(player.x, player.y - player.radius - 50f, "THE GUARDIAN AWAITS", currentBossColor);
     }
 
     /** Boss name, title and colour for this floor, from the AI batch when it has one. */
@@ -3197,6 +3205,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         activeBoss = new Enemy(spawnX, spawnY, Enemy.Type.BOSS);
         activeBoss.setBossKind(currentBossKind);
+        activeBoss.extra = true; // its death opens the portal; it isn't one of the floor's kills
         // It waits in its arena until a player walks in, instead of wandering to the door
         activeBoss.arena = currentLayout != null ? currentLayout.bossRoom : null;
         activeBoss.isAwake = activeBoss.arena == null;
@@ -4959,6 +4968,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     elite.applyTemplate(pool.get(elite.templateIndex));
                 }
                 elite.makeElite();
+                elite.extra = true; // an event spawn: doesn't count toward the floor's kills
                 elite.ascend(ascension());
                 elite.isAwake = true;
                 elite.setBehaviorTracker(behaviorTracker);

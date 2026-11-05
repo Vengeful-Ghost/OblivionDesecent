@@ -10,7 +10,7 @@
     tools:ignore="HardcodedText">
 
     <!-- Only scrolls if there are more friends than fit -->
-    <ScrollView
+    <com.example.obliviondescent.FitScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
@@ -88,6 +88,6 @@
 
     </FrameLayout>
 
-    </ScrollView>
+    </com.example.obliviondescent.FitScrollView>
 
 </FrameLayout>

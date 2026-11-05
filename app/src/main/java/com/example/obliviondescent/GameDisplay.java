@@ -623,17 +623,26 @@ public class GameDisplay extends View {
         canvas.restore();
     }
 
-    /** With two or fewer enemies left, edge arrows point at the ones off screen. */
+    /**
+     * With two or fewer enemies left, edge arrows point at the ones off screen. A boss waiting
+     * in its arena always gets one, since the portal won't open until it falls.
+     */
     private void drawEnemyArrows(Canvas canvas) {
         if (enemies == null || floorManager == null || floorManager.isPortalOpen()) return;
         synchronized (enemies) {
-            int left = 0;
-            for (Enemy e : enemies) if (!e.isDead && !e.summoned && !e.mimic) left++;
-            if (left == 0 || left > 2) return;
+            int left = floorEnemiesLeft();
             for (Enemy e : enemies) {
-                if (!e.isDead && !e.summoned && !e.mimic) drawEdgeArrow(canvas, e.x, e.y);
+                if (e.isDead || e.summoned || e.mimic) continue;
+                if (e.type == Enemy.Type.BOSS || (!e.extra && left <= 2)) drawEdgeArrow(canvas, e.x, e.y);
             }
         }
+    }
+
+    /** The floor's own enemies still standing; room-event spawns and the boss aren't part of the count. */
+    private int floorEnemiesLeft() {
+        int left = 0;
+        for (Enemy e : enemies) if (!e.isDead && !e.summoned && !e.mimic && !e.extra) left++;
+        return left;
     }
 
     /** Pulsing red triangle on the screen edge, pointing at an off-screen world point. */
@@ -1076,13 +1085,13 @@ public class GameDisplay extends View {
         }
         if (enemies == null || floorManager.isPortalOpen()) return;
         synchronized (enemies) {
-            int left = 0;
-            for (Enemy e : enemies) if (!e.isDead && !e.summoned && !e.mimic) left++;
-            if (left == 0 || left > 2) return;
+            int left = floorEnemiesLeft();
             float pulse = 0.75f + 0.25f * (float) Math.sin(System.currentTimeMillis() / 250.0);
             mapEnemyPaint.setAlpha((int) (255 * pulse));
             for (Enemy e : enemies) {
-                if (!e.isDead && !e.summoned && !e.mimic)
+                if (e.isDead || e.summoned || e.mimic) continue;
+                // The last two of the floor's enemies, and a boss waiting in its arena
+                if (e.type == Enemy.Type.BOSS || (!e.extra && left <= 2))
                     canvas.drawCircle(ox + e.x * scale, oy + e.y * scale, dot * pulse, mapEnemyPaint);
             }
         }
