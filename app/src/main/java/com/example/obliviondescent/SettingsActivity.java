@@ -97,6 +97,10 @@ public class SettingsActivity extends AppCompatActivity {
 
         btnBack.setOnClickListener(v -> finish());
 
+        View btnPrivacy = findViewById(R.id.btn_privacy_options);
+        btnPrivacy.setVisibility(Ads.privacyOptionsRequired(this) ? View.VISIBLE : View.GONE);
+        btnPrivacy.setOnClickListener(v -> Ads.showPrivacyOptions(this));
+
         MaterialButton btnSignOut = findViewById(R.id.btn_sign_out);
         btnSignOut.setOnClickListener(v -> {
             new android.app.AlertDialog.Builder(this, R.style.AlertDialogDark)

@@ -92,6 +92,143 @@ public class MenuActivity extends AppCompatActivity {
                 startActivity(new Intent(this, LobbyActivity.class)));
 
         findViewById(R.id.btn_tutorial).setOnClickListener(v -> showTutorial());
+        findViewById(R.id.btn_altar).setOnClickListener(v -> showAltar());
+        findViewById(R.id.btn_daily).setOnClickListener(v -> showDaily());
+        Ads.gatherConsent(this);
+    }
+
+    /** Soul Altar: spend Souls from past runs on permanent upgrades. */
+    private void showAltar() {
+        if (userId == null) return;
+        Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dialog.setContentView(R.layout.dialog_altar);
+        if (dialog.getWindow() != null)
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dialog.findViewById(R.id.btn_close_altar).setOnClickListener(v -> dialog.dismiss());
+        dbManager.loadPlayerStats(userId, data -> renderAltar(dialog, data));
+        dialog.show();
+        hideSystemUIOnWindow(dialog);
+    }
+
+    /** Fills the altar with one cell per upgrade, two per row, from the player document. */
+    private void renderAltar(Dialog dialog, java.util.Map<String, Object> data) {
+        if (!dialog.isShowing()) return;
+        Object soulsValue = data != null ? data.get("souls") : null;
+        long souls = soulsValue instanceof Number ? ((Number) soulsValue).longValue() : 0;
+        int[] ranks = Altar.ranks(data);
+        ((TextView) dialog.findViewById(R.id.txt_altar_souls)).setText(String.valueOf(souls));
+
+        // Ascension: chosen here, used by the next new solo game
+        int unlocked = data != null && data.get("ascensionUnlocked") instanceof Number
+                ? ((Number) data.get("ascensionUnlocked")).intValue() : 0;
+        int chosen = data != null && data.get("ascension") instanceof Number
+                ? Math.min(unlocked, ((Number) data.get("ascension")).intValue()) : 0;
+        dialog.findViewById(R.id.altar_ascension_row).setVisibility(unlocked > 0 ? View.VISIBLE : View.GONE);
+        ((TextView) dialog.findViewById(R.id.txt_ascension)).setText("ASCENSION " + chosen + " / " + unlocked
+                + "   enemies +" + (15 * chosen) + "% HP, Souls +" + (25 * chosen) + "%");
+        dialog.findViewById(R.id.btn_ascension_down).setOnClickListener(v -> setAscension(dialog, data, chosen - 1, unlocked));
+        dialog.findViewById(R.id.btn_ascension_up).setOnClickListener(v -> setAscension(dialog, data, chosen + 1, unlocked));
+
+        LinearLayout grid = dialog.findViewById(R.id.altar_grid);
+        grid.removeAllViews();
+        int gap = getResources().getDimensionPixelSize(R.dimen.space_xs);
+        LinearLayout row = null;
+        for (Altar a : Altar.values()) {
+            if (a.ordinal() % 2 == 0) {
+                row = new LinearLayout(this);
+                grid.addView(row);
+            }
+            View cell = getLayoutInflater().inflate(R.layout.item_altar_cell, row, false);
+            int rank = ranks[a.ordinal()];
+            ((android.widget.ImageView) cell.findViewById(R.id.altar_icon)).setImageResource(a.icon);
+            ((TextView) cell.findViewById(R.id.altar_title)).setText(a.title);
+            ((TextView) cell.findViewById(R.id.altar_effect)).setText(a.effect);
+            ((TextView) cell.findViewById(R.id.altar_rank)).setText("Rank " + rank + " / " + a.maxRank);
+            MaterialButton buy = cell.findViewById(R.id.altar_buy);
+            if (rank >= a.maxRank) {
+                buy.setText("MAX");
+                buy.setEnabled(false);
+            } else {
+                int cost = a.cost(rank);
+                boolean afford = souls >= cost;
+                buy.setText(String.valueOf(cost));
+                buy.setEnabled(afford);
+                buy.setAlpha(afford ? 1f : 0.4f);
+                buy.setOnClickListener(v -> {
+                    buy.setEnabled(false);
+                    dbManager.buyAltarRank(userId, a.name(), rank, cost, ok ->
+                            dbManager.loadPlayerStats(userId, fresh -> renderAltar(dialog, fresh)));
+                });
+            }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+            lp.setMargins(gap, gap, gap, gap);
+            row.addView(cell, lp);
+        }
+    }
+
+    /** Saves the picked Ascension (clamped to what's unlocked) and redraws the altar. */
+    private void setAscension(Dialog dialog, java.util.Map<String, Object> data, int level, int unlocked) {
+        level = Math.max(0, Math.min(unlocked, level));
+        dbManager.setAscension(userId, level);
+        java.util.Map<String, Object> updated = new java.util.HashMap<>(data);
+        updated.put("ascension", level);
+        renderAltar(dialog, updated);
+    }
+
+    /** Today's Daily Run: the same seeded dungeon for everyone, with today's top five. */
+    private void showDaily() {
+        if (userId == null) return;
+        java.util.TimeZone utc = java.util.TimeZone.getTimeZone("UTC");
+        java.text.SimpleDateFormat dayFormat = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US);
+        java.text.SimpleDateFormat shownFormat = new java.text.SimpleDateFormat("d MMM", java.util.Locale.US);
+        dayFormat.setTimeZone(utc);
+        shownFormat.setTimeZone(utc);
+        java.util.Date now = new java.util.Date();
+        String day = dayFormat.format(now);
+
+        Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dialog.setContentView(R.layout.dialog_daily);
+        if (dialog.getWindow() != null)
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dialog.findViewById(R.id.btn_close_daily).setOnClickListener(v -> dialog.dismiss());
+        ((TextView) dialog.findViewById(R.id.txt_daily_date)).setText(shownFormat.format(now));
+        dialog.findViewById(R.id.btn_daily_play).setOnClickListener(v -> {
+            dialog.dismiss();
+            SoundManager.stopMenuMusic();
+            Intent intent = new Intent(this, GameActivity.class);
+            intent.putExtra(GameActivity.EXTRA_DAILY_SEED, Long.parseLong(day) * 1_000_003L);
+            intent.putExtra(GameActivity.EXTRA_DAILY_DAY, day);
+            startActivity(intent);
+        });
+
+        dbManager.loadDailyTop(day, rows -> {
+            if (!dialog.isShowing()) return;
+            LinearLayout board = dialog.findViewById(R.id.daily_board);
+            for (int i = 0; i < rows.size(); i++) {
+                java.util.Map<String, Object> r = rows.get(i);
+                if (userId.equals(r.get("uid")))
+                    ((TextView) dialog.findViewById(R.id.txt_daily_best)).setText("Your best: #" + (i + 1)
+                            + ", floor " + r.get("floor"));
+                if (i >= 5) continue;
+                View line = getLayoutInflater().inflate(R.layout.item_stat_row, board, false);
+                ((TextView) line.findViewById(R.id.stat_label)).setText((i + 1) + ".  " + r.get("name"));
+                ((TextView) line.findViewById(R.id.stat_value)).setText("F" + r.get("floor") + "  " + r.get("kills") + " kills");
+                board.addView(line);
+            }
+            if (rows.isEmpty()) {
+                View line = getLayoutInflater().inflate(R.layout.item_stat_row, board, false);
+                ((TextView) line.findViewById(R.id.stat_label)).setText("No runs yet. Be the first!");
+                ((TextView) line.findViewById(R.id.stat_value)).setText("");
+                board.addView(line);
+            }
+        });
+        dialog.show();
+        hideSystemUIOnWindow(dialog);
+    }
+
+    private void hideSystemUIOnWindow(Dialog dialog) {
+        if (dialog.getWindow() != null) dialog.getWindow().getDecorView().setSystemUiVisibility(
+                getWindow().getDecorView().getSystemUiVisibility());
     }
 
     // Icon of each tutorial page
@@ -123,9 +260,10 @@ public class MenuActivity extends AppCompatActivity {
                     + "A gold gate seals a vault. Walk up to it with a key to open it: vaults hold the best loot. "
                     + "Keys drop from elites, mimics and now and then other enemies."},
             {"Grow Stronger",
-                    "Kills give XP. When you level up, tap the glowing badge and pick a perk.\n\n"
-                    + "Tap \u2665 to drink a healing potion. Armor absorbs hits first but wears down.\n\n"
-                    + "Your run saves at the start of every floor, and if you fall you can respawn there."}
+                    "Kills give XP. When you level up, tap the glowing badge and pick a perk. "
+                    + "Two perks at 2 stacks each awaken a synergy.\n\n"
+                    + "Every run earns Souls, even the ones you lose: spend them at the Soul Altar on lasting upgrades.\n\n"
+                    + "Your run saves at the start of every floor. Try the Daily Run to race everyone on the same dungeon."}
     };
 
     /** New-player guide: one card, Back / Next flip its page in place. */
@@ -176,8 +314,7 @@ public class MenuActivity extends AppCompatActivity {
         });
         render.run();
         dialog.show();
-        if (dialog.getWindow() != null) dialog.getWindow().getDecorView().setSystemUiVisibility(
-                getWindow().getDecorView().getSystemUiVisibility());
+        hideSystemUIOnWindow(dialog);
     }
 
     /**

@@ -15,5 +15,6 @@
 local.properties
 /.claude/worktrees/
 ci-debug.keystore
+node_modules/
 # Local reference material, not part of the game
 /Claude-Code-Game-Studios-main/

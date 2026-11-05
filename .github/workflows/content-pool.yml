@@ -1,0 +1,27 @@
+name: Content Pool
+
+# Refreshes the shared Gemini content every player downloads, so AI cost stays flat no matter
+# how many people play. Needs repo secrets GEMINI_API_KEY and FIREBASE_SERVICE_ACCOUNT.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Firebase Admin
+        run: npm install --no-save --prefix tools/content-pool firebase-admin
+
+      - name: Generate
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node tools/content-pool/generate.mjs

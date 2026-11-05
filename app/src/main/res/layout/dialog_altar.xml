@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Soul Altar: permanent upgrades bought with Souls; the upgrade cells are added in Java -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_overlay"
+    android:clickable="true"
+    android:focusable="true"
+    android:padding="@dimen/space_md">
+
+    <!-- Only scrolls if the card is taller than the screen -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:overScrollMode="ifContentScrolls">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+    <LinearLayout
+        style="@style/OD.Card"
+        android:layout_width="@dimen/card_width_lg"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:animation="@anim/dialog_open">
+
+        <!-- Header: close, title, Souls owned -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <ImageButton
+                android:id="@+id/btn_close_altar"
+                style="@style/OD.CloseButton"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
+                android:layout_gravity="start|center_vertical"
+                android:contentDescription="Close"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                style="@style/OD.Text.Title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="SOUL ALTAR"
+                android:textSize="@dimen/text_heading"
+                android:shadowColor="@color/gold_glow"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="10"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/txt_altar_souls"
+                style="@style/OD.Text.Value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="@dimen/space_sm"
+                android:text="..."
+                android:textColor="@color/arcane_glow"
+                android:drawableStart="@drawable/ic_level"
+                android:drawablePadding="@dimen/space_xs"
+                android:drawableTint="@color/arcane_glow"
+                tools:ignore="HardcodedText"/>
+
+        </FrameLayout>
+
+        <TextView
+            style="@style/OD.Text.Caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Every run earns Souls, even the ones you lose."
+            android:textSize="@dimen/text_caption"
+            tools:ignore="HardcodedText"/>
+
+        <!-- Ascension picker for new solo games; shown once the first level is unlocked -->
+        <LinearLayout
+            android:id="@+id/altar_ascension_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/txt_ascension"
+                style="@style/OD.Text.Label"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/arcane_glow"
+                android:text="ASCENSION 0 / 0"
+                tools:ignore="HardcodedText"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_ascension_down"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
+                android:minWidth="0dp"
+                android:paddingHorizontal="0dp"
+                android:text="-"
+                tools:ignore="HardcodedText"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_ascension_up"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
+                android:layout_marginStart="@dimen/space_sm"
+                android:minWidth="0dp"
+                android:paddingHorizontal="0dp"
+                android:text="+"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@drawable/divider_gold"
+            android:layout_marginTop="@dimen/space_xs"
+            android:layout_marginBottom="@dimen/space_xs"/>
+
+        <LinearLayout
+            android:id="@+id/altar_grid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"/>
+
+    </LinearLayout>
+
+    </FrameLayout>
+
+    </ScrollView>
+
+</FrameLayout>

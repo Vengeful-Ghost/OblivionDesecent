@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_overlay"
@@ -84,6 +85,20 @@
             android:drawableTint="@color/gold_glow"
             android:gravity="center"/>
 
+        <TextView
+            android:id="@+id/txt_souls"
+            style="@style/OD.Text.Value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            android:text="+0 Souls"
+            android:textColor="@color/arcane_glow"
+            android:drawableStart="@drawable/ic_level"
+            android:drawablePadding="@dimen/space_sm"
+            android:drawableTint="@color/arcane_glow"
+            android:gravity="center"
+            tools:ignore="HardcodedText"/>
+
     </LinearLayout>
 
     <View
@@ -127,6 +142,18 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- Opt-in rewarded ads; shown only when an ad is loaded -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_ad_revive"
+            style="@style/OD.Button"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/touch_min"
+            android:text="Revive here (ad)"
+            android:textSize="@dimen/text_small"
+            android:layout_marginBottom="@dimen/space_md"
+            android:visibility="gone"
+            tools:ignore="HardcodedText"/>
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_respawn"
             style="@style/OD.Button.Danger"
@@ -144,6 +171,18 @@
             android:text="MAIN MENU"
             android:textSize="@dimen/text_small"
             android:textColor="@color/bone_dim"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_ad_souls"
+            style="@style/OD.Button.Secondary"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/touch_min"
+            android:layout_marginTop="@dimen/space_md"
+            android:text="x2 Souls (ad)"
+            android:textSize="@dimen/text_small"
+            android:textColor="@color/arcane_glow"
+            android:visibility="gone"
+            tools:ignore="HardcodedText"/>
 
     </LinearLayout>
 

@@ -17,6 +17,11 @@
         android:theme="@style/Theme.OblivionDescent"
         tools:targetApi="31">
 
+        <!-- AdMob app ID; test or live ads are picked by the ad unit in build.gradle.kts -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-7562431805276354~4438598483"/>
+
         <activity
             android:name=".MainActivity"
             android:screenOrientation="sensorLandscape"

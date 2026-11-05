@@ -103,11 +103,45 @@
         android:letterSpacing="0.18"
         android:animation="@anim/fade_in_delayed"
         app:layout_constraintTop_toBottomOf="@id/GameTitleFront"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/menu_extras"
         app:layout_constraintStart_toStartOf="@+id/GameTitleFront"
         app:layout_constraintEnd_toEndOf="@+id/GameTitleFront"
         android:layout_marginTop="@dimen/space_sm"
         tools:ignore="HardcodedText" />
+
+    <!-- Meta progression and the daily challenge, under the title -->
+    <LinearLayout
+        android:id="@+id/menu_extras"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="@dimen/space_lg"
+        app:layout_constraintTop_toBottomOf="@id/MainMenu"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="@+id/GameTitleFront"
+        app:layout_constraintEnd_toEndOf="@+id/GameTitleFront">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_altar"
+            style="@style/OD.Button.Secondary"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/touch_min"
+            android:layout_marginEnd="@dimen/space_md"
+            android:text="Soul Altar"
+            app:icon="@drawable/ic_level"
+            tools:ignore="HardcodedText" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_daily"
+            style="@style/OD.Button.Secondary"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/touch_min"
+            android:text="Daily Run"
+            app:icon="@drawable/ic_trophy"
+            tools:ignore="HardcodedText" />
+
+    </LinearLayout>
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_new_game"

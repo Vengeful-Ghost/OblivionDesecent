@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One Soul Altar upgrade: icon, name, effect and rank, with a buy button priced in Souls -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="@dimen/space_sm"
+    android:background="@drawable/dialog_bg">
+
+    <ImageView
+        android:id="@+id/altar_icon"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_marginEnd="@dimen/space_sm"
+        android:importantForAccessibility="no"/>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/altar_title"
+            style="@style/OD.Text.Label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/text_small"
+            android:textColor="@color/gold_bright"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="Vitality"
+            tools:ignore="HardcodedText"/>
+
+        <TextView
+            android:id="@+id/altar_effect"
+            style="@style/OD.Text.Caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/text_caption"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:text="+5 max HP"
+            tools:ignore="HardcodedText"/>
+
+        <TextView
+            android:id="@+id/altar_rank"
+            style="@style/OD.Text.Label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/bone_muted"
+            android:text="Rank 0 / 10"
+            tools:ignore="HardcodedText"/>
+
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/altar_buy"
+        style="@style/OD.Button.Secondary"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/touch_min"
+        android:minWidth="72dp"
+        android:layout_marginStart="@dimen/space_xs"
+        android:paddingHorizontal="@dimen/space_sm"
+        android:textSize="@dimen/text_small"
+        android:text="20"
+        tools:ignore="HardcodedText"/>
+
+</LinearLayout>

@@ -36,6 +36,8 @@ import java.util.Map;
  *   follows/{userId}           — { following: [userId, ...] }
  *   lobbies/{code}             — co-op party: hostId, status, seed, players { userId: { name, slot } }
  *   invites/{id}               — party invite: from, fromName, to, code, createdAt
+ *   daily/{yyyyMMdd}/scores/{userId} — best daily run: name, floor, kills, seconds, score
+ *   content_pool/r{rangeStart} — pooled AI content (variants), written only by CI
  */
 public class DBManager {
 
@@ -220,6 +222,94 @@ public class DBManager {
         }).addOnFailureListener(e -> Log.e(TAG, "updateHighestFloor failed", e));
     }
 
+    /**
+     * Daily run: keeps each player's best result of the day (floor first, kills break ties).
+     */
+    public void submitDailyScore(String day, String userId, String name, int floor, int kills, long seconds) {
+        long score = floor * 1000L + Math.min(kills, 999);
+        DocumentReference ref = db.collection("daily").document(day).collection("scores").document(userId);
+        db.runTransaction(transaction -> {
+            Long best = transaction.get(ref).getLong("score");
+            if (best != null && best >= score) return null;
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("name", name);
+            entry.put("floor", floor);
+            entry.put("kills", kills);
+            entry.put("seconds", seconds);
+            entry.put("score", score);
+            transaction.set(ref, entry);
+            return null;
+        }).addOnFailureListener(e -> Log.e(TAG, "submitDailyScore failed", e));
+    }
+
+    /** The day's ten best daily runs, best first (each map also holds "uid"). */
+    public void loadDailyTop(String day, OnGameSlotsLoadedListener listener) {
+        db.collection("daily").document(day).collection("scores")
+                .orderBy("score", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(10)
+                .get()
+                .addOnSuccessListener(query -> {
+                    List<Map<String, Object>> rows = new ArrayList<>();
+                    for (DocumentSnapshot doc : query.getDocuments()) {
+                        Map<String, Object> row = doc.getData();
+                        if (row == null) continue;
+                        row.put("uid", doc.getId());
+                        rows.add(row);
+                    }
+                    listener.onLoaded(rows);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "loadDailyTop failed", e);
+                    listener.onLoaded(new ArrayList<>());
+                });
+    }
+
+    /** Raises the highest Ascension the player may pick; never lowers it. */
+    public void unlockAscension(String userId, int level) {
+        DocumentReference ref = db.collection("players").document(userId);
+        db.runTransaction(transaction -> {
+            Long unlocked = transaction.get(ref).getLong("ascensionUnlocked");
+            if (unlocked == null || unlocked < level) transaction.update(ref, "ascensionUnlocked", level);
+            return null;
+        }).addOnFailureListener(e -> Log.e(TAG, "unlockAscension failed", e));
+    }
+
+    /** The Ascension that new solo games start at. */
+    public void setAscension(String userId, int level) {
+        db.collection("players").document(userId)
+                .update("ascension", level)
+                .addOnFailureListener(e -> Log.e(TAG, "setAscension failed", e));
+    }
+
+    /** Adds Souls earned by a run (Soul Altar currency). */
+    public void addSouls(String userId, int souls) {
+        if (souls <= 0) return;
+        db.collection("players").document(userId)
+                .update("souls", FieldValue.increment(souls))
+                .addOnFailureListener(e -> Log.e(TAG, "addSouls failed", e));
+    }
+
+    /**
+     * Buys the next Altar rank: succeeds only if the player still has that rank and enough Souls,
+     * so a double tap or a second phone can't buy twice.
+     */
+    public void buyAltarRank(String userId, String key, int rank, int cost, OnBooleanResultListener listener) {
+        com.google.firebase.firestore.DocumentReference ref = db.collection("players").document(userId);
+        db.runTransaction(transaction -> {
+            DocumentSnapshot snap = transaction.get(ref);
+            Long souls = snap.getLong("souls");
+            Object owned = snap.get(FieldPath.of("altar", key));
+            int current = owned instanceof Number ? ((Number) owned).intValue() : 0;
+            if (souls == null || souls < cost || current != rank) return false;
+            transaction.update(ref, "souls", souls - cost, FieldPath.of("altar", key), rank + 1);
+            return true;
+        }).addOnSuccessListener(listener::onResult)
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "buyAltarRank failed", e);
+                    listener.onResult(false);
+                });
+    }
+
     /* ============================================================
        GAMES — save slots (max 3 per player)
        ============================================================ */
@@ -244,7 +334,7 @@ public class DBManager {
         save.put("currentFloor",       1);
         save.put("health",             100);
         save.put("armorValue",         0);     // Current numeric armor HP
-        save.put("level",              1);     // max HP = 100 + 10 per level above 1
+        save.put("level",              1);
         save.put("xp",                 0);
 
         // Equipped items — null means default (Fists / no armor)

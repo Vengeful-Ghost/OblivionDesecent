@@ -352,6 +352,18 @@
                     android:text="Sign Out"
                     tools:ignore="HardcodedText"/>
 
+                <!-- Shown only where the law lets players change their ad consent later -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_privacy_options"
+                    style="@style/OD.Button.Secondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/touch_min"
+                    android:layout_marginTop="@dimen/space_sm"
+                    android:text="Ad Privacy"
+                    android:textSize="@dimen/text_small"
+                    android:visibility="gone"
+                    tools:ignore="HardcodedText"/>
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_back"
                     style="@style/OD.Button"

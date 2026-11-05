@@ -22,12 +22,6 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # local.properties is gitignored, so rebuild it from repo secrets
-      - name: Create local.properties
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> local.properties
-
       # Same signing key on every run, so the phone installs new builds as updates
       - name: Prepare signing key
         run: |

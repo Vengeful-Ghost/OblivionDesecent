@@ -854,12 +854,12 @@ public class Enemy {
     /**
      * Called by GameActivity after construction.
      * Scales HP and damage based on current floor.
-     * Stats grow 8% per floor, so floor 5 enemies are ~40% stronger than floor 1.
+     * HP grows 30% per floor to keep pace with shop weapons (6 + 2.5/floor damage); damage grows 10%.
      * We don't scale speed — that's handled by type selection per floor instead.
      */
     public void applyFloorScaling(int floor) {
-        float multiplier = 1f + (floor - 1) * 0.08f;
-        maxHealth = (int)(maxHealth * multiplier);
+        float multiplier = 1f + (floor - 1) * 0.10f;
+        maxHealth = (int)(maxHealth * (1f + (floor - 1) * 0.30f));
         health = maxHealth;
         // Scale weapon damage through a direct field write
         weapon = new Weapon(
@@ -885,6 +885,13 @@ public class Enemy {
     public void scaleHealth(float factor) {
         maxHealth = Math.max(1, Math.round(maxHealth * factor));
         health = maxHealth;
+    }
+
+    /** Ascension: +15% health and +10% damage per level; call after every other scaling. */
+    public void ascend(int level) {
+        if (level <= 0) return;
+        scaleHealth(1f + 0.15f * level);
+        dmgMultiplier *= 1f + 0.10f * level;
     }
 
     /* ============================================================

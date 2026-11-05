@@ -1,18 +1,15 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     id("com.google.gms.google-services")
 }
 
-val localProps = Properties()
-val localPropsFile = rootProject.file("local.properties")
-if (localPropsFile.exists()) {
-    localProps.load(localPropsFile.inputStream())
-}
-
 // CI run number, so every pushed build is a newer version than the one installed
 val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toInt() ?: 1
+
+// Real ads only in builds made with -PliveAds (the Play Store upload); every other build, including
+// the CI APK on your own phone, gets Google's test ads so tapping them can't get AdMob banned
+val rewardedAdUnit = if (project.hasProperty("liveAds")) "ca-app-pub-7562431805276354/5397079056"
+    else "ca-app-pub-3940256099942544/5224354917"
 
 android {
     namespace = "com.example.obliviondescent"
@@ -26,12 +23,7 @@ android {
         versionName = "1.0.$buildNumber"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        buildConfigField("String", "GEMINI_API_KEY",
-            "\"${localProps.getProperty("GEMINI_API_KEY") ?: ""}\"")
-
-        buildConfigField("String", "CLAUDE_API_KEY",
-            "\"${localProps.getProperty("CLAUDE_API_KEY") ?: ""}\"")
+        buildConfigField("String", "REWARDED_AD_UNIT", "\"$rewardedAdUnit\"")
     }
 
     signingConfigs {
@@ -81,6 +73,7 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("com.google.android.gms:play-services-ads:24.9.0")
+    implementation("com.google.android.ump:user-messaging-platform:3.2.0")
 }

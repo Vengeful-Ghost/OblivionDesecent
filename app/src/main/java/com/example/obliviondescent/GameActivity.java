@@ -160,6 +160,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private long lastPerfectDodge = 0;
     private volatile long perfectCritUntil = 0; // hits are sure crits until then
 
+    // Synergies: Phantom cuts each enemy once per dash; Bulwark regenerates on a timer
+    private final Set<Enemy> phantomHits = new HashSet<>();
+    private long phantomDash = 0, lastRegen = 0;
+
     // Hit-stop freezes the world for a few frames; slow-mo runs it at a fraction of real speed
     private volatile long hitStopUntil = 0, slowMoUntil = 0;
     private volatile float slowMoScale = 1f;
@@ -182,6 +186,21 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private int keys = 0;
     private TextView txtKeys;
     private long lastLockedHint = 0;
+
+    // Soul Altar ranks by Altar ordinal, loaded from the player document
+    private int[] altar = new int[Altar.values().length];
+    private boolean secondWindUsed = false;
+    private boolean adReviveUsed = false; // the ad revive works once a life
+
+    // Daily run (0 = not one): seeded, one life, best score per day on a leaderboard
+    static final String EXTRA_DAILY_SEED = "daily_seed", EXTRA_DAILY_DAY = "daily_day";
+    private long dailySeed = 0;
+    private String dailyDay;
+
+    // Ascension (solo saves only): tougher enemies and more Souls; a save keeps the level it started with
+    static final int MAX_ASCENSION = 10;
+    private int ascension = 0;
+    private boolean ascensionFromSave = false;
 
     private Enemy activeBoss = null;
     private boolean bossSpawnHandled = false;
@@ -329,6 +348,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             partySize = Math.max(1, getIntent().getIntExtra(CoopSession.EXTRA_PARTY, 1));
             player.setColor(CoopSession.SLOT_COLORS[coop.slot & 3]);
         }
+        // Daily run: today's seeded dungeon for everyone, one life, no save
+        dailySeed = getIntent().getLongExtra(EXTRA_DAILY_SEED, 0L);
+        dailyDay = getIntent().getStringExtra(EXTRA_DAILY_DAY);
 
         floorManager = new FloorManager();
 
@@ -362,8 +384,16 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         int slotIndex = getIntent().getIntExtra("slot_index", 1);
 
         statsManager = new StatsManager(dbManager, userId, gameId);
+        Ads.preload(this);
+        if (userId != null)
+            dbManager.loadPlayerStats(userId, data -> runOnUiThread(() -> {
+                applyAltar(Altar.ranks(data));
+                Object chosen = data != null ? data.get("ascension") : null;
+                if (!oneOffRun() && !ascensionFromSave && chosen instanceof Number)
+                    ascension = Math.min(MAX_ASCENSION, ((Number) chosen).intValue());
+            }));
 
-        if (gameId == null && userId != null && coop == null) {
+        if (gameId == null && userId != null && !oneOffRun()) {
             // New game — create Firestore save, get back the ID
             dbManager.createGameSave(userId, slotIndex, newId -> {
                 gameId = newId;
@@ -447,11 +477,21 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return 1f + 0.6f * (partySize - 1);
     }
 
-    /** Layout for the current floor; co-op seeds it so every phone builds the same dungeon. */
+    /** Layout for the current floor; co-op and daily runs seed it so everyone gets the same dungeon. */
     private FloorLayout generateLayout() {
-        long seed = coop != null ? coop.seed * 31 + floorManager.getCurrentFloor() : System.nanoTime();
+        long seed = runSeed() != 0 ? runSeed() * 31 + floorManager.getCurrentFloor() : System.nanoTime();
         return FloorLayout.generate(floorManager.getCurrentFloor(), floorManager.isBossFloor(),
                 floorManager.getKillsRequired(), seed);
+    }
+
+    /** Shared seed of a co-op or daily run; 0 for a solo save. */
+    private long runSeed() {
+        return coop != null ? coop.seed : dailySeed;
+    }
+
+    /** Co-op and daily runs are one-offs: no save file, no stored items, no solo content cache. */
+    private boolean oneOffRun() {
+        return coop != null || dailySeed != 0;
     }
 
     /* ============================================================
@@ -805,11 +845,22 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (isDashing) {
             player.update(dashDX * (DASH_POWER / player.speed), dashDY * (DASH_POWER / player.speed));
             effects.trail(player.x, player.y, Color.argb(160, 90, 140, 255));
+            if (has(Synergy.PHANTOM)) phantomCuts(now);
             if (now - dashStartTime > DASH_DURATION) {
                 isDashing = false;
             }
         } else if (playerHealth > 0) {
             player.update(joystick.getDX(), joystick.getDY());
+        }
+        // Bulwark: slow regeneration while alive and hurt
+        if (has(Synergy.BULWARK) && now - lastRegen >= 2000 && playerHealth > 0 && playerHealth < maxHealth) {
+            lastRegen = now;
+            runOnUiThread(() -> {
+                if (playerHealth <= 0 || playerHealth >= maxHealth) return;
+                playerHealth++;
+                playerHealthBar.setProgress(playerHealth);
+                if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
+            });
         }
         if (currentLayout != null && !inShopRoom) {
             float[] resolved = currentLayout.resolveCollision(
@@ -1009,11 +1060,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         enemy.applyTemplate(pool.get(enemy.templateIndex));
                     }
                     enemy.scaleHealth(partyHealth());
-                    // Rare elites from floor 6, at most two a floor
-                    if (floor >= 6 && elites < 2 && Math.random() < 0.05) {
+                    // Elites from floor 4, at most two a floor
+                    if (floor >= 4 && elites < 2 && Math.random() < 0.08) {
                         enemy.makeElite();
                         elites++;
                     }
+                    enemy.ascend(ascension);
                     enemy.setBehaviorTracker(behaviorTracker);
                     enemy.setLayout(layout);
                     // isAwake = false — enemy waits for player to enter trigger radius
@@ -1200,7 +1252,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /**
-     * Fires a Gemini batch call for the given range.
+     * Fetches the range's content from the shared pool.
      * Caches result keyed by rangeStart. After 3 failed attempts the range uses offline content.
      */
     private void generateBatch(int rangeStart, int rangeEnd) {
@@ -1209,7 +1261,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (!batchesInFlight.add(rangeStart)) return;
 
         // Check local storage first — avoids a network call on load game. Co-op never touches the solo cache.
-        String cachedJson = coop == null ? BatchGenerator.loadRawBatch(this, rangeStart) : null;
+        String cachedJson = !oneOffRun() ? BatchGenerator.loadRawBatch(this, rangeStart) : null;
         if (cachedJson != null) {
             try {
                 BatchResult result = batchGenerator.parseBatch(cachedJson, rangeStart, rangeEnd);
@@ -1226,10 +1278,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         Log.d("Batch", "=== Firing batch for floors " + rangeStart + "-" + rangeEnd + " ===");
 
-        batchGenerator.generateBatch(rangeStart, rangeEnd, new BatchGenerator.OnBatchGeneratedListener() {
+        batchGenerator.fetchBatch(rangeStart, rangeEnd, fallbackSeed(rangeStart), new BatchGenerator.OnBatchGeneratedListener() {
             @Override
             public void onSuccess(BatchResult result, String jsonText) {
-                if (coop == null) BatchGenerator.saveRawBatch(GameActivity.this, rangeStart, jsonText);
+                if (!oneOffRun()) BatchGenerator.saveRawBatch(GameActivity.this, rangeStart, jsonText);
                 batchCache.put(rangeStart, result);
                 batchesInFlight.remove(rangeStart);
                 if (coop != null) coop.publishBatch(rangeStart, jsonText);
@@ -1239,7 +1291,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
             @Override
             public void onFailure(String error) {
-                int failures = batchFailures.merge(rangeStart, 1, Integer::sum);
+                int failures = BatchGenerator.MISSING.equals(error) ? 3 : batchFailures.merge(rangeStart, 1, Integer::sum);
                 Log.e("Batch", "=== Batch " + rangeStart + " failed (" + failures + "): " + error + " ===");
                 if (failures >= 3) {
                     // Stop waiting on the AI: offline content keeps enemies, shops and bosses coming
@@ -1254,7 +1306,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     });
                     return;
                 }
-                // Called on an OkHttp thread, which has no Looper of its own
+                // Firestore calls back on the main thread; the delay keeps retries spaced out
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                     batchesInFlight.remove(rangeStart);
                     if (threadsRunning) generateBatch(rangeStart, rangeEnd);
@@ -1263,9 +1315,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         });
     }
 
-    /** Offline content seed: shared in co-op so every phone builds the same fallback. */
+    /** Offline content and pool pick seed: shared in co-op and daily runs so everyone gets the same. */
     private long fallbackSeed(int rangeStart) {
-        return coop != null ? coop.seed + rangeStart : System.nanoTime();
+        return runSeed() != 0 ? runSeed() + rangeStart : System.nanoTime();
     }
 
     /**
@@ -1351,6 +1403,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             thrall.applyFloorScaling(floor);
             thrall.scaleHealth(partyHealth());
             thrall.makeThrall();
+            thrall.ascend(ascension);
             thrall.isAwake = true;
             thrall.setBehaviorTracker(behaviorTracker);
             thrall.setLayout(currentLayout);
@@ -1443,6 +1496,28 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             effects.number(e.x, e.y - e.radius - 40f, "STAGGER", Color.rgb(120, 200, 255));
     }
 
+    /** Phantom synergy: the dash cuts every enemy it passes through, once each. */
+    private void phantomCuts(long now) {
+        if (phantomDash != dashStartTime) {
+            phantomDash = dashStartTime;
+            phantomHits.clear();
+        }
+        Weapon w = player.getWeapon();
+        synchronized (enemies) {
+            for (Enemy e : enemies) {
+                if (e.isDead || phantomHits.contains(e)
+                        || getDistance(player.x, player.y, e.x, e.y) > player.radius + e.radius + 30f) continue;
+                phantomHits.add(e);
+                e.lastHitTime = now;
+                boolean crit = Math.random() < critChance();
+                int damage = Math.max(1, Math.round(w.damage * damageMultiplier() * (crit ? 2f : 1f)));
+                damageEnemy(e, damage, crit, dashDX * 12f, dashDY * 12f, false);
+                effects.slash(e.x, e.y, (float) Math.toDegrees(Math.atan2(dashDY, dashDX)), e.radius + 30f, 40f,
+                        Color.rgb(160, 112, 232));
+            }
+        }
+    }
+
     /**
      * An attack met the player in the first moments of a dash: time slows, the dash recharges
      * and the next hits are sure crits.
@@ -1471,6 +1546,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         statsManager.onDamageGiven(damage);
         showEnemyHit(e, damage, crit);
         if (crit || stagger) hitStop(crit ? 70 : 45);
+        if (crit && has(Synergy.MIDAS)) spawnGoldCoins(e.x, e.y, 1);
         if (isGuest()) {
             e.predictHit(damage);
             if (e.isDead) deadEnemyAt.put(e.id, System.currentTimeMillis());
@@ -1547,6 +1623,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 }
             }
 
+            if (playerHealth <= 0 && altar[Altar.SECOND_WIND.ordinal()] > 0 && !secondWindUsed) {
+                secondWindUsed = true;
+                playerHealth = Math.max(1, maxHealth * 3 / 10);
+                animateHealthBar(0, playerHealth);
+                invulnerableUntil = System.currentTimeMillis() + 1500;
+                effects.banner(player.x, player.y - player.radius - 50f, "SECOND WIND", Color.rgb(244, 215, 122));
+                effects.burst(player.x, player.y, Color.rgb(244, 215, 122), 40, 12f);
+            }
+
             if (playerHealth <= 0 && coop != null) {
                 // Co-op: the run goes on; a fallen player revives on the next floor
                 player.startDeathAnimation();
@@ -1561,7 +1646,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 statsManager.onPlayerDied();
                 statsManager.flush();
                 new android.os.Handler().postDelayed(
-                        () -> showGameOverDialog(null), player.getDeathDuration());
+                        () -> showGameOverDialog(dailySeed != 0 ? "Your daily run ends here." : null),
+                        player.getDeathDuration());
             }
         });
     }
@@ -1645,6 +1731,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         effects.clear();
         invulnerableUntil = 0;
         statsManager.startRun();
+        secondWindUsed = false;
+        adReviveUsed = false;
 
         runOnUiThread(() -> {
             playerHealthBar.setProgress(playerHealth);
@@ -1675,12 +1763,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     hitStop(50);
                     if (e.mimic) dropLootChest(e.x, e.y);
                     // Keys: elites, mimics and bosses always drop one, others now and then
-                    if (e.elite || e.mimic || e.type == Enemy.Type.BOSS || (!e.summoned && Math.random() < 0.04))
+                    if (e.elite || e.mimic || e.type == Enemy.Type.BOSS
+                            || (!e.summoned && Math.random() < 0.04 + 0.02 * altar[Altar.LOCKSMITH.ordinal()]))
                         gainKey(e.x, e.y);
                     if (!e.noGoldDrop)
                     {
                         spawnGoldCoins(e.x, e.y, withGreed(e.getGoldDrop()));
-                        int xp = e.getXpReward();
+                        int xp = Math.round(e.getXpReward() * (1f + 0.05f * altar[Altar.WISDOM.ordinal()]));
                         runOnUiThread(() -> gainXp(xp));
                     }
                 }
@@ -1786,8 +1875,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void spinAttack(long now) {
         lastSpinTime = now;
         Weapon w = player.getWeapon();
-        float reach = player.radius + 200f;
-        int damage = Math.max(1, Math.round(Math.max(w.damage, 6) * damageMultiplier() * 0.5f));
+        boolean storm = has(Synergy.BLADESTORM);
+        float reach = player.radius + (storm ? 300f : 200f);
+        int damage = Math.max(1, Math.round(Math.max(w.damage, 6) * damageMultiplier() * (storm ? 1f : 0.5f)));
         int color = Color.rgb(140, 200, 255);
         player.startSpin(reach, color);
         effects.burst(player.x, player.y, color, 10, 6f);
@@ -2096,8 +2186,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             case WEAPON:
                 Weapon weapon = item.toWeapon();
                 weapons.add(weapon);
-                // Co-op items only last for the run, so they're never stored
-                if (coop == null) dbManager.saveGeneratedWeapon(
+                // Co-op and daily items only last for the run, so they're never stored
+                if (!oneOffRun()) dbManager.saveGeneratedWeapon(
                         userId != null ? userId : "unknown",
                         item.name, item.damage, item.range, item.cooldown,
                         item.rarity, item.color, item.knockback, item.isProjectile,
@@ -2114,7 +2204,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             case ARMOR:
                 Armor armor = item.toArmor();
                 inventoryArmors.add(armor);
-                if (coop == null) dbManager.saveGeneratedArmor(
+                if (!oneOffRun()) dbManager.saveGeneratedArmor(
                         userId != null ? userId : "unknown",
                         item.name, item.defense, item.maxDurability,
                         item.rarity, item.color, item.armorSlot,
@@ -2447,6 +2537,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 // Fallen players rejoin at half health
                 player.resetDeathAnimation();
                 playerHealth = maxHealth / 2;
+                secondWindUsed = false;
                 playerHealthBar.setProgress(playerHealth);
                 if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
             }
@@ -2567,6 +2658,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         slowMo(1300, 0.25f);
         gameDisplay.punchZoom(1300, 0.18f);
         if (camera != null) camera.startShake(400, 16f);
+        // Beating floor 10 or deeper opens the next Ascension
+        if (!oneOffRun() && userId != null && floorManager.getCurrentFloor() >= 10 && ascension < MAX_ASCENSION) {
+            dbManager.unlockAscension(userId, ascension + 1);
+            effects.banner(player.x, player.y - player.radius - 110f, "ASCENSION " + (ascension + 1) + " UNLOCKED",
+                    Color.rgb(176, 96, 255));
+        }
         spawnTreasureChests(activeBoss.x, activeBoss.y);
     }
 
@@ -2594,6 +2691,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         activeBoss.applyBossScaling(
                 (bossData != null ? bossData.bossHpMultiplier : BatchGenerator.bossHpMultiplier(floor)) * partyHealth(),
                 bossData != null ? bossData.bossDmgMultiplier : BatchGenerator.bossDmgMultiplier(floor));
+        activeBoss.ascend(ascension);
         activeBoss.setBehaviorTracker(behaviorTracker);
         activeBoss.setLayout(currentLayout);
 
@@ -2763,6 +2861,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         mimic.applyFloorScaling(floorManager.getCurrentFloor());
         mimic.scaleHealth(1.5f * partyHealth());
         mimic.makeMimic();
+        mimic.ascend(ascension);
         mimic.isAwake = true;
         mimic.setBehaviorTracker(behaviorTracker);
         mimic.setLayout(currentLayout);
@@ -2985,6 +3084,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         boolean perkTab = f.equals("PERKS");
         if (perkTab) {
             for (Perk p : Perk.values()) if (stacks(p) > 0) items.add(p);
+            for (Synergy s : Synergy.values()) if (has(s)) items.add(s);
         }
         // Stable sorts, so ties keep the weapons / armor / consumables order; perks keep theirs
         if (!perkTab && inventorySort.equals("Name"))
@@ -3012,6 +3112,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             if (item instanceof Weapon) addWeaponRow(row, dialog, (Weapon) item);
             else if (item instanceof Armor) addArmorRow(row, dialog, (Armor) item);
             else if (item instanceof Perk) addPerkCell(row, (Perk) item);
+            else if (item instanceof Synergy) addSynergyCell(row, (Synergy) item);
             else addConsumableRow(row, dialog, (ConsumableStack) item);
         }
 
@@ -3324,6 +3425,21 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         addCell(row, cell);
     }
 
+    /** An awakened synergy, in gold, with what it does. */
+    private void addSynergyCell(LinearLayout row, Synergy synergy) {
+        int gold = Color.rgb(244, 215, 122);
+        View cell = getLayoutInflater().inflate(R.layout.dialog_inventory_item, row, false);
+        android.widget.ImageView icon = cell.findViewById(R.id.inv_item_icon);
+        icon.setImageResource(R.drawable.ic_trophy);
+        icon.setImageTintList(android.content.res.ColorStateList.valueOf(gold));
+        TextView nameView = cell.findViewById(R.id.inv_item_name);
+        nameView.setText(synergy.title);
+        nameView.setTextColor(gold);
+        ((TextView) cell.findViewById(R.id.inv_item_subtitle)).setText(synergy.effect);
+        applyRarityBorder(cell, gold);
+        addCell(row, cell);
+    }
+
     private void addCell(LinearLayout row, View cell) {
         int gap = Math.round(4 * getResources().getDisplayMetrics().density);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -3614,8 +3730,42 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         txtCheckpoint.setText("Last checkpoint: Floor " + checkpointFloor);
         fillRunSummary(dialog.findViewById(R.id.summary_grid));
 
+        // Souls: the part of a lost life that carries over to the Soul Altar; paid when the card closes
+        int[] souls = {Math.round(Altar.souls(statsManager.getRunFloors(), statsManager.getRunKills(),
+                statsManager.getRunBosses()) * (1f + 0.25f * ascension))};
+        TextView txtSouls = dialog.findViewById(R.id.txt_souls);
+        txtSouls.setText("+" + souls[0] + " Souls");
+        Runnable payout = () -> { if (userId != null) dbManager.addSouls(userId, souls[0]); };
+        if (dailySeed != 0 && userId != null && dailyDay != null)
+            dbManager.submitDailyScore(dailyDay, userId, username, floorManager.getCurrentFloor(),
+                    statsManager.getRunKills(), statsManager.getRunSeconds());
+
+        // Opt-in rewarded ads: double the Souls, or (solo saves only) get back up right here once a life
+        MaterialButton adSouls = dialog.findViewById(R.id.btn_ad_souls);
+        MaterialButton adRevive = dialog.findViewById(R.id.btn_ad_revive);
+        if (Ads.isReady() && souls[0] > 0) adSouls.setVisibility(View.VISIBLE);
+        if (Ads.isReady() && coopReason == null && !adReviveUsed) adRevive.setVisibility(View.VISIBLE);
+        adSouls.setOnClickListener(v -> Ads.show(this, () -> {
+            souls[0] *= 2;
+            txtSouls.setText("+" + souls[0] + " Souls");
+        }, () -> {
+            adSouls.setVisibility(View.GONE);
+            adRevive.setVisibility(View.GONE);
+            hideSystemUIOnWindow(dialog.getWindow());
+        }));
+        adRevive.setOnClickListener(v -> Ads.show(this, () -> {
+            adReviveUsed = true;
+            dialog.dismiss();
+            reviveHere();
+        }, () -> {
+            adSouls.setVisibility(View.GONE);
+            adRevive.setVisibility(View.GONE);
+            hideSystemUIOnWindow(dialog.getWindow());
+        }));
+
         MaterialButton btnRespawn = dialog.findViewById(R.id.btn_respawn);
         btnRespawn.setOnClickListener(v -> {
+            payout.run();
             respawnPlayer();
             dialog.dismiss();
             hideSystemUI();
@@ -3623,12 +3773,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         MaterialButton btnMenu = dialog.findViewById(R.id.btn_game_over_menu);
         if (coopReason != null) {
-            // Co-op: the run is over for the whole party, there is no respawn
+            // Co-op or daily: the run is over, there is no respawn
             ((TextView) dialog.findViewById(R.id.txt_over_title)).setText("RUN OVER");
             ((TextView) dialog.findViewById(R.id.txt_over_message)).setText(coopReason);
             txtCheckpoint.setVisibility(View.GONE);
             btnRespawn.setVisibility(View.GONE);
             btnMenu.setOnClickListener(v -> {
+                payout.run();
                 dialog.dismiss();
                 leaveCoop();
                 SoundManager.stopGameMusic();
@@ -3640,6 +3791,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             return;
         }
         btnMenu.setOnClickListener(v -> {
+            payout.run();
             dialog.dismiss();
             if (gameId != null && userId != null) {
                 dbManager.deleteGame(userId, gameId, success ->
@@ -3656,6 +3808,19 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         dialog.show();
         hideSystemUIOnWindow(dialog.getWindow());
+    }
+
+    /** Ad revive: back up where you fell at half health, briefly untouchable. */
+    private void reviveHere() {
+        player.resetDeathAnimation();
+        playerHealth = maxHealth / 2;
+        playerHealthBar.setProgress(playerHealth);
+        if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
+        invulnerableUntil = System.currentTimeMillis() + 2000;
+        effects.burst(player.x, player.y, Color.rgb(244, 215, 122), 40, 12f);
+        effects.banner(player.x, player.y - player.radius - 50f, "REVIVED", Color.rgb(244, 215, 122));
+        isGamePaused = false;
+        hideSystemUI();
     }
 
     /** Run summary: eight stat cards, two per row, for this life. */
@@ -3763,14 +3928,52 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return perks[p.ordinal()];
     }
 
-    /** Player damage multiplier: +5% per level above 1, +1% per Might. */
-    private float damageMultiplier() {
-        return 1f + (playerLevel - 1) * 0.05f + 0.01f * stacks(Perk.MIGHT);
+    /** Two perks at two stacks each awaken a synergy with an effect of its own. */
+    private enum Synergy {
+        BLADESTORM("Bladestorm", Perk.WHIRLWIND, Perk.MIGHT, "Spin hits at full power and reaches further"),
+        PHANTOM("Phantom", Perk.SHADOW_STEP, Perk.KEEN_EYE, "Dashing through enemies cuts them"),
+        BULWARK("Bulwark", Perk.IRON_SKIN, Perk.VIGOR, "Regenerate 1 HP every 2 seconds"),
+        MIDAS("Midas Touch", Perk.GREED, Perk.QUICK_HANDS, "Critical hits shake loose a coin");
+
+        final String title, effect;
+        final Perk a, b;
+
+        Synergy(String title, Perk a, Perk b, String effect) {
+            this.title = title;
+            this.a = a;
+            this.b = b;
+            this.effect = effect;
+        }
+
+        static Synergy of(Perk p) {
+            for (Synergy s : values()) if (s.a == p || s.b == p) return s;
+            return null;
+        }
     }
 
-    /** Max HP: 100 at level 1, +10 per level, +5 per Vigor. */
+    private boolean has(Synergy s) {
+        return stacks(s.a) >= 2 && stacks(s.b) >= 2;
+    }
+
+    /** Player damage multiplier: +1% per Might, +2% per Altar Strength; levels give perks, not raw stats. */
+    private float damageMultiplier() {
+        return 1f + 0.01f * stacks(Perk.MIGHT) + 0.02f * altar[Altar.STRENGTH.ordinal()];
+    }
+
+    /** Max HP: 100, +5 per Vigor, +5 per Altar Vitality. */
     private int computeMaxHealth() {
-        return 100 + (playerLevel - 1) * 10 + 5 * stacks(Perk.VIGOR);
+        return 100 + 5 * stacks(Perk.VIGOR) + 5 * altar[Altar.VITALITY.ordinal()];
+    }
+
+    /** New Altar ranks: refresh max HP, topping up a player who was at full health. */
+    private void applyAltar(int[] ranks) {
+        altar = ranks;
+        int oldMax = maxHealth;
+        maxHealth = computeMaxHealth();
+        if (playerHealth >= oldMax) playerHealth = maxHealth;
+        playerHealthBar.setMax(maxHealth);
+        playerHealthBar.setProgress(playerHealth);
+        if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
     }
 
     private float critChance() {
@@ -3792,7 +3995,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Gold after Greed; the fraction becomes a chance at one more coin. */
     private int withGreed(int gold) {
-        float total = gold * (1f + 0.01f * stacks(Perk.GREED));
+        float total = gold * (1f + 0.01f * stacks(Perk.GREED) + 0.05f * altar[Altar.FORTUNE.ordinal()]);
         int whole = (int) total;
         return whole + (Math.random() < total - whole ? 1 : 0);
     }
@@ -3802,7 +4005,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /**
-     * Adds XP and handles level-ups (+10 max HP, +20 HP, +5% damage per level).
+     * Adds XP and handles level-ups (+20 HP heal and a perk pick per level).
      * Each level-up also earns a perk pick, waiting behind the badge.
      * Must run on the UI thread, like every other change to playerHealth.
      */
@@ -3892,7 +4095,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         icon.setImageTintList(android.content.res.ColorStateList.valueOf(perk.color));
         ((TextView) card.findViewById(R.id.perk_name)).setText(perk.title);
         ((TextView) card.findViewById(R.id.perk_desc)).setText(perk.describe(1));
-        ((TextView) card.findViewById(R.id.perk_owned)).setText("Owned: " + stacks(perk));
+        Synergy synergy = Synergy.of(perk);
+        String hint = synergy == null || has(synergy) ? ""
+                : "\n" + synergy.title + ": 2x " + synergy.a.title + " + 2x " + synergy.b.title;
+        ((TextView) card.findViewById(R.id.perk_owned)).setText("Owned: " + stacks(perk) + hint);
     }
 
     /** Turns a card edge-on, swaps its back for its front, then turns it face up. */
@@ -3915,7 +4121,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         dialog.dismiss();
         perkDialogOpen = false;
         pendingPerks--;
+        Synergy synergy = Synergy.of(perk);
+        boolean awakened = synergy != null && !has(synergy);
         perks[perk.ordinal()]++;
+        awakened = awakened && has(synergy);
         if (perk == Perk.VIGOR) {
             maxHealth = computeMaxHealth();
             int old = playerHealth;
@@ -3926,6 +4135,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         applySpeedPerk();
         updateLevelBadge();
         effects.banner(player.x, player.y - player.radius - 50f, perk.title, perk.color);
+        if (awakened) {
+            effects.banner(player.x, player.y - player.radius - 110f, synergy.title.toUpperCase() + " AWAKENS",
+                    Color.rgb(244, 215, 122));
+            effects.burst(player.x, player.y, Color.rgb(244, 215, 122), 40, 12f);
+        }
         soundManager.playCoinPickup();
         if (coop == null) isGamePaused = false;
         hideSystemUI();
@@ -4248,6 +4462,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         save.put("perks",                perkStacks);
         save.put("pendingPerks",         pendingPerks);
         save.put("keys",                 keys);
+        save.put("ascension",            ascension);
         dbManager.updateGameSave(gameId, save);
     }
 
@@ -4312,10 +4527,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 pendingPerks = data.get("pendingPerks") != null
                         ? ((Number) data.get("pendingPerks")).intValue() : 0;
                 keys = data.get("keys") != null ? ((Number) data.get("keys")).intValue() : 0;
+                if (data.get("ascension") instanceof Number) {
+                    ascension = ((Number) data.get("ascension")).intValue();
+                    ascensionFromSave = true;
+                }
                 updateKeysHUD();
                 applySpeedPerk();
                 updateLevelBadge();
                 maxHealth = computeMaxHealth();
+                playerHealth = Math.min(playerHealth, maxHealth); // saves from before levels stopped adding HP
 
                 if (data.get("playtimeSeconds") != null)
                     gameStartTime -= ((Number) data.get("playtimeSeconds")).longValue() * 1000L;
