@@ -83,9 +83,6 @@ public class Enemy {
     private static final long DEATH_DURATION = 500; // ms
 
     public boolean counted = false; // True once this kill has been reported to FloorManager
-    // Only the floor's own enemies count toward its kill target. Room events (cursed chest elites)
-    // and the boss set this, so they never fill or overflow the counter.
-    public boolean extra = false;
 
     private int goldDrop; // How many coins this enemy drops on death
     public boolean noGoldDrop = false;
