@@ -418,6 +418,93 @@
                     android:visibility="gone"
                     tools:ignore="HardcodedText"/>
 
+                <!-- On-screen sticks: size, opacity and which hand moves -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        style="@style/OD.Text"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Stick size"
+                        android:textStyle="bold"
+                        tools:ignore="HardcodedText"/>
+
+                    <SeekBar
+                        android:id="@+id/seekbar_stick_size"
+                        android:layout_width="0dp"
+                        android:layout_height="@dimen/touch_min"
+                        android:layout_weight="1.2"
+                        android:min="70"
+                        android:max="130"
+                        android:progress="100"
+                        android:progressTint="@color/gold_bright"
+                        android:thumbTint="@color/gold_bright"
+                        android:progressBackgroundTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        style="@style/OD.Text"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Stick opacity"
+                        android:textStyle="bold"
+                        tools:ignore="HardcodedText"/>
+
+                    <SeekBar
+                        android:id="@+id/seekbar_stick_alpha"
+                        android:layout_width="0dp"
+                        android:layout_height="@dimen/touch_min"
+                        android:layout_weight="1.2"
+                        android:min="30"
+                        android:max="100"
+                        android:progress="100"
+                        android:progressTint="@color/gold_bright"
+                        android:thumbTint="@color/gold_bright"
+                        android:progressBackgroundTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        style="@style/OD.Text"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Left-handed (move on the right)"
+                        android:textStyle="bold"
+                        tools:ignore="HardcodedText"/>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_left_handed"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="@dimen/touch_min"
+                        app:thumbTint="@color/gold_bright"
+                        app:trackTint="@color/border_gold_outer"/>
+
+                </LinearLayout>
+
             </LinearLayout>
 
             <!-- EFFECTS: what the screen shows during a fight -->

@@ -293,6 +293,23 @@ public class DBManager {
                 });
     }
 
+    /** Buys a Wardrobe look: succeeds only if it isn't owned yet and the player still has the Souls. */
+    public void buyCosmetic(String userId, String id, int cost, OnBooleanResultListener listener) {
+        DocumentReference ref = db.collection("players").document(userId);
+        db.runTransaction(transaction -> {
+            DocumentSnapshot snap = transaction.get(ref);
+            Long souls = snap.getLong("souls");
+            Object owned = snap.get("cosmetics");
+            if (souls == null || souls < cost || (owned instanceof List && ((List<?>) owned).contains(id))) return false;
+            transaction.update(ref, "souls", souls - cost, "cosmetics", FieldValue.arrayUnion(id));
+            return true;
+        }).addOnSuccessListener(listener::onResult)
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "buyCosmetic failed", e);
+                    listener.onResult(false);
+                });
+    }
+
     /* ============================================================
        GAMES — save slots (max 3 per player)
        ============================================================ */

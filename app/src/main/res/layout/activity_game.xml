@@ -262,6 +262,25 @@
 
     </LinearLayout>
 
+    <!-- First-run tutorial: one step at a time; tap it to skip -->
+    <TextView
+        android:id="@+id/txt_tutorial"
+        style="@style/OD.Text.Value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxWidth="220dp"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="@dimen/space_lg"
+        android:paddingHorizontal="@dimen/space_md"
+        android:paddingVertical="@dimen/space_sm"
+        android:background="@drawable/hud_panel"
+        android:tag="stone"
+        android:gravity="center"
+        android:textSize="@dimen/text_small"
+        android:textColor="@color/gold_bright"
+        android:visibility="gone"/>
+
     <com.example.obliviondescent.JoystickView
         android:id="@+id/joystick"
         android:layout_width="168dp"

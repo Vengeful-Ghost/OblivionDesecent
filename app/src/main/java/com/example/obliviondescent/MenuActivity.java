@@ -102,10 +102,11 @@ public class MenuActivity extends AppCompatActivity {
 
         findViewById(R.id.btn_tutorial).setOnClickListener(v -> { click(); showTutorial(); });
         findViewById(R.id.btn_altar).setOnClickListener(v -> { click(); showAltar(); });
-        findViewById(R.id.btn_daily).setOnClickListener(v -> { click(); showDaily(); });
+        findViewById(R.id.btn_daily).setOnClickListener(v -> { click(); showDaily(false); });
         findViewById(R.id.btn_quests).setOnClickListener(v -> { click(); showQuests(); });
         findViewById(R.id.btn_history).setOnClickListener(v -> { click(); showHistory(); });
         findViewById(R.id.btn_bestiary).setOnClickListener(v -> { click(); showBestiary(); });
+        findViewById(R.id.btn_weekly).setOnClickListener(v -> { click(); showDaily(true); });
         Ads.gatherConsent(this);
     }
 
@@ -127,6 +128,7 @@ public class MenuActivity extends AppCompatActivity {
         if (dialog.getWindow() != null)
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         dialog.findViewById(R.id.btn_close_altar).setOnClickListener(v -> { click(); dialog.dismiss(); });
+        dialog.findViewById(R.id.btn_wardrobe).setOnClickListener(v -> { click(); showWardrobe(); });
         dbManager.loadPlayerStats(userId, data -> renderAltar(dialog, data));
         dialog.show();
         hideSystemUIOnWindow(dialog);
@@ -180,8 +182,11 @@ public class MenuActivity extends AppCompatActivity {
         Wear.apply(grid);
     }
 
-    /** Today's Daily Run: the same seeded dungeon for everyone, with today's top five. */
-    private void showDaily() {
+    /**
+     * Today's Daily Run, or this week's challenge with its twist: the same seeded dungeon for everyone,
+     * one life, and the top five. The week runs Monday to Sunday (ISO weeks, UTC).
+     */
+    private void showDaily(boolean weekly) {
         if (userId == null) return;
         java.util.TimeZone utc = java.util.TimeZone.getTimeZone("UTC");
         java.text.SimpleDateFormat dayFormat = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US);
@@ -190,24 +195,40 @@ public class MenuActivity extends AppCompatActivity {
         shownFormat.setTimeZone(utc);
         java.util.Date now = new java.util.Date();
         String day = dayFormat.format(now);
+        java.util.Calendar calendar = java.util.Calendar.getInstance(utc, java.util.Locale.US);
+        calendar.setFirstDayOfWeek(java.util.Calendar.MONDAY);
+        calendar.setMinimalDaysInFirstWeek(4);
+        calendar.setTime(now);
+        int week = calendar.get(java.util.Calendar.WEEK_OF_YEAR), weekYear = calendar.getWeekYear();
+        GameActivity.WeeklyMod[] mods = GameActivity.WeeklyMod.values();
+        GameActivity.WeeklyMod mod = mods[(weekYear * 53 + week) % mods.length];
+        String key = weekly ? String.format(java.util.Locale.US, "W%d-%02d", weekYear, week) : day;
+        long seed = weekly ? (weekYear * 100L + week) * 1_000_033L : Long.parseLong(day) * 1_000_003L;
 
         Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         dialog.setContentView(R.layout.dialog_daily);
         if (dialog.getWindow() != null)
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         dialog.findViewById(R.id.btn_close_daily).setOnClickListener(v -> { click(); dialog.dismiss(); });
-        ((TextView) dialog.findViewById(R.id.txt_daily_date)).setText(shownFormat.format(now));
+        ((TextView) dialog.findViewById(R.id.txt_daily_date)).setText(weekly ? "Week " + week : shownFormat.format(now));
+        if (weekly) {
+            ((TextView) dialog.findViewById(R.id.txt_daily_title)).setText("WEEKLY CHALLENGE");
+            ((TextView) dialog.findViewById(R.id.txt_daily_desc)).setText("This week: " + mod.title + ". "
+                    + mod.rule + ". The same dungeon for everyone, one life, no saves.");
+            ((TextView) dialog.findViewById(R.id.txt_daily_board_title)).setText("THIS WEEK'S BEST");
+        }
         dialog.findViewById(R.id.btn_daily_play).setOnClickListener(v -> {
             click();
             dialog.dismiss();
             SoundManager.stopMenuMusic();
             Intent intent = new Intent(this, GameActivity.class);
-            intent.putExtra(GameActivity.EXTRA_DAILY_SEED, Long.parseLong(day) * 1_000_003L);
-            intent.putExtra(GameActivity.EXTRA_DAILY_DAY, day);
+            intent.putExtra(GameActivity.EXTRA_DAILY_SEED, seed);
+            intent.putExtra(GameActivity.EXTRA_DAILY_DAY, key);
+            if (weekly) intent.putExtra(GameActivity.EXTRA_WEEKLY_MOD, mod.name());
             startActivity(intent);
         });
 
-        dbManager.loadDailyTop(day, rows -> {
+        dbManager.loadDailyTop(key, rows -> {
             if (!dialog.isShowing()) return;
             LinearLayout board = dialog.findViewById(R.id.daily_board);
             for (int i = 0; i < rows.size(); i++) {
@@ -366,6 +387,75 @@ public class MenuActivity extends AppCompatActivity {
         while (row != null && row.getChildCount() < 4)
             row.addView(new View(this), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
         rows.addView(tip);
+        dialog.show();
+        hideSystemUIOnWindow(dialog);
+    }
+
+    /** Wardrobe: looks bought with Souls for the body, the swing trail and the death burst. */
+    private void showWardrobe() {
+        if (userId == null) return;
+        dbManager.loadPlayerStats(userId, data -> {
+            Object soulsValue = data != null ? data.get("souls") : null;
+            long souls = soulsValue instanceof Number ? ((Number) soulsValue).longValue() : 0;
+            java.util.Set<String> owned = new java.util.HashSet<>();
+            Object ownedValue = data != null ? data.get("cosmetics") : null;
+            if (ownedValue instanceof java.util.List)
+                for (Object o : (java.util.List<?>) ownedValue) owned.add(String.valueOf(o));
+            renderWardrobe(souls, owned);
+        });
+    }
+
+    /** One row per slot; tap an owned look to wear it, or an affordable one to buy and wear it. */
+    private void renderWardrobe(long souls, java.util.Set<String> owned) {
+        Dialog dialog = listDialog("WARDROBE", souls + " Souls");
+        LinearLayout rows = dialog.findViewById(R.id.list_rows);
+        SharedPreferences look = getSharedPreferences("cosmetics_" + userId, MODE_PRIVATE);
+        float dp = getResources().getDisplayMetrics().density;
+        int gap = Math.round(3 * dp);
+        String[] slots = {"Body", "Swing trail", "Death burst"};
+        int[] icons = {R.drawable.ic_helmet, R.drawable.ic_sword, R.drawable.ic_skull};
+        for (int slot = 0; slot < slots.length; slot++) {
+            TextView label = new TextView(this, null, 0, R.style.OD_Text_Caption);
+            label.setText(slots[slot]);
+            rows.addView(label);
+            LinearLayout row = new LinearLayout(this);
+            rows.addView(row, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Math.round(44 * dp)));
+            GameActivity.Cosmetic worn = GameActivity.Cosmetic.worn(look, slot);
+            for (GameActivity.Cosmetic c : GameActivity.Cosmetic.values()) {
+                if (c.slot != slot) continue;
+                boolean have = c.price == 0 || owned.contains(c.name());
+                View cell = getLayoutInflater().inflate(R.layout.item_stat_cell, row, false);
+                android.widget.ImageView icon = cell.findViewById(R.id.stat_icon);
+                icon.setImageResource(icons[slot]);
+                if (c.color != 0) icon.setImageTintList(android.content.res.ColorStateList.valueOf(c.color));
+                ((TextView) cell.findViewById(R.id.stat_value)).setText(c.title);
+                ((TextView) cell.findViewById(R.id.stat_label)).setText(
+                        c == worn ? "Worn" : have ? "Owned" : c.price + " Souls");
+                cell.setAlpha(have || souls >= c.price ? 1f : 0.45f);
+                cell.setOnClickListener(v -> {
+                    click();
+                    if (have) {
+                        look.edit().putString("slot" + c.slot, c.name()).apply();
+                        dialog.dismiss();
+                        showWardrobe();
+                    } else if (souls >= c.price) {
+                        dbManager.buyCosmetic(userId, c.name(), c.price, ok -> {
+                            sounds.play(ok ? SoundManager.Sfx.PURCHASE : SoundManager.Sfx.GATE_LOCKED);
+                            if (ok) look.edit().putString("slot" + c.slot, c.name()).apply();
+                            dialog.dismiss();
+                            showWardrobe();
+                        });
+                    } else {
+                        sounds.play(SoundManager.Sfx.GATE_LOCKED);
+                    }
+                });
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+                lp.setMargins(gap, gap, gap, gap);
+                row.addView(cell, lp);
+            }
+            while (row.getChildCount() < 5)
+                row.addView(new View(this), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+        }
         dialog.show();
         hideSystemUIOnWindow(dialog);
     }

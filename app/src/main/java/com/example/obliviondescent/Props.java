@@ -62,13 +62,15 @@ public class Props {
 
     // Decoration kinds
     static final int TORCH = 0, BARREL = 1, CRATE = 2, PILLAR = 3, BONES = 4, RUBBLE = 5,
-            COBWEB = 6, CANDLES = 7, BANNER = 8, RUG = 9, SIGIL = 10;
+            COBWEB = 6, CANDLES = 7, BANNER = 8, RUG = 9, SIGIL = 10,
+            SHRINE = 11, GAMBLER = 12; // room events GameActivity places and answers
 
     /** One decoration in world space; a and b hold its size, angle or variant, depending on the kind. */
     static final class Decor {
         final int kind;
         final float x, y, a, b;
         volatile boolean broken; // a smashed crate or barrel
+        volatile boolean used;   // a shrine or gambler that has made its deal
 
         Decor(int kind, float x, float y, float a, float b) {
             this.kind = kind;
@@ -514,6 +516,45 @@ public class Props {
         return false;
     }
 
+    /** Blood shrine: a standing stone with a crimson rune over a bowl; both go dark once it's used. */
+    void drawShrine(Canvas canvas, float x, float y, long now, boolean used) {
+        drawPillar(canvas, x, y, 34);
+        fill.setColor(used ? STONE_DARK : CRIMSON_GLOW);
+        if (!used) fill.setAlpha((int) (150 + 100 * Math.sin(now / 400.0)));
+        canvas.drawRect(x - 3, y - 14, x + 3, y + 14, fill);
+        canvas.drawRect(x - 10, y - 3, x + 10, y + 3, fill);
+        fill.setColor(IRON);
+        canvas.drawCircle(x, y + 50, 16, fill);
+        fill.setColor(used ? STONE_MID : CRIMSON_BASE);
+        canvas.drawCircle(x, y + 50, 11, fill);
+    }
+
+    /** The gambler: a hooded figure with glinting eyes behind a table of dice and gold. */
+    void drawGambler(Canvas canvas, float x, float y, long now, boolean used) {
+        fill.setColor(SHADOW);
+        canvas.drawOval(x - 46, y + 22, x + 46, y + 46, fill);
+        fill.setColor(CLOAK_DARK);
+        canvas.drawCircle(x, y - 4, 30, fill);
+        fill.setColor(CLOAK_MID);
+        canvas.drawCircle(x, y - 14, 18, fill);
+        fill.setColor(GOLD_GLOW);
+        canvas.drawCircle(x - 6, y - 14, 2.5f, fill);
+        canvas.drawCircle(x + 6, y - 14, 2.5f, fill);
+        fill.setColor(WOOD_MID);
+        canvas.drawRect(x - 42, y + 14, x + 42, y + 36, fill);
+        fill.setColor(WOOD_LINE);
+        canvas.drawRect(x - 42, y + 32, x + 42, y + 36, fill);
+        if (!used) {
+            float bob = (float) Math.sin(now / 300.0) * 2f;
+            fill.setColor(GOLD_BRIGHT);
+            canvas.drawCircle(x - 20, y + 23 + bob, 6, fill);
+            canvas.drawCircle(x - 11, y + 21 + bob, 6, fill);
+        }
+        fill.setColor(BONE);
+        canvas.drawRect(x + 8, y + 18, x + 18, y + 28, fill);
+        canvas.drawRect(x + 21, y + 20, x + 30, y + 29, fill);
+    }
+
     void drawDecor(Canvas canvas, Decor d, long now) {
         if (d.broken) {
             drawSplinters(canvas, d.x, d.y, d.a);
@@ -530,6 +571,8 @@ public class Props {
             case BANNER:  drawBanner(canvas, d.x, d.y, now + (long) d.a); break;
             case RUG:     drawRug(canvas, d.x - d.a, d.y - d.b, d.x + d.a, d.y + d.b); break;
             case SIGIL:   drawSigil(canvas, d.x, d.y, d.a, now); break;
+            case SHRINE:  drawShrine(canvas, d.x, d.y, now, d.used); break;
+            case GAMBLER: drawGambler(canvas, d.x, d.y, now, d.used); break;
             case CANDLES:
                 drawCandle(canvas, d.x - 12, d.y, now);
                 drawCandle(canvas, d.x + 9, d.y - 7, now + 200);

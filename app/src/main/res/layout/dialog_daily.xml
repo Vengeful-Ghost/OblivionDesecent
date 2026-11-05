@@ -49,6 +49,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
+                android:id="@+id/txt_daily_title"
                 android:text="DAILY RUN"
                 android:textSize="@dimen/text_heading"
                 android:shadowColor="@color/gold_glow"
@@ -92,6 +93,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textColor="@color/bone_dim"
+                    android:id="@+id/txt_daily_desc"
                     android:text="The same dungeon for everyone today. One life, no saves. Go as deep as you can."
                     tools:ignore="HardcodedText"/>
 
@@ -132,6 +134,7 @@
                     style="@style/OD.Text.Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:id="@+id/txt_daily_board_title"
                     android:text="TODAY'S BEST"
                     android:textColor="@color/gold_bright"
                     tools:ignore="HardcodedText"/>

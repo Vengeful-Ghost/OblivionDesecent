@@ -381,6 +381,23 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         // Daily run: today's seeded dungeon for everyone, one life, no save
         dailySeed = getIntent().getLongExtra(EXTRA_DAILY_SEED, 0L);
         dailyDay = getIntent().getStringExtra(EXTRA_DAILY_DAY);
+        // Weekly challenge: a daily-style seeded run with a twist
+        String mod = getIntent().getStringExtra(EXTRA_WEEKLY_MOD);
+        if (mod != null) {
+            try {
+                weeklyMod = WeeklyMod.valueOf(mod);
+            } catch (IllegalArgumentException ignored) {
+                // a twist from a newer version
+            }
+        }
+        if (weeklyMod == WeeklyMod.GLASS_CANNON) {
+            maxHealth = computeMaxHealth();
+            playerHealth = maxHealth;
+            checkpointHealth = maxHealth;
+            playerHealthBar.setMax(maxHealth);
+            playerHealthBar.setProgress(playerHealth);
+            txtHealthValue.setText(playerHealth + " / " + maxHealth);
+        }
 
         floorManager = new FloorManager();
 
@@ -410,6 +427,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         SharedPreferences loginPrefs = getSharedPreferences("loginPrefs", MODE_PRIVATE);
         userId = loginPrefs.getString("user_id", null);
         username = loginPrefs.getString("username", "Player");
+        // Wardrobe looks (MenuActivity.showWardrobe); co-op keeps its slot colours
+        if (userId != null) {
+            SharedPreferences look = getSharedPreferences("cosmetics_" + userId, MODE_PRIVATE);
+            Cosmetic body = Cosmetic.worn(look, 0), trail = Cosmetic.worn(look, 1);
+            if (coop == null && body.color != 0) player.setColor(body.color);
+            if (trail.color != 0) player.trailColor = trail.color;
+            deathColor = Cosmetic.worn(look, 2).color;
+        }
         gameId = getIntent().getStringExtra("game_id");
         int slotIndex = getIntent().getIntExtra("slot_index", 1);
 
@@ -459,6 +484,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             if (gameId != null && getIntent().hasExtra("game_id")) {
                 loadGameFromFirestore();
             }
+            if (weeklyMod != null)
+                effects.banner(player.x, player.y - player.radius - 120f, weeklyMod.title.toUpperCase(),
+                        Color.rgb(224, 72, 72));
+            // First solo run on this phone: a guided first floor
+            if (coop == null && dailySeed == 0 && userId != null
+                    && !getSharedPreferences("tutorial_" + userId, MODE_PRIVATE).getBoolean("done", false))
+                setTutorialStep(0);
         });
 
         btnDash.setOnClickListener(v -> dash());
@@ -492,6 +524,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         btnInventory.setOnClickListener(v -> { if (playerHealth > 0 || coop != null) showInventoryDialog(); });
         btnLevelUp = findViewById(R.id.btn_level_up);
         btnLevelUp.setOnClickListener(v -> showPerkDialog());
+        findViewById(R.id.txt_tutorial).setOnClickListener(v -> finishTutorial(true));
 
         // Held down = keep attacking; polled by the logic thread in tick()
         aimJoystick = findViewById(R.id.aim_joystick);
@@ -939,7 +972,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         float dashProgress = Math.min(1f, (float) (now - lastDashTime) / dashCooldown());
         float spinProgress = Math.min(1f, (float) (now - lastSpinTime) / spinCooldown());
         float heavyProgress = Math.min(1f, (float) (now - lastHeavyTime) / HEAVY_COOLDOWN);
-        float potionProgress = Math.min(1f, (float) (now - lastPotionAt) / POTION_COOLDOWN);
+        float potionProgress = Math.min(1f, (float) (now - lastPotionAt) / potionCooldown());
         int dashStep = (int) (dashProgress * 50);
         int spinStep = (int) (spinProgress * 50);
         int heavyStep = (int) (heavyProgress * 50);
@@ -1125,6 +1158,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         checkGoldCollection();
         checkChestInteraction();
         checkVault(now);
+        tickExtras(now);
 
         cleanupDeadEnemies();
         checkPortalCollision();
@@ -1195,9 +1229,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         elites++;
                     }
                     // Shield-bearers from floor 3: fighters that close in behind a raised shield
-                    if (floor >= 3 && (type == Enemy.Type.GRUNT || type == Enemy.Type.BRUTE || type == Enemy.Type.TANK)
+                    if (floor >= 3 && !enemy.shield
+                            && (type == Enemy.Type.GRUNT || type == Enemy.Type.BRUTE || type == Enemy.Type.TANK)
                             && Math.random() < 0.2) enemy.makeShield();
                     enemy.ascend(ascension());
+                    if (weeklyMod == WeeklyMod.HASTE) enemy.speed *= 1.25f;
                     enemy.setBehaviorTracker(behaviorTracker);
                     enemy.setLayout(layout);
                     // isAwake = false — enemy waits for player to enter trigger radius
@@ -1209,6 +1245,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         bat.applyFloorScaling(floor);
                         bat.scaleHealth(partyHealth());
                         bat.ascend(ascension());
+                        if (weeklyMod == WeeklyMod.HASTE) bat.speed *= 1.25f;
                         bat.setBehaviorTracker(behaviorTracker);
                         bat.setLayout(layout);
                         enemies.add(bat);
@@ -1549,8 +1586,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     boolean slam = bomb || (e.type == Enemy.Type.BOSS && e.strikeReach > e.radius * 2f);
                     if (bomb) blastEnemies(e);
                     float knockback = e.getWeapon().knockback;
+                    int dealt = e.strikeDamage;
                     resolveStrike(e.x, e.y, e.strikeDirX, e.strikeDirY, e.strikeReach, e.strikeArc,
                             e.strikeDamage, knockback, e.radius, slam, now);
+                    // Vampiric elites mend from a hit that landed on this phone's player
+                    if (lastHurtAt == now && e.eliteTrait() == Enemy.EliteTrait.VAMPIRIC) {
+                        e.heal(dealt);
+                        effects.number(e.x, e.y - e.radius - 20f, "+" + dealt, Color.rgb(200, 40, 60));
+                    }
                     if (coop != null) coop.publishEvent("s," + floor + "," + e.x + "," + e.y + "," + e.strikeDirX
                             + "," + e.strikeDirY + "," + e.strikeReach + "," + e.strikeArc + "," + e.strikeDamage
                             + "," + knockback + "," + e.radius + "," + (slam ? 1 : 0));
@@ -1676,7 +1719,17 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             checkPerfectDodge(now);
             return;
         }
+        if (relic == Relic.AEGIS && now >= aegisReadyAt) {
+            aegisReadyAt = now + 12000;
+            invulnerableUntil = now + 400;
+            int pale = Color.rgb(200, 220, 255);
+            effects.banner(player.x, player.y - player.radius - 50f, "WARDED", pale);
+            effects.burst(player.x, player.y, pale, 20, 8f);
+            soundManager.play(SoundManager.Sfx.BLOCK);
+            return;
+        }
         damage = Math.max(1, Math.round(damage * (1f - 0.005f * perks[Perk.IRON_SKIN.ordinal()])));
+        if (relic == Relic.SKULL) damage = Math.round(damage * 1.1f);
         invulnerableUntil = now + HIT_INVULNERABILITY;
         lastRegen = now + 5000; // Bulwark pauses for 10s after a hit
         hitStop(60);
@@ -1890,6 +1943,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (crit || stagger) hitStop(crit ? 70 : 45);
         buzz(crit || heavy ? 30 : 12, crit || heavy ? 180 : 70);
         if (crit && has(Synergy.MIDAS) && Math.random() < 0.25) spawnGoldCoins(e.x, e.y, 1);
+        weaponTraits(e, damage);
         if (isGuest()) {
             e.predictHit(damage);
             if (e.isDead) deadEnemyAt.put(e.id, System.currentTimeMillis());
@@ -1982,18 +2036,19 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             if (playerHealth <= 0 && coop != null) {
                 // Co-op: the run goes on; a fallen player revives on the next floor
                 player.startDeathAnimation();
-                effects.poof(player.x, player.y, player.getColor());
+                effects.poof(player.x, player.y, deathColor != 0 ? deathColor : player.getColor());
                 statsManager.onPlayerDied();
                 effects.banner(player.x, player.y - player.radius - 50f, "YOU FELL", Color.rgb(224, 72, 72));
                 effects.number(player.x, player.y - player.radius - 10f, "Revive on the next floor", Color.WHITE);
             } else if (playerHealth <= 0) {
                 isGamePaused = true;
                 player.startDeathAnimation();
-                effects.poof(player.x, player.y, player.getColor());
+                effects.poof(player.x, player.y, deathColor != 0 ? deathColor : player.getColor());
                 statsManager.onPlayerDied();
                 statsManager.flush();
                 new android.os.Handler().postDelayed(
-                        () -> showGameOverDialog(dailySeed != 0 ? "Your daily run ends here." : null),
+                        () -> showGameOverDialog(dailySeed == 0 ? null : weeklyMod != null
+                                ? "Your weekly challenge ends here." : "Your daily run ends here."),
                         player.getDeathDuration());
             }
         });
@@ -2111,6 +2166,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     statsManager.onEnemyKilled();
                     if (!e.summoned) quest(Quests.KILLS, 1);
                     bestiary(e, true);
+                    if (relic == Relic.FANG && !e.summoned) healPlayer(2);
+                    // Explosive elites go off a moment after they fall
+                    if (e.eliteTrait() == Enemy.EliteTrait.EXPLOSIVE) {
+                        pendingBlasts.add(new long[]{(long) e.x, (long) e.y, Math.round(e.getDamage() * 0.8f),
+                                System.currentTimeMillis() + 700});
+                        effects.burst(e.x, e.y, Color.rgb(255, 140, 40), 20, 6f);
+                        effects.number(e.x, e.y - e.radius - 30f, "!", Color.rgb(255, 140, 40));
+                    }
                     if (e.elite) quest(Quests.ELITES, 1);
                     if (e.type == Enemy.Type.BAT) quest(Quests.BATS, 1);
                     effects.burst(e.x, e.y, e.getColor(), e.type == Enemy.Type.BOSS ? 60 : 16, 9f);
@@ -2827,7 +2890,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             shopBoughtIndices.clear();
             loading.setVisibility(View.GONE);
             container.setVisibility(View.VISIBLE);
-            populateShopGridFromItems(dialog, container, goldDisplay, restockedShop);
+            populateShopGridFromItems(dialog, container, goldDisplay, withoutPotions(restockedShop));
             soundManager.play(SoundManager.Sfx.PURCHASE);
         }, () -> {
             restock.setVisibility(View.GONE);
@@ -2916,6 +2979,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 addStatRow(box, R.drawable.ic_hourglass, "Cooldown", item.cooldown + "ms");
                 addStatRow(box, R.drawable.ic_knockback, "Knockback", String.valueOf(item.knockback));
                 addStatRow(box, R.drawable.ic_target, "Style", Weapon.kindOf(item.name, item.isProjectile).title());
+                Weapon.Trait trait = Weapon.traitOf(item.name, item.rarity);
+                if (trait != null) addStatRow(box, R.drawable.ic_level, trait.title,
+                        trait.describe("LEGENDARY".equalsIgnoreCase(item.rarity)));
                 break;
             }
             case ARMOR: {
@@ -3242,6 +3308,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 }
 
                 TreasureChest chest = new TreasureChest(cx, cy, bossX, bossY, launch + i * 180L);
+                chest.boss = true;
                 pickChestReward(chest);
                 treasureChests.add(chest);
             }
@@ -3251,8 +3318,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     /** A random item from this floor range's shop pool; left empty until the AI content arrives. */
     private void pickChestReward(TreasureChest chest) {
         List<ShopItem> pool = getChestItemPool(floorManager.getCurrentFloor());
-        if (chest.vault) {
-            // Vault: only the rarest items on offer
+        if (chest.vault || chest.cursed) {
+            // Vault and cursed chests: only the rarest items on offer
             List<String> order = java.util.Arrays.asList("COMMON", "RARE", "EPIC", "LEGENDARY");
             int best = -1;
             for (ShopItem s : pool) best = Math.max(best, order.indexOf(String.valueOf(s.rarity).toUpperCase()));
@@ -3282,6 +3349,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 treasureChests.add(chest);
             }
         }
+        placeRoomEvent();
     }
 
     /** A slain mimic coughs up a real chest with loot. */
@@ -3335,14 +3403,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             List<ShopItem> items = result.shopByFloor.get(f);
             if (items != null) pool.addAll(items);
         }
-        return pool;
+        return withoutPotions(pool);
     }
 
     /** Plays each chest's landing burst, then opens a chest when the player walks close enough. */
     private void checkChestInteraction() {
         long now = System.currentTimeMillis();
         int gold = Color.rgb(244, 215, 122);
-        TreasureChest woke = null;
+        TreasureChest woke = null, cursed = null;
         synchronized (treasureChests) {
             for (TreasureChest chest : treasureChests) {
                 if (!chest.landed) {
@@ -3370,6 +3438,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     effects.burst(chest.x, chest.y - 10, gold, 14, 7f);
                     effects.slash(chest.x, chest.y, 0f, 80f, 180f, chest.rewardItemColor);
                     if (chest.vault) spawnGoldCoins(chest.x, chest.y + 60f, withGreed(8 + floorManager.getCurrentFloor()));
+                    if (chest.cursed) cursed = chest;
+                    // Relics: half the vault and cursed chests, a quarter of the boss's
+                    if (((chest.vault || chest.cursed) && Math.random() < 0.5) || (chest.boss && Math.random() < 0.25))
+                        grantRelic(chest.x, chest.y);
                     if (chest.rewardItem != null) {
                         final ShopItem reward = chest.rewardItem;
                         runOnUiThread(() -> purchaseItem(reward));
@@ -3378,6 +3450,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
         }
         if (woke != null) awakenMimic(woke);
+        if (cursed != null) curseChest(cursed);
     }
 
     /** A key for vault gates; every phone gets its own. */
@@ -3473,8 +3546,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             inventoryPage = 0;
 
             int[] ids = {R.id.filter_all, R.id.filter_weapons,
-                    R.id.filter_armor, R.id.filter_consumables, R.id.filter_perks};
-            String[] filters = {"ALL", "WEAPONS", "ARMOR", "CONSUMABLES", "PERKS"};
+                    R.id.filter_armor, R.id.filter_consumables, R.id.filter_perks, R.id.filter_relics};
+            String[] filters = {"ALL", "WEAPONS", "ARMOR", "CONSUMABLES", "PERKS", "RELICS"};
 
             for (int i = 0; i < ids.length; i++) {
                 TextView t = dialog.findViewById(ids[i]);
@@ -3505,6 +3578,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         updateArmorSlotView(dialog.findViewById(R.id.txt_equipped_chest), Armor.Slot.CHEST);
         updateArmorSlotView(dialog.findViewById(R.id.txt_equipped_legs),  Armor.Slot.LEGS);
         updateArmorSlotView(dialog.findViewById(R.id.txt_equipped_boots), Armor.Slot.BOOTS);
+        TextView rView = dialog.findViewById(R.id.txt_equipped_relic);
+        if (rView != null) {
+            Relic worn = relic;
+            rView.setText(worn != null ? worn.title : "No relic");
+            rView.setTextColor(worn != null ? Color.rgb(244, 215, 122) : ContextCompat.getColor(this, R.color.bone_muted));
+        }
     }
 
     private void updateArmorSlotView(TextView view, Armor.Slot slot) {
@@ -3535,14 +3614,16 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (f.equals("ALL") || f.equals("ARMOR")) items.addAll(inventoryArmors);
         if (f.equals("ALL") || f.equals("CONSUMABLES")) items.addAll(consumableInventory);
         boolean perkTab = f.equals("PERKS");
+        boolean relicTab = f.equals("RELICS");
         if (perkTab) {
             for (Perk p : Perk.values()) if (stacks(p) > 0) items.add(p);
             for (Synergy s : Synergy.values()) if (has(s)) items.add(s);
         }
-        // Stable sorts, so ties keep the weapons / armor / consumables order; perks keep theirs
-        if (!perkTab && inventorySort.equals("Name"))
+        if (relicTab) items.addAll(relics);
+        // Stable sorts, so ties keep the weapons / armor / consumables order; perks and relics keep theirs
+        if (!perkTab && !relicTab && inventorySort.equals("Name"))
             items.sort((a, b) -> itemName(a).compareToIgnoreCase(itemName(b)));
-        else if (!perkTab && !inventorySort.equals("Type"))
+        else if (!perkTab && !relicTab && !inventorySort.equals("Type"))
             items.sort((a, b) -> Float.compare(sortValue(b), sortValue(a)));
 
         // As many square cells as fit: rows of at least 80dp, at least 4 per row
@@ -3566,6 +3647,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             else if (item instanceof Armor) addArmorRow(row, dialog, (Armor) item);
             else if (item instanceof Perk) addPerkCell(row, (Perk) item);
             else if (item instanceof Synergy) addSynergyCell(row, (Synergy) item);
+            else if (item instanceof Relic) addRelicCell(row, dialog, (Relic) item);
             else addConsumableRow(row, dialog, (ConsumableStack) item);
         }
 
@@ -3579,7 +3661,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         if (items.isEmpty()) {
             TextView empty = new TextView(this);
-            empty.setText(perkTab ? "No blessings yet. Level up to earn one." : "Nothing here...");
+            empty.setText(perkTab ? "No blessings yet. Level up to earn one."
+                    : relicTab ? "No relics yet. Vaults, boss chests and cursed chests hold them." : "Nothing here...");
             empty.setTextColor(ContextCompat.getColor(this, R.color.bone_muted));
             empty.setTextSize(16f);
             empty.setGravity(android.view.Gravity.CENTER);
@@ -3792,6 +3875,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         setupFilterTab(dialog, R.id.filter_armor,        "ARMOR");
         setupFilterTab(dialog, R.id.filter_consumables,  "CONSUMABLES");
         setupFilterTab(dialog, R.id.filter_perks,        "PERKS");
+        setupFilterTab(dialog, R.id.filter_relics,       "RELICS");
 
         updateEquippedDisplay(dialog);
         populateInventoryList(dialog);
@@ -3896,6 +3980,52 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         ((TextView) cell.findViewById(R.id.inv_item_subtitle)).setText(synergy.effect);
         applyRarityBorder(cell, gold, synergy.title);
         addCell(row, cell);
+    }
+
+    /** One relic, in gold, with what it does; the worn one is marked. */
+    private void addRelicCell(LinearLayout row, Dialog dialog, Relic r) {
+        int gold = Color.rgb(244, 215, 122);
+        View cell = getLayoutInflater().inflate(R.layout.dialog_inventory_item, row, false);
+        android.widget.ImageView icon = cell.findViewById(R.id.inv_item_icon);
+        icon.setImageResource(r.icon);
+        icon.setImageTintList(android.content.res.ColorStateList.valueOf(gold));
+        TextView nameView = cell.findViewById(R.id.inv_item_name);
+        nameView.setText(r.title);
+        nameView.setTextColor(gold);
+        ((TextView) cell.findViewById(R.id.inv_item_subtitle)).setText(r.effect);
+        cell.findViewById(R.id.inv_equipped_badge).setVisibility(relic == r ? View.VISIBLE : View.GONE);
+        applyRarityBorder(cell, gold, r.title);
+        cell.setOnClickListener(v -> showRelicActionDialog(dialog, r));
+        addCell(row, cell);
+    }
+
+    /** Wear a relic (only one at a time) or take it off. */
+    private void showRelicActionDialog(Dialog parentDialog, Relic r) {
+        Dialog detail = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        detail.setContentView(R.layout.dialog_item_action);
+        detail.setCancelable(false);
+        if (detail.getWindow() != null)
+            detail.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        bindActionDialog(detail, r.title, "RELIC", "LEGENDARY", r.effect, Color.rgb(244, 215, 122));
+        LinearLayout stats = detail.findViewById(R.id.action_stats);
+        addStatRow(stats, r.icon, "Effect", r.effect);
+        addStatRow(stats, R.drawable.ic_key, "Found in", "Vaults, boss and cursed chests");
+        addStatRow(stats, R.drawable.ic_level, "Worn", "One relic at a time");
+
+        MaterialButton btn = detail.findViewById(R.id.btn_action);
+        boolean worn = relic == r;
+        btn.setText(worn ? "Take off" : "Wear");
+        btn.setOnClickListener(v -> {
+            relic = worn ? null : r;
+            soundManager.play(SoundManager.Sfx.EQUIP);
+            updateEquippedDisplay(parentDialog);
+            populateInventoryList(parentDialog);
+            detail.dismiss();
+        });
+        detail.findViewById(R.id.btn_remove).setVisibility(View.GONE);
+        detail.findViewById(R.id.btn_close_action).setOnClickListener(v -> detail.dismiss());
+        detail.show();
+        hideSystemUIOnWindow(detail.getWindow());
     }
 
     private void addCell(LinearLayout row, View cell) {
@@ -4118,8 +4248,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void useConsumable(ConsumableStack stack, Dialog inventoryDialog) {
         if (playerHealth <= 0) return; // a fallen co-op player waits for the next floor
         long now = System.currentTimeMillis();
-        if (now - lastPotionAt < POTION_COOLDOWN) {
-            effects.number(player.x, player.y - player.radius, "Not ready (" + ((POTION_COOLDOWN - (now - lastPotionAt)) / 1000 + 1) + "s)",
+        if (now - lastPotionAt < potionCooldown()) {
+            effects.number(player.x, player.y - player.radius, "Not ready (" + ((potionCooldown() - (now - lastPotionAt)) / 1000 + 1) + "s)",
                     Color.rgb(200, 190, 170));
             soundManager.play(SoundManager.Sfx.GATE_LOCKED);
             return;
@@ -4133,6 +4263,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             healPerStep = Math.max(1, Math.round(amount / 16f));
             healLeft = amount;
             effects.number(player.x, player.y - player.radius, "+" + amount, Color.rgb(90, 230, 110));
+            if (relic == Relic.VIAL && maxArmor > 0) {
+                int newArmor = Math.min(maxArmor, playerArmor + Math.max(1, Math.round(maxArmor * percent / 100f)));
+                runOnUiThread(() -> {
+                    animateArmorBar(playerArmor, newArmor);
+                    playerArmor = newArmor;
+                });
+            }
         } else if ("armor_restore".equals(item.effect)) {
             int newArmor = Math.min(maxArmor, playerArmor + Math.max(1, Math.round(maxArmor * percent / 100f)));
             runOnUiThread(() -> {
@@ -4165,6 +4302,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         addStatRow(box, R.drawable.ic_hourglass, "Cooldown", weapon.cooldown + "ms");
         addStatRow(box, R.drawable.ic_knockback, "Knockback", String.valueOf(weapon.knockback));
         addStatRow(box, R.drawable.ic_target, "Style", weapon.kind().title());
+        Weapon.Trait trait = weapon.trait();
+        if (trait != null) addStatRow(box, R.drawable.ic_level, trait.title,
+                trait.describe(weapon.rarity == Weapon.Rarity.LEGENDARY));
     }
 
     private void showArmorStats(LinearLayout box, Armor armor) {
@@ -4494,14 +4634,450 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return stacks(s.a) >= 3 && stacks(s.b) >= 3;
     }
 
-    /** Player damage multiplier: +1% per Might, +2% per Altar Strength; levels give perks, not raw stats. */
-    private float damageMultiplier() {
-        return 1f + 0.01f * stacks(Perk.MIGHT) + 0.02f * altar[Altar.STRENGTH.ordinal()];
+    /* ============================================================
+       RELICS, WEAPON TRAITS, WEEKLY CHALLENGE, WARDROBE, ROOM EVENTS, TUTORIAL
+       ============================================================ */
+
+    /** Relics: passive items from vaults, boss chests and cursed chests; one is worn at a time (inventory). */
+    enum Relic {
+        VIAL("Alchemist's Vial", "Healing potions also restore the same share of armor", R.drawable.ic_heart),
+        FANG("Bloodfang", "Every kill heals 2 HP", R.drawable.ic_dagger),
+        IDOL("Gilded Idol", "+20% gold", R.drawable.ic_coin),
+        SANDGLASS("Sandglass", "Potions recharge 25% faster", R.drawable.ic_hourglass),
+        FEATHER("Wind Feather", "Dash recharges 20% faster", R.drawable.ic_boots),
+        SKULL("Grim Skull", "+12% damage, but you take 10% more", R.drawable.ic_skull),
+        AEGIS("Warden's Aegis", "Blocks one hit every 12 seconds", R.drawable.ic_shield),
+        EYE("Hunter's Eye", "+6% critical hit chance", R.drawable.ic_target);
+
+        final String title, effect;
+        final int icon;
+
+        Relic(String title, String effect, int icon) {
+            this.title = title;
+            this.effect = effect;
+            this.icon = icon;
+        }
     }
 
-    /** Max HP: 100, +5 per Vigor, +5 per Altar Vitality. */
+    private final java.util.EnumSet<Relic> relics = java.util.EnumSet.noneOf(Relic.class); // changed on the UI thread
+    private volatile Relic relic; // the one worn, or null
+    private long aegisReadyAt = 0;
+
+    /** Grants a relic not owned yet, if any are left; the first one found is worn at once. */
+    private void grantRelic(float x, float y) {
+        List<Relic> left = new ArrayList<>();
+        for (Relic r : Relic.values()) if (!relics.contains(r)) left.add(r);
+        if (left.isEmpty()) return;
+        Relic found = left.get((int) (Math.random() * left.size()));
+        runOnUiThread(() -> {
+            relics.add(found);
+            if (relic == null) relic = found;
+        });
+        int gold = Color.rgb(244, 215, 122);
+        effects.banner(x, y - 120f, "RELIC: " + found.title.toUpperCase(), gold);
+        effects.burst(x, y, gold, 30, 10f);
+        soundManager.play(SoundManager.Sfx.PERK_PICK);
+    }
+
+    private long potionCooldown() {
+        return relic == Relic.SANDGLASS ? POTION_COOLDOWN * 3 / 4 : POTION_COOLDOWN;
+    }
+
+    /** Heals the player outside the potion flow (lifesteal, Bloodfang); on the UI thread like other HP changes. */
+    private void healPlayer(int amount) {
+        runOnUiThread(() -> {
+            if (playerHealth <= 0 || playerHealth >= maxHealth) return;
+            playerHealth = Math.min(maxHealth, playerHealth + amount);
+            playerHealthBar.setProgress(playerHealth);
+            if (txtHealthValue != null) txtHealthValue.setText(playerHealth + " / " + maxHealth);
+        });
+    }
+
+    /** Burning trait: damage still to come on one enemy, dealt every half second. Logic thread only. */
+    private static final class Burn {
+        final Enemy enemy;
+        final int perTick;
+        int left;
+        long next;
+
+        Burn(Enemy enemy, int total, long now) {
+            this.enemy = enemy;
+            this.left = total;
+            this.perTick = Math.max(1, total / 4);
+            this.next = now + 500;
+        }
+    }
+
+    private final List<Burn> burns = new ArrayList<>();
+    private final List<long[]> pendingBlasts = new ArrayList<>(); // explosive elites: {x, y, damage, when}
+    private boolean chaining; // a chained bolt doesn't chain again
+
+    /** The worn weapon's trait (Epic and Legendary only) acting on a hit that landed. */
+    private void weaponTraits(Enemy e, int damage) {
+        Weapon w = player.getWeapon();
+        Weapon.Trait trait = w.trait();
+        if (trait == null || chaining) return;
+        int power = trait.power(w.rarity == Weapon.Rarity.LEGENDARY);
+        switch (trait) {
+            case LIFESTEAL:
+                healPlayer(Math.max(1, damage * power / 100));
+                break;
+            case BURNING:
+                burns.add(new Burn(e, Math.max(1, damage * power / 100), System.currentTimeMillis()));
+                break;
+            case CHAIN: {
+                if (Math.random() * 100 >= power) break;
+                Enemy next = null;
+                float best = 320f;
+                synchronized (enemies) {
+                    for (Enemy o : enemies) {
+                        if (o == e || o.isDead) continue;
+                        float d = getDistance(e.x, e.y, o.x, o.y);
+                        if (d < best) {
+                            best = d;
+                            next = o;
+                        }
+                    }
+                }
+                if (next == null) break;
+                int blue = Color.rgb(150, 210, 255);
+                effects.slash(e.x, e.y, (float) Math.toDegrees(Math.atan2(next.y - e.y, next.x - e.x)), best, 4f, blue);
+                effects.burst(next.x, next.y, blue, 16, 9f);
+                chaining = true;
+                damageEnemy(next, Math.max(1, damage / 2), false, 0f, 0f, false, false);
+                chaining = false;
+                break;
+            }
+            default: // Keen works through critChance()
+                break;
+        }
+    }
+
+    /** The weekly challenge's twist (MenuActivity starts the run); null outside it. */
+    enum WeeklyMod {
+        GLASS_CANNON("Glass Cannon", "You deal 50% more damage, but have half the health"),
+        NO_POTIONS("Dry Throat", "No potions: shops and chests hold none"),
+        HASTE("Swift Death", "Every enemy moves 25% faster");
+
+        final String title, rule;
+
+        WeeklyMod(String title, String rule) {
+            this.title = title;
+            this.rule = rule;
+        }
+    }
+
+    static final String EXTRA_WEEKLY_MOD = "weekly_mod";
+    private WeeklyMod weeklyMod;
+
+    /** Items without potions when the week forbids them. */
+    private List<ShopItem> withoutPotions(List<ShopItem> items) {
+        if (weeklyMod != WeeklyMod.NO_POTIONS) return items;
+        List<ShopItem> kept = new ArrayList<>();
+        for (ShopItem s : items) if (s.type != ShopItem.ItemType.CONSUMABLE) kept.add(s);
+        return kept;
+    }
+
+    /** Wardrobe looks bought with Souls (MenuActivity.showWardrobe): slot 0 body, 1 swing trail, 2 death burst. */
+    enum Cosmetic {
+        PILGRIM(0, "Pilgrim", 0, 0), EMBER(0, "Ember", 0xFFE0702A, 40), FROST(0, "Frost", 0xFF7FC4F0, 40),
+        VOID(0, "Void", 0xFF6A3FA8, 80), GILDED(0, "Gilded", 0xFFE8C25A, 150),
+        STEEL(1, "Steel", 0, 0), BLOOD(1, "Blood", 0xFFC81E28, 30), SPIRIT(1, "Spirit", 0xFF6FE3D0, 60),
+        SHADOW(1, "Shadow", 0xFF7A4FD0, 100),
+        DUST(2, "Dust", 0, 0), ASH(2, "Ash", 0xFF9A938A, 30), SOULFIRE(2, "Soulfire", 0xFF4FD8E0, 60),
+        GOLD(2, "Gold", 0xFFF4D77A, 120);
+
+        final int slot, color, price; // color 0 = the game's own look
+        final String title;
+
+        Cosmetic(int slot, String title, int color, int price) {
+            this.slot = slot;
+            this.title = title;
+            this.color = color;
+            this.price = price;
+        }
+
+        /** The look worn in a slot, from the player's wardrobe prefs; the free one if none was picked. */
+        static Cosmetic worn(SharedPreferences prefs, int slot) {
+            String name = prefs.getString("slot" + slot, null);
+            if (name != null) {
+                try {
+                    Cosmetic c = valueOf(name);
+                    if (c.slot == slot) return c;
+                } catch (IllegalArgumentException ignored) {
+                    // a look from an older version
+                }
+            }
+            for (Cosmetic c : values()) if (c.slot == slot && c.price == 0) return c;
+            return PILGRIM;
+        }
+    }
+
+    private int deathColor = 0; // wardrobe death burst; 0 = the body colour
+
+    // The shrine or gambler whose offer is open, so walking up asks once per visit
+    private volatile Props.Decor eventNear;
+
+    /** Solo only: about half the floors hide a blood shrine, a gambler or a cursed chest in a quiet room. */
+    private void placeRoomEvent() {
+        if (coop != null || currentLayout == null || Math.random() > 0.5) return;
+        List<Room> quiet = new ArrayList<>();
+        for (Room r : currentLayout.rooms) {
+            boolean plain = r.type == Room.Type.SMALL || r.type == Room.Type.MEDIUM || r.type == Room.Type.LARGE;
+            if (plain && r != currentLayout.treasureRoom && r != currentLayout.vaultRoom
+                    && r != currentLayout.bossRoom && r != currentLayout.exitRoom && r != currentLayout.entryRoom)
+                quiet.add(r);
+        }
+        if (quiet.isEmpty()) return;
+        Room room = quiet.get((int) (Math.random() * quiet.size()));
+        float x = room.centerX(), y = room.centerY() + room.height * 0.2f;
+        int kind = (int) (Math.random() * 3);
+        if (kind == 2) {
+            TreasureChest chest = new TreasureChest(x, y, x, y, 0L);
+            chest.landed = true;
+            chest.cursed = true;
+            pickChestReward(chest);
+            synchronized (treasureChests) { treasureChests.add(chest); }
+            return;
+        }
+        // A new list, so the render thread never sees the one it's drawing change
+        List<Props.Decor> decor = new ArrayList<>(currentLayout.decor);
+        decor.add(new Props.Decor(kind == 0 ? Props.SHRINE : Props.GAMBLER, x, y, 0, 0));
+        currentLayout.decor = decor;
+    }
+
+    /** Walking up to a shrine or the gambler pauses and asks; walking away lets it ask again. */
+    private void checkRoomEvents() {
+        FloorLayout layout = currentLayout;
+        if (coop != null || layout == null || inShopRoom || playerHealth <= 0) return;
+        Props.Decor near = null;
+        for (Props.Decor d : layout.decor) {
+            if ((d.kind == Props.SHRINE || d.kind == Props.GAMBLER) && !d.used
+                    && getDistance(player.x, player.y, d.x, d.y) < player.radius + 90f) near = d;
+        }
+        if (near == eventNear) return;
+        eventNear = near;
+        if (near == null) return;
+        Props.Decor event = near;
+        isGamePaused = true;
+        runOnUiThread(() -> {
+            if (event.kind == Props.SHRINE) offerShrine(event);
+            else offerGamble(event);
+        });
+    }
+
+    /** Blood shrine: a quarter of your max HP for a blessing (one more perk pick). */
+    private void offerShrine(Props.Decor shrine) {
+        int cost = Math.max(1, maxHealth / 4);
+        boolean can = playerHealth > cost;
+        confirmEvent(R.drawable.ic_heart, "Blood Shrine",
+                "Offer " + cost + " HP for a blessing?" + (can ? "" : "\nYou are too weak to pay."),
+                "Offer blood", can, () -> {
+                    shrine.used = true;
+                    int old = playerHealth;
+                    playerHealth = Math.max(1, playerHealth - cost);
+                    animateHealthBar(old, playerHealth);
+                    pendingPerks++;
+                    updateLevelBadge();
+                    int red = Color.rgb(224, 72, 72);
+                    effects.burst(shrine.x, shrine.y, red, 30, 10f);
+                    effects.banner(player.x, player.y - player.radius - 50f, "BLESSING EARNED", red);
+                    soundManager.play(SoundManager.Sfx.PERK_PICK);
+                });
+    }
+
+    /** The gambler: gold for a random item from this range's stock, of any rarity. */
+    private void offerGamble(Props.Decor gambler) {
+        int floor = floorManager.getCurrentFloor();
+        int price = Math.round(BatchGenerator.priceBase(floor) * 1.5f);
+        List<ShopItem> pool = getChestItemPool(floor);
+        boolean can = playerGold >= price && !pool.isEmpty();
+        confirmEvent(R.drawable.ic_coin, "The Gambler",
+                "Pay " + price + " gold for a mystery item? It could be anything." + (can ? "" : "\nYou can't pay."),
+                "Gamble", can, () -> {
+                    gambler.used = true;
+                    playerGold -= price;
+                    statsManager.onCoinsSpent(price);
+                    updateGoldHUD();
+                    ShopItem prize = pool.get((int) (Math.random() * pool.size()));
+                    purchaseItem(prize);
+                    effects.banner(player.x, player.y - player.radius - 50f, prize.name.toUpperCase(),
+                            getRarityColor(prize.rarity));
+                    soundManager.play(SoundManager.Sfx.PURCHASE);
+                });
+    }
+
+    /** A room event's offer on the confirm card; the game stays paused until it's answered. */
+    private void confirmEvent(int icon, String title, String message, String yesText, boolean canAccept,
+                              Runnable accept) {
+        Dialog confirm = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        confirm.setContentView(R.layout.dialog_confirm);
+        confirm.setCancelable(false);
+        if (confirm.getWindow() != null)
+            confirm.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        ((android.widget.ImageView) confirm.findViewById(R.id.confirm_icon)).setImageResource(icon);
+        ((TextView) confirm.findViewById(R.id.confirm_title)).setText(title);
+        ((TextView) confirm.findViewById(R.id.confirm_message)).setText(message);
+        MaterialButton no = confirm.findViewById(R.id.btn_confirm_no);
+        MaterialButton yes = confirm.findViewById(R.id.btn_confirm_yes);
+        no.setText("Leave");
+        yes.setText(yesText);
+        yes.setEnabled(canAccept);
+        yes.setAlpha(canAccept ? 1f : 0.4f);
+        no.setOnClickListener(v -> {
+            confirm.dismiss();
+            isGamePaused = false;
+            hideSystemUI();
+        });
+        yes.setOnClickListener(v -> {
+            confirm.dismiss();
+            accept.run();
+            isGamePaused = false;
+            hideSystemUI();
+        });
+        confirm.show();
+        hideSystemUIOnWindow(confirm.getWindow());
+    }
+
+    /** A cursed chest's price: two elites rise around it. Solo only, so this phone runs the enemies. */
+    private void curseChest(TreasureChest chest) {
+        int floor = floorManager.getCurrentFloor();
+        List<EnemyTemplate> pool = getEnemyPoolForFloor(floor);
+        int purple = Color.rgb(176, 60, 220);
+        synchronized (enemies) {
+            for (int i = 0; i < 2; i++) {
+                double a = Math.PI * i + Math.random();
+                float x = chest.x + (float) Math.cos(a) * 160f, y = chest.y + (float) Math.sin(a) * 160f;
+                if (currentLayout != null && !currentLayout.isFloor(x, y)) {
+                    x = chest.x;
+                    y = chest.y;
+                }
+                Enemy elite = new Enemy(x, y, pickEnemyType(floor));
+                elite.applyFloorScaling(floor);
+                if (!pool.isEmpty()) {
+                    elite.templateIndex = (int) (Math.random() * pool.size());
+                    elite.applyTemplate(pool.get(elite.templateIndex));
+                }
+                elite.makeElite();
+                elite.ascend(ascension());
+                elite.isAwake = true;
+                elite.setBehaviorTracker(behaviorTracker);
+                elite.setLayout(currentLayout);
+                enemies.add(elite);
+                effects.burst(x, y, purple, 24, 10f);
+            }
+        }
+        effects.banner(chest.x, chest.y - 90f, "CURSED!", purple);
+        if (camera != null) camera.startShake(250, 12f);
+        soundManager.play(SoundManager.Sfx.SUMMON);
+    }
+
+    // First-run tutorial (solo): the step shown in txt_tutorial, or -1 when off
+    private volatile int tutorialStep = -1;
+    private long tutorialStepAt;
+    private float tutorialFromX, tutorialFromY;
+    private static final String[] TUTORIAL = {
+            "Drag the move stick to walk",
+            "Hold the ATK stick to attack. Drag it to aim",
+            "Tap DASH to dodge through attacks",
+            "Hold HEAVY, then let go for a crushing blow",
+            "Defeat the enemies to open the portal",
+            "Step into the portal to go deeper"};
+
+    private void setTutorialStep(int step) {
+        tutorialStep = step;
+        tutorialStepAt = System.currentTimeMillis();
+        tutorialFromX = player.x;
+        tutorialFromY = player.y;
+        runOnUiThread(() -> {
+            TextView hint = findViewById(R.id.txt_tutorial);
+            if (step < 0) {
+                hint.setVisibility(View.GONE);
+                return;
+            }
+            hint.setText(TUTORIAL[step] + "\n(tap to skip)");
+            hint.setVisibility(View.VISIBLE);
+        });
+    }
+
+    private void finishTutorial(boolean skipped) {
+        setTutorialStep(-1);
+        if (userId != null)
+            getSharedPreferences("tutorial_" + userId, MODE_PRIVATE).edit().putBoolean("done", true).apply();
+        if (skipped) return;
+        effects.banner(player.x, player.y - player.radius - 60f, "TUTORIAL COMPLETE", Color.rgb(244, 215, 122));
+        soundManager.play(SoundManager.Sfx.PERK_PICK);
+    }
+
+    /** Moves the tutorial on once the player has done what the current step asks. */
+    private void tickTutorial() {
+        int step = tutorialStep;
+        if (step < 0) return;
+        // Reaching floor 2 ends it; a loaded deeper save ends it quietly
+        if (floorManager.getCurrentFloor() > 1) {
+            finishTutorial(step < TUTORIAL.length - 1);
+            return;
+        }
+        boolean done;
+        switch (step) {
+            case 0: done = getDistance(player.x, player.y, tutorialFromX, tutorialFromY) > 250f; break;
+            case 1: done = lastAttackTime > tutorialStepAt; break;
+            case 2: done = lastDashTime > tutorialStepAt; break;
+            case 3: done = lastHeavyTime > tutorialStepAt; break;
+            case 4: done = floorManager.isPortalOpen(); break;
+            default: done = false;
+        }
+        if (!done) return;
+        soundManager.play(SoundManager.Sfx.CLICK);
+        setTutorialStep(step + 1);
+    }
+
+    /** Per-tick upkeep: burning foes, delayed elite blasts, room events and the tutorial. */
+    private void tickExtras(long now) {
+        for (java.util.Iterator<Burn> it = burns.iterator(); it.hasNext(); ) {
+            Burn b = it.next();
+            if (b.enemy.isDead || b.left <= 0) {
+                it.remove();
+                continue;
+            }
+            if (now < b.next) continue;
+            b.next = now + 500;
+            int dmg = Math.min(b.left, b.perTick);
+            b.left -= dmg;
+            if (showDamageNumbers)
+                effects.number(b.enemy.x, b.enemy.y - b.enemy.radius, String.valueOf(dmg), Color.rgb(255, 140, 40));
+            effects.burst(b.enemy.x, b.enemy.y, Color.rgb(255, 120, 30), 5, 4f);
+            statsManager.onDamageGiven(dmg);
+            if (isGuest()) {
+                b.enemy.predictHit(dmg);
+                if (b.enemy.isDead) deadEnemyAt.put(b.enemy.id, now);
+                coop.sendHit(b.enemy.id + "," + dmg + ",0.0,0.0,0");
+            } else {
+                b.enemy.takeDamage(dmg);
+            }
+        }
+        for (java.util.Iterator<long[]> it = pendingBlasts.iterator(); it.hasNext(); ) {
+            long[] b = it.next();
+            if (now < b[3]) continue;
+            it.remove();
+            resolveStrike(b[0], b[1], 1f, 0f, 170f, 180f, (int) b[2], 0.5f, 40f, true, now);
+        }
+        checkRoomEvents();
+        tickTutorial();
+    }
+
+    /** Player damage multiplier: +1% per Might, +2% per Altar Strength; levels give perks, not raw stats. */
+    private float damageMultiplier() {
+        float m = 1f + 0.01f * stacks(Perk.MIGHT) + 0.02f * altar[Altar.STRENGTH.ordinal()];
+        if (relic == Relic.SKULL) m *= 1.12f;
+        if (weeklyMod == WeeklyMod.GLASS_CANNON) m *= 1.5f;
+        return m;
+    }
+
+    /** Max HP: 100, +5 per Vigor, +5 per Altar Vitality; halved by the Glass Cannon week. */
     private int computeMaxHealth() {
-        return maxHealth(stacks(Perk.VIGOR), altar[Altar.VITALITY.ordinal()]);
+        int hp = maxHealth(stacks(Perk.VIGOR), altar[Altar.VITALITY.ordinal()]);
+        return weeklyMod == WeeklyMod.GLASS_CANNON ? hp / 2 : hp;
     }
 
     static int maxHealth(int vigor, int vitality) {
@@ -4522,7 +5098,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     private float critChance() {
         if (System.currentTimeMillis() < perfectCritUntil) return 1f;
-        return CRIT_CHANCE + 0.005f * stacks(Perk.KEEN_EYE);
+        float chance = CRIT_CHANCE + 0.005f * stacks(Perk.KEEN_EYE);
+        Weapon w = player.getWeapon();
+        if (w.trait() == Weapon.Trait.KEEN) chance += Weapon.Trait.KEEN.power(w.rarity == Weapon.Rarity.LEGENDARY) / 100f;
+        if (relic == Relic.EYE) chance += 0.06f;
+        return chance;
     }
 
     private long attackCooldown(Weapon w) {
@@ -4534,12 +5114,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     private long dashCooldown() {
-        return (long) (DASH_COOLDOWN / (1f + 0.01f * stacks(Perk.SHADOW_STEP)));
+        long cooldown = (long) (DASH_COOLDOWN / (1f + 0.01f * stacks(Perk.SHADOW_STEP)));
+        return relic == Relic.FEATHER ? cooldown * 4 / 5 : cooldown;
     }
 
     /** Gold after Greed; the fraction becomes a chance at one more coin. */
     private int withGreed(int gold) {
-        float total = gold * (1f + 0.01f * stacks(Perk.GREED) + 0.05f * altar[Altar.FORTUNE.ordinal()]);
+        float total = gold * (1f + 0.01f * stacks(Perk.GREED) + 0.05f * altar[Altar.FORTUNE.ordinal()]
+                + (relic == Relic.IDOL ? 0.2f : 0f));
         int whole = (int) total;
         return whole + (Math.random() < total - whole ? 1 : 0);
     }
@@ -4841,12 +5423,48 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         showDamageNumbers = settings.getBoolean(SettingsActivity.KEY_NUMBERS, true);
         lowHealthEffects = settings.getBoolean(SettingsActivity.KEY_DANGER, true);
         cameraLean = settings.getBoolean(SettingsActivity.KEY_LEAN, true);
+        applyStickSettings(settings);
 
         // CHECK IF WE CAME BACK FROM SETTINGS
         if (showMenuOnResume) {
             showMenuOnResume = false;
             // Slight delay so the activity has time to draw before throwing the dialog up
             new android.os.Handler().postDelayed(this::showMenuDialog, 100);
+        }
+    }
+
+    /** Settings: stick size and opacity, and the move stick on the right for left-handed players. */
+    private void applyStickSettings(SharedPreferences settings) {
+        View actions = findViewById(R.id.action_buttons);
+        float dp = getResources().getDisplayMetrics().density;
+        float size = settings.getInt(SettingsActivity.KEY_STICK_SIZE, 100) / 100f;
+        float alpha = settings.getInt(SettingsActivity.KEY_STICK_ALPHA, 100) / 100f;
+        boolean left = settings.getBoolean(SettingsActivity.KEY_LEFT_HANDED, false);
+        android.widget.RelativeLayout.LayoutParams stick = (android.widget.RelativeLayout.LayoutParams) joystick.getLayoutParams();
+        android.widget.RelativeLayout.LayoutParams arc = (android.widget.RelativeLayout.LayoutParams) actions.getLayoutParams();
+        stick.removeRule(android.widget.RelativeLayout.ALIGN_PARENT_START);
+        stick.removeRule(android.widget.RelativeLayout.ALIGN_PARENT_END);
+        stick.addRule(left ? android.widget.RelativeLayout.ALIGN_PARENT_END : android.widget.RelativeLayout.ALIGN_PARENT_START);
+        stick.setMarginStart(left ? 0 : Math.round(24 * dp));
+        stick.setMarginEnd(left ? Math.round(24 * dp) : 0);
+        arc.removeRule(android.widget.RelativeLayout.ALIGN_PARENT_START);
+        arc.removeRule(android.widget.RelativeLayout.ALIGN_PARENT_END);
+        arc.addRule(left ? android.widget.RelativeLayout.ALIGN_PARENT_START : android.widget.RelativeLayout.ALIGN_PARENT_END);
+        arc.setMarginStart(left ? Math.round(20 * dp) : 0);
+        arc.setMarginEnd(left ? 0 : Math.round(20 * dp));
+        joystick.setLayoutParams(stick);
+        actions.setLayoutParams(arc);
+        // Mirrored, the arc's buttons still fan out toward the middle of the screen
+        actions.setLayoutDirection(left ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+        // Both grow from their outer bottom corner, so they never slide off the screen
+        joystick.setPivotX(left ? 168 * dp : 0f);
+        joystick.setPivotY(168 * dp);
+        actions.setPivotX(left ? 0f : 188 * dp);
+        actions.setPivotY(184 * dp);
+        for (View v : new View[]{joystick, actions}) {
+            v.setScaleX(size);
+            v.setScaleY(size);
+            v.setAlpha(alpha);
         }
     }
 
@@ -4919,12 +5537,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * @return list of shop items (empty if the batch is not yet available)
      */
     private List<ShopItem> getShopItemsForFloor(int floor) {
-        if (floor == restockedFloor && restockedShop != null) return restockedShop;
+        if (floor == restockedFloor && restockedShop != null) return withoutPotions(restockedShop);
         int rangeStart = getRangeStart(floor);
         BatchResult result = batchCache.get(rangeStart);
         if (result == null || result.shopByFloor == null) return new ArrayList<>();
         List<ShopItem> items = result.shopByFloor.get(floor);
-        return items != null ? items : new ArrayList<>();
+        return items != null ? withoutPotions(items) : new ArrayList<>();
     }
 
     /**
@@ -5023,6 +5641,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         save.put("perks",                perkStacks);
         save.put("pendingPerks",         pendingPerks);
         save.put("keys",                 keys);
+        List<String> relicNames = new ArrayList<>();
+        for (Relic r : relics) relicNames.add(r.name());
+        save.put("relics",               relicNames);
+        save.put("relic",                relic != null ? relic.name() : null);
         dbManager.updateGameSave(gameId, save);
     }
 
@@ -5087,6 +5709,19 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 pendingPerks = data.get("pendingPerks") != null
                         ? ((Number) data.get("pendingPerks")).intValue() : 0;
                 keys = data.get("keys") != null ? ((Number) data.get("keys")).intValue() : 0;
+                // Relics found and the one worn; names this version doesn't know are skipped
+                Object savedRelics = data.get("relics");
+                if (savedRelics instanceof List) {
+                    for (Object name : (List<?>) savedRelics) {
+                        try {
+                            relics.add(Relic.valueOf(String.valueOf(name)));
+                        } catch (IllegalArgumentException ignored) {
+                            // unknown relic
+                        }
+                    }
+                }
+                Object wornRelic = data.get("relic");
+                for (Relic r : relics) if (r.name().equals(wornRelic)) relic = r;
                 updateKeysHUD();
                 applySpeedPerk();
                 updateLevelBadge();

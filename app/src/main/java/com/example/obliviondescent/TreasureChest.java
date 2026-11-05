@@ -23,8 +23,11 @@ public class TreasureChest {
     public boolean landed = false; // set by GameActivity once the landing burst has played
     public boolean mimic = false;  // treasure room only: wakes up as an enemy instead of opening
     public boolean vault = false;  // vault chest: the rarest loot plus gold
+    public boolean cursed = false; // room event: the rarest loot, but elites rise when it opens
+    public boolean boss = false;   // thrown out by a slain boss
 
     public static final float OPEN_RADIUS = 80f;
+    private static final int CURSE = Color.rgb(176, 60, 220); // a cursed chest glows purple
     private static final long DROP_TIME = 650;     // flight from the boss to the landing spot
     private static final float DROP_HEIGHT = 170f;
     private static final long BOUNCE_TIME = 300;
@@ -114,7 +117,7 @@ public class TreasureChest {
             canvas.drawText(rewardItemName != null ? rewardItemName : "OPEN", groundX, groundY - 50f, labelPaint);
         } else {
             labelPaint.setTextSize(26f);
-            labelPaint.setColor(GOLD_BRIGHT);
+            labelPaint.setColor(cursed ? CURSE : GOLD_BRIGHT);
             canvas.drawText("!", groundX, groundY - 40f + (float) Math.sin(now / 200.0) * 5f, labelPaint);
         }
     }
@@ -122,7 +125,7 @@ public class TreasureChest {
     /** Pulsing glow, a beam of light and rising sparks in the reward's colour. */
     private void drawLoot(Canvas canvas, float cx, float cy, long now) {
         if (beamPaint.getShader() == null) {
-            int rgb = rewardItemColor & 0x00FFFFFF;
+            int rgb = (cursed ? CURSE : rewardItemColor) & 0x00FFFFFF;
             beamPaint.setShader(new LinearGradient(0, 0, 0, -BEAM_HEIGHT,
                     0x90000000 | rgb, rgb, Shader.TileMode.CLAMP));
             glowPaint.setShader(new RadialGradient(0, 0, 70,

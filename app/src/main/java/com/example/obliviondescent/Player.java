@@ -286,7 +286,7 @@ public class Player {
         float r = radius * 0.7f + length;
         float seg = (angle - swingFrom) / 3f;
         spinRect.set(cx - r, cy - r, cx + r, cy + r);
-        spinPaint.setColor(swingHeavy ? Color.rgb(255, 210, 90) : Color.WHITE);
+        spinPaint.setColor(swingHeavy ? Color.rgb(255, 210, 90) : trailColor);
         for (int i = 0; i < 3; i++) {
             spinPaint.setAlpha((int) ((1f - t) * (swingHeavy ? 200 : 130) * (1f - i * 0.3f)));
             spinPaint.setStrokeWidth((swingHeavy ? 24f : 14f) - i * 4f);
@@ -314,6 +314,7 @@ public class Player {
     }
 
     public void setInvulnerable(boolean invulnerable) { this.invulnerable = invulnerable; }
+    public volatile int trailColor = Color.WHITE; // wardrobe swing trail
     public void setColor(int color) { paint.setColor(color); }
     public int getColor() { return paint.getColor(); }
     public float getX() { return x; }

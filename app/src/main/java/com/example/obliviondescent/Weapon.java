@@ -73,6 +73,43 @@ public class Weapon {
     }
 
     // ─── HELPERS ─────────────────────────────────────────────────────────────────
+    /** A power only Epic and Legendary weapons carry; strength in percent, half again for Legendary. */
+    public enum Trait {
+        LIFESTEAL("Lifesteal", 6, "Heals you for %d%% of the damage it deals"),
+        BURNING("Burning", 30, "Sets foes ablaze: %d%% of each hit again over 2 seconds"),
+        CHAIN("Chain Lightning", 25, "%d%% chance to arc to a nearby foe for half damage"),
+        KEEN("Keen", 8, "+%d%% critical hit chance");
+
+        public final String title;
+        private final int base;
+        private final String text;
+
+        Trait(String title, int base, String text) {
+            this.title = title;
+            this.base = base;
+            this.text = text;
+        }
+
+        public int power(boolean legendary) {
+            return legendary ? base * 3 / 2 : base;
+        }
+
+        public String describe(boolean legendary) {
+            return String.format(java.util.Locale.US, text, power(legendary));
+        }
+    }
+
+    /** The trait an item of this name and rarity carries; fixed by the name, so shops, chests and saves agree. */
+    static Trait traitOf(String name, String rarity) {
+        String r = String.valueOf(rarity).toUpperCase();
+        if (name == null || (!r.equals("EPIC") && !r.equals("LEGENDARY"))) return null;
+        return Trait.values()[Math.floorMod(name.hashCode(), Trait.values().length)];
+    }
+
+    public Trait trait() {
+        return traitOf(name, rarity.name());
+    }
+
     /**
      * How a weapon is swung, read from its name. Each kind has its own swing arc (half-angle, degrees),
      * finisher arc, combo length, reach factor, finisher damage and finisher knockback.

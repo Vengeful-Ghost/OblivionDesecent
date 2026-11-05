@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Soul Altar: permanent upgrades bought with Souls; the upgrade cells are added in Java -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -72,14 +73,39 @@
 
         </FrameLayout>
 
-        <TextView
-            style="@style/OD.Text.Caption"
+        <!-- Souls also buy looks in the Wardrobe -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="Every run earns Souls"
-            android:textSize="@dimen/text_caption"
-            tools:ignore="HardcodedText"/>
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                style="@style/OD.Text.Caption"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="Every run earns Souls"
+                android:textSize="@dimen/text_caption"
+                tools:ignore="HardcodedText"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_wardrobe"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:minHeight="0dp"
+                android:paddingStart="@dimen/space_sm"
+                android:paddingEnd="@dimen/space_sm"
+                android:textSize="@dimen/text_caption"
+                android:text="Wardrobe"
+                app:icon="@drawable/ic_helmet"
+                app:iconSize="@dimen/icon_sm"
+                app:iconPadding="@dimen/space_xs"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
 
         <View
             android:layout_width="match_parent"

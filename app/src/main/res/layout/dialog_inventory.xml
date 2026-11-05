@@ -214,6 +214,36 @@
 
                 </LinearLayout>
 
+                <!-- Relic slot -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="@dimen/space_sm">
+
+                    <ImageView
+                        android:layout_width="@dimen/icon_md"
+                        android:layout_height="@dimen/icon_md"
+                        android:layout_marginEnd="@dimen/space_sm"
+                        android:src="@drawable/ic_trophy"
+                        android:importantForAccessibility="no"/>
+
+                    <TextView
+                        android:id="@+id/txt_equipped_relic"
+                        style="@style/OD.Text"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="No relic"
+                        android:textSize="@dimen/text_small"
+                        android:textColor="@color/bone_muted"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        tools:ignore="HardcodedText"/>
+
+                </LinearLayout>
+
             </LinearLayout>
 
         <!-- Close button -->
@@ -311,6 +341,18 @@
                 android:paddingTop="14dp"
                 android:drawableTop="@drawable/ic_level"
                 android:contentDescription="Perks"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/filter_relics"
+                style="@style/OD.Text.Tab"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
+                android:paddingTop="14dp"
+                android:drawableTop="@drawable/ic_trophy"
+                android:contentDescription="Relics"
                 android:clickable="true"
                 android:focusable="true"
                 tools:ignore="HardcodedText"/>

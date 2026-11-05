@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 // CI run number, so every pushed build is a newer version than the one installed
@@ -68,6 +69,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-crashlytics")
     implementation(libs.firebase.database)
     implementation(libs.gridlayout)
     testImplementation(libs.junit)

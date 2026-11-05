@@ -1122,13 +1122,45 @@ public class Enemy {
                     Color.rgb(226, 214, 190), weapon.knockback);
     }
 
-    /** Elite: twice the health and damage, three times the gold. */
+    /** Elite: twice the health and damage, three times the gold, and a named trait. */
     public void makeElite() {
         elite = true;
         maxHealth *= 2;
         health = maxHealth;
         dmgMultiplier *= 2f;
         goldDrop *= 3;
+        EliteTrait trait = eliteTrait();
+        if (trait == EliteTrait.HASTED) speed *= 1.35f;
+        else if (trait == EliteTrait.SHIELDED && !shield) makeShield();
+    }
+
+    /** What makes an elite stand out; its title leads the nameplate. */
+    public enum EliteTrait {
+        VAMPIRIC("Vampiric"),   // heals from the hits it lands
+        EXPLOSIVE("Explosive"), // blows up a moment after it dies
+        SHIELDED("Shielded"),   // fights behind a raised shield
+        HASTED("Hasted");       // a third faster
+
+        public final String title;
+
+        EliteTrait(String title) {
+            this.title = title;
+        }
+    }
+
+    /** The elite's trait, or null for others; picked from the id, so a co-op guest's mirror agrees. */
+    public EliteTrait eliteTrait() {
+        if (!elite) return null;
+        EliteTrait trait = EliteTrait.values()[Math.floorMod(id * 7 + 3, EliteTrait.values().length)];
+        // Only fighters can raise a shield
+        if (trait == EliteTrait.SHIELDED && type != Type.GRUNT && type != Type.BRUTE && type != Type.TANK)
+            return EliteTrait.VAMPIRIC;
+        return trait;
+    }
+
+    /** Vampiric elites mend from the hits they land. */
+    public void heal(int amount) {
+        if (!isDead) health = Math.min(maxHealth, health + amount);
     }
 
     /** A summoner's thrall: drops nothing and doesn't count toward the floor. */
@@ -1330,7 +1362,7 @@ public class Enemy {
         String label = (displayName != null) ? displayName : type.name();
         if (displayName != null) labelPaint.setColor(displayColor);
         if (elite) {
-            label = "Elite " + label;
+            label = eliteTrait().title + " " + label;
             labelPaint.setColor(Color.rgb(244, 215, 122));
         }
         canvas.drawText(label, drawX, barTop - 6f, labelPaint);

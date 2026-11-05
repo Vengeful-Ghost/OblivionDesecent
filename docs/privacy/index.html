@@ -35,15 +35,18 @@ it is shared with, and the choices you have. By creating an account and playing,
 <ul>
   <li><strong>Account:</strong> the username you choose and a password. Sign-in is handled by Google Firebase
     Authentication; we never see or store your password in plain text.</li>
-  <li><strong>Game data:</strong> your saved run (floor, health, gold, items, perks, keys), Soul Altar upgrades and
-    Souls, lifetime statistics (floors cleared, kills, play time and similar), Daily Run results, the players you
+  <li><strong>Game data:</strong> your saved run (floor, health, gold, items, perks, relics, keys), Soul Altar
+    upgrades, Wardrobe looks and Souls, lifetime statistics (floors cleared, kills, play time and similar), Daily Run and Weekly Challenge results, the players you
     follow, party invites you send and receive, and co-op party information (party code, players in the party,
     in-run positions and actions, and items you gift to party members).</li>
-  <li><strong>Stored only on your device:</strong> your settings, daily quest progress, recent run history and
+  <li><strong>Stored only on your device:</strong> your settings, the looks you wear, tutorial progress, daily
+    quest progress, recent run history and
     Bestiary. These never leave your phone and are removed when you uninstall the game.</li>
   <li><strong>Usage and device data:</strong> Firebase Analytics collects basic usage events and device information
     (such as device model, operating system version and an app instance ID) so we can see how the game is
     used and fix problems.</li>
+  <li><strong>Crash reports:</strong> if the game crashes, Firebase Crashlytics sends a crash report (the code
+    location, device model, operating system version and an app instance ID) so we can fix it.</li>
   <li><strong>Advertising data:</strong> if you choose to watch a rewarded ad, Google AdMob may collect your device's
     advertising ID, IP address and device information to show and measure ads (see section 4).</li>
 </ul>
@@ -58,7 +61,7 @@ it is shared with, and the choices you have. By creating an account and playing,
 </ul>
 
 <h2>3. What other players can see</h2>
-<p>Your username, statistics, highest floor and Daily Run results are visible to other signed-in players on
+<p>Your username, statistics, highest floor and Daily Run and Weekly Challenge results are visible to other signed-in players on
 leaderboards and profiles. Players in your co-op party see your username and your character during the run.</p>
 
 <h2>4. Ads and your consent</h2>
@@ -74,7 +77,7 @@ apps that use its services</a>.</p>
 <h2>5. Who we share data with</h2>
 <p>We do not sell your data. It is processed only by these service providers:</p>
 <ul>
-  <li><strong>Google Firebase</strong> (Authentication, Cloud Firestore, Realtime Database, Analytics) to store
+  <li><strong>Google Firebase</strong> (Authentication, Cloud Firestore, Realtime Database, Analytics, Crashlytics) to store
     accounts and game data. <a href="https://firebase.google.com/support/privacy">Firebase privacy information</a>.</li>
   <li><strong>Google AdMob</strong> for rewarded ads. <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.</li>
 </ul>

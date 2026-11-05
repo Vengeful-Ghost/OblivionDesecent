@@ -41,6 +41,9 @@ public class SettingsActivity extends AppCompatActivity {
     // Fight effects, all on by default
     public static final String KEY_SHAKE = "screen_shake", KEY_NUMBERS = "damage_numbers", KEY_GORE = "blood_effects",
             KEY_DANGER = "low_health_effects", KEY_LEAN = "camera_lean";
+    // On-screen sticks: size and opacity in percent, and the move stick on the right for left hands
+    public static final String KEY_STICK_SIZE = "stick_size", KEY_STICK_ALPHA = "stick_alpha",
+            KEY_LEFT_HANDED = "left_handed";
 
     // True when this screen was opened from the in-game pause menu — music must NOT play
     public static final String EXTRA_FROM_GAME = "from_game";
@@ -120,6 +123,11 @@ public class SettingsActivity extends AppCompatActivity {
         bindSwitch(R.id.switch_gore, KEY_GORE, prefs);
         bindSwitch(R.id.switch_danger, KEY_DANGER, prefs);
         bindSwitch(R.id.switch_lean, KEY_LEAN, prefs);
+        bindPercent(R.id.seekbar_stick_size, KEY_STICK_SIZE, prefs);
+        bindPercent(R.id.seekbar_stick_alpha, KEY_STICK_ALPHA, prefs);
+        SwitchCompat leftHanded = findViewById(R.id.switch_left_handed);
+        leftHanded.setChecked(prefs.getBoolean(KEY_LEFT_HANDED, false));
+        leftHanded.setOnCheckedChangeListener((button, on) -> prefs.edit().putBoolean(KEY_LEFT_HANDED, on).apply());
 
         View btnPrivacy = findViewById(R.id.btn_privacy_options);
         btnPrivacy.setVisibility(Ads.privacyOptionsRequired(this) ? View.VISIBLE : View.GONE);
@@ -216,6 +224,20 @@ public class SettingsActivity extends AppCompatActivity {
             panes[i].setVisibility(i == index ? View.VISIBLE : View.GONE);
             tabs[i].setTextColor(getColor(i == index ? R.color.gold_bright : R.color.bone_muted));
         }
+    }
+
+    /** A slider saved straight to a percent setting that is 100 by default. */
+    private void bindPercent(int id, String key, SharedPreferences prefs) {
+        SeekBar slider = findViewById(id);
+        slider.setProgress(prefs.getInt(key, 100));
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                prefs.edit().putInt(key, progress).apply();
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) {}
+            @Override public void onStopTrackingTouch(SeekBar s) {}
+        });
     }
 
     /** A switch saved straight to a setting that is on by default. */

@@ -208,17 +208,32 @@
 
         </LinearLayout>
 
-        <!-- Half width and centred under the pairs above -->
+        <!-- The Bestiary and this week's challenge -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/space_sm"
-            android:orientation="horizontal"
-            android:gravity="center_horizontal"
-            android:weightSum="2">
+            android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_bestiary"
+                style="@style/OD.Button.Secondary"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="@dimen/touch_min"
+                android:layout_marginEnd="@dimen/space_sm"
+                android:paddingStart="@dimen/space_sm"
+                android:paddingEnd="@dimen/space_sm"
+                android:maxLines="1"
+                android:textSize="@dimen/text_small"
+                android:text="Bestiary"
+                app:icon="@drawable/ic_skull"
+                app:iconSize="@dimen/icon_sm"
+                app:iconPadding="@dimen/space_xs"
+                tools:ignore="HardcodedText" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_weekly"
                 style="@style/OD.Button.Secondary"
                 android:layout_width="0dp"
                 android:layout_weight="1"
@@ -227,8 +242,8 @@
                 android:paddingEnd="@dimen/space_sm"
                 android:maxLines="1"
                 android:textSize="@dimen/text_small"
-                android:text="Bestiary"
-                app:icon="@drawable/ic_skull"
+                android:text="Weekly"
+                app:icon="@drawable/ic_crossed_swords"
                 app:iconSize="@dimen/icon_sm"
                 app:iconPadding="@dimen/space_xs"
                 tools:ignore="HardcodedText" />
