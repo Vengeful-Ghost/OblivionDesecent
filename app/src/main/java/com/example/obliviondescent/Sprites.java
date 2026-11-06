@@ -76,10 +76,13 @@ final class Sprites {
 
         long durationMs() { return (long) (base.length * 1000f / fps); }
 
-        /** The frame showing ms into the animation: loops wrap, one-shots hold their last frame. */
+        /**
+         * The frame showing ms into the animation: loops wrap, one-shots hold their last frame. ms may be the
+         * wall clock (about 1.7e12): counted in long frames, so it never clamps to one frame as an int would.
+         */
         int at(long ms) {
-            int i = (int) (Math.max(0L, ms) * fps / 1000f);
-            return loop ? i % base.length : Math.min(i, base.length - 1);
+            long i = (long) (Math.max(0L, ms) * (double) fps / 1000.0);
+            return (int) (loop ? i % base.length : Math.min(i, base.length - 1));
         }
 
         boolean done(long ms) { return !loop && ms >= durationMs(); }
@@ -153,6 +156,45 @@ final class Sprites {
     /** The named animation, or null when the pack doesn't have it (callers fall back to their shapes). */
     static Anim get(String name) {
         return ANIMS.get(name);
+    }
+
+    // Eight ways to face, clockwise from east on screen (y down): E, SE, S, SW, W, NW, N, NE. The pack draws
+    // bodies in five views (art/sprites.mjs: "player.walk" side on, then ".se", ".s", ".ne", ".n"); the
+    // three left-facing ways are those mirrored.
+    private static final String[] VIEW_OF = {"", ".se", ".s", ".se", "", ".ne", ".n", ".ne"};
+    private static final boolean[] MIRROR = {false, false, false, true, true, true, false, false};
+    private static final Map<String, Anim[]> VIEWS = new HashMap<>();
+
+    /**
+     * Which of the eight ways a body looking along (dx, dy) faces, given the way it faced before: it only
+     * turns once the look is well past the halfway line between two ways, so it doesn't flicker on it.
+     */
+    static int facing(int before, float dx, float dy) {
+        if (dx * dx + dy * dy < 1e-6f) return before;
+        double deg = Math.toDegrees(Math.atan2(dy, dx));
+        double off = Math.abs(((deg - before * 45.0) % 360 + 540) % 360 - 180); // degrees from the current way
+        if (before >= 0 && off < 30) return before;
+        return (int) Math.floorMod(Math.round(deg / 45.0), 8);
+    }
+
+    /** True when facing way (from {@link #facing}) is drawn as its mirror image. */
+    static boolean mirrored(int way) {
+        return MIRROR[way & 7];
+    }
+
+    /** The body animation base ("player.walk") as seen facing way; its side view when the pack has no other. */
+    static Anim get(String base, int way) {
+        Anim[] views = VIEWS.get(base);
+        if (views == null) {
+            views = new Anim[8];
+            Anim side = ANIMS.get(base);
+            for (int i = 0; i < 8; i++) {
+                Anim a = ANIMS.get(base + VIEW_OF[i]);
+                views[i] = a != null ? a : side;
+            }
+            if (side != null) VIEWS.put(base, views); // before the pack loads, try again next time
+        }
+        return views[way & 7];
     }
 
     private static final Map<String, Bitmap> TEXTURES = new HashMap<>();

@@ -59,6 +59,7 @@ public class Player {
     // Pixel art: the sprite's feet sit this far below the centre (in radii), on the contact shadow
     private static final float FEET = 0.78f;
     private boolean faceLeft = false; // render thread only
+    private int way = 0;              // which of eight ways the sprite faces (Sprites.facing); render thread only
 
     // Round shading: light from the top left, shadow on the far side, so the body reads as a ball
     static final RadialGradient SHADE = new RadialGradient(-0.3f, -0.35f, 1.35f,
@@ -179,7 +180,7 @@ public class Player {
         if (isDying) {
             // The body flashes white and collapses while GameEffects.poof() scatters it
             float progress = Math.min(1f, (System.currentTimeMillis() - deathStartTime) / 220f);
-            Sprites.Anim still = Sprites.get("player.idle");
+            Sprites.Anim still = Sprites.get("player.idle", way);
             if (progress < 1f && still != null) {
                 float feet = drawY + radius * FEET;
                 canvas.save();
@@ -209,7 +210,11 @@ public class Player {
         // Contact shadow on the floor; the body bobs above it while walking
         canvas.drawOval(drawX - radius * 0.9f, drawY + radius * 0.5f, drawX + radius * 0.9f, drawY + radius * 1.05f,
                 shadowPaint);
-        Sprites.Anim body = Sprites.get(moving ? "player.walk" : "player.idle");
+        // Faces where it aims (or walks), one of eight ways: five drawn views, the left-facing three mirrored
+        double look = Math.toRadians(aimAngle);
+        way = Sprites.facing(way, (float) Math.cos(look), (float) Math.sin(look));
+        faceLeft = Sprites.mirrored(way);
+        Sprites.Anim body = Sprites.get(moving ? "player.walk" : "player.idle", way);
         if (moving && body == null) drawY -= Math.abs((float) Math.sin(now / 95.0)) * 5f; // the sprite walks by itself
 
         float length = weaponLength(weapon);
@@ -224,9 +229,7 @@ public class Player {
 
         boolean squash = now < flashUntil;
         if (body != null) {
-            // Pixel art: faces where it aims, squashes and flashes red on a hit
-            float cos = (float) Math.cos(Math.toRadians(aimAngle));
-            if (Math.abs(cos) > 0.15f) faceLeft = cos < 0;
+            // Pixel art: squashes and flashes red on a hit
             float feet = drawY + radius * FEET;
             int frame = body.at(now);
             if (squash) {

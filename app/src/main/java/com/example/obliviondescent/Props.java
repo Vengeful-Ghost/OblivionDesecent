@@ -227,13 +227,15 @@ public class Props {
         if (portal != null) {
             canvas.save();
             canvas.translate(x, y);
-            canvas.scale(0.9f + 0.1f * (float) Math.sin(now / 400.0), 0.9f + 0.1f * (float) Math.sin(now / 400.0));
+            // the floor glow, shrunk to about the rift's own size (its gradient is 130 across)
+            float glow = 0.6f * (0.9f + 0.1f * (float) Math.sin(now / 400.0));
+            canvas.scale(glow, glow);
             canvas.drawCircle(0, 0, 130, gold ? goldGlowPaint : arcaneGlowPaint);
             canvas.restore();
             Sprites.draw(canvas, portal, portal.at(now), x, y + r * 0.5f, false, 0, 255);
             if (label != null) {
                 labelPaint.setColor(gold ? GOLD_GLOW : ARCANE_GLOW);
-                canvas.drawText(label, x, y - r * 2f, labelPaint); // over the portal's top
+                canvas.drawText(label, x, y - r * 2.8f, labelPaint); // above the sparks it draws in
             }
             return;
         }

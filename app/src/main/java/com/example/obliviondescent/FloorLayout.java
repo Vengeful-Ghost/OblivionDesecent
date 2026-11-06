@@ -638,6 +638,37 @@ public class FloorLayout {
         return new float[]{oldX, oldY};
     }
 
+    /**
+     * True when something of radius r lying at (x, y), a coin or a chest, shows on open floor: on walkable
+     * floor with r to spare all round, below the brick face a north wall (or a walled-off block) draws
+     * WALL_FACE down from its line, and off the barrels, crates and pillars.
+     */
+    public boolean clearForItem(float x, float y, float r) {
+        if (!isOnFloor(x, y, r) || !isFloor(x, y - Props.WALL_FACE - r * 0.5f)) return false;
+        float[] out = new float[2];
+        Props.pushOut(decor, x, y, r, out);
+        return out[0] == x && out[1] == y;
+    }
+
+    /**
+     * Where an item meant for (x, y), thrown from (fromX, fromY), should come to rest: there if it's clear,
+     * otherwise the first clear spot back along its path, otherwise the nearest clear spot round the thrower.
+     */
+    public float[] itemSpot(float x, float y, float r, float fromX, float fromY) {
+        if (clearForItem(x, y, r)) return new float[]{x, y};
+        for (int i = 1; i <= 6; i++) {
+            float k = 1f - i / 6f, px = fromX + (x - fromX) * k, py = fromY + (y - fromY) * k;
+            if (clearForItem(px, py, r)) return new float[]{px, py};
+        }
+        for (float ring = 40f; ring <= 280f; ring += 40f)
+            for (int a = 0; a < 12; a++) {
+                double t = a * Math.PI / 6;
+                float px = fromX + (float) Math.cos(t) * ring, py = fromY + (float) Math.sin(t) * ring;
+                if (clearForItem(px, py, r)) return new float[]{px, py};
+            }
+        return new float[]{fromX, fromY};
+    }
+
     /** True when a body of radius r at (cx, cy) is fully on walkable floor. */
     boolean isOnFloor(float cx, float cy, float r) {
         return isFloor(cx,     cy    )

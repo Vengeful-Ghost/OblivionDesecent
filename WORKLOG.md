@@ -92,3 +92,74 @@ coins in flight and the small poof in `art/records/scenes/ENTRY.png`. Not played
   grid and let rooms be unions of rectangles (L, T, plus, cut corners, pillared halls) and corridors chains
   of segments (L-bends, zig-zag "diagonals" in 1-tile steps), drawn with the same textures. Must stay
   seeded so co-op phones build the same floor.
+
+### Round 4 (2026-11-06, night)
+
+- **Nothing animated (walks, idles, portals, torches, coins):** `Sprites.Anim.at()` turned the wall clock (~1.7e12 ms)
+  times fps into an `int`, which always clamped to the same frame. Now counted in `long`. Effects were fine
+  (they pass their own age).
+- **Portals:** the rift is now about the player's height (`art/sprites.mjs` opts `width: 8, height: 14`;
+  `art/src/fx/arcane/portal.js` scales its sparks, glows and floor line with that size), the floor glow is
+  smaller and the label sits above the sparks (`Props.drawPortal`). `FloorManager.setExitRoom(room)`: a doorway
+  on the north or south side puts the two portals side by side (next floor left, shop right); east or west
+  stacks them (next floor up, shop down).
+- **Digits:** `node art/tools/digits.mjs` redraws 0-9 in both Pixelify TTFs as classic 5 x 7 pixel digits on
+  each weight's own grid (Pixelify's 5 looked like an S). Pixelify has no Reserved Font Name, so the modified
+  font ships under the OFL; noted in `assets/licenses/PixelifySans-OFL.txt` and the Settings credits.
+- **"So close" death card** (`GameActivity.fillSoClose`): "Slain by <what hit last> on floor N" (hits carry
+  their source through `hitPlayer` / `resolveStrike` / `Projectile.owner`; `Enemy.killerName()`), how many floors
+  short of your best (or New best / Matched; `bestFloorBefore` is read when the run loads), and the Soul Altar
+  upgrade you're nearest to with this life's Souls counted in (redrawn when an ad doubles them). The two lines
+  sit under the run summary. Daily / weekly runs skip the best-floor line.
+- **Treasure thief** (`Enemy.makeThief/updateThief`, `GameActivity.pickThiefRoom/spawnThief/tickThief`): on 25% of
+  floors from 2 on (never boss floors; seeded on daily runs) it waits in one ordinary room and bolts when the
+  player first walks in. A gold speeder, 85% of the player's speed, runs the open way that leads most directly
+  away; 12 s, then "IT GOT AWAY". Each hit spills 2 coins; caught: 20 + 2 x floor coins (max 60), a key, triple
+  XP. Doesn't count toward the floor; clearing the floor leaves it running. Bestiary entry THIEF. Co-op: state
+  bit 16, guests mirror it.
+- **Tutorial crash on its last page:** 7 pages, 6 icons (the biome round added a page without one). Icon added
+  (`ic_map`) and the lookup clamps.
+- **Coins and chests in walls:** `FloorLayout.clearForItem / itemSpot` (on floor with room to spare, below a north
+  wall's brick face, off solid props; else back along the throw, else the nearest clear spot round the thrower).
+  Every coin drop and dropped chest goes through `GameActivity.landing`.
+- **Eight-way facing:** `_kit.js` has a `Rig`: parts placed in 3D (forward, across, up) and projected for five views
+  (e, se, s, ne, n); the game mirrors three of them. Player, all regular enemies and the bosses are rebuilt on it
+  (bat and mimic stay one flat drawing). `art/sprites.mjs` `body()` exports `<name>.<anim>` (side) plus `.se .s .ne .n`.
+  In the game `Sprites.facing(way, dx, dy)` picks one of 8 ways with a 30 degree dead zone, `Sprites.get(base, way)`
+  and `Sprites.mirrored(way)` give the view. Player faces where it aims / walks, enemies where they look or run.
+- Renders (Robolectric, removed again): `art/records/scenes/EXIT_FROM_TOP.png`, `EXIT_FROM_SIDE.png`, `FACINGS.png`,
+  `GAME_OVER.png`. Note: Robolectric doesn't draw a TextView's compound drawables (even plain vectors), so icons
+  beside text are missing from those renders only.
+- **pixelfx gallery** (https://patch-gg.github.io/pixelfx/): only the effects we use are vendored. Shortlist that
+  fits, not downloaded yet: pickups/chest-open, key-glint, loot-beam, potion; spawn/summon-rise, spawn-portal,
+  soul-rise, respawn-beam; lightning/chain-lightning; status/burning, stunned, cursed; shadow/life-steal, hex-sigil,
+  necro-skulls; holy/divine-shield, healing-ring, resurrection; impacts/ground-slam, heavy-landing, shield-block;
+  water/ripples, drip, fountain; weather/fog, fireflies; ui/level-up, quest-complete. Effects "drawn on the body"
+  paint pixelfx's grey dummy, so only effect-only ones drop straight in.
+
+Last checked: release APK builds (15.6 MB). Not played on a phone.
+
+### Next: the pixelfx shortlist (started 2026-11-06, paused for the usage limit)
+
+The user approved downloading them. pixelfx's latest `src/core` is identical to ours, so these are copied in
+as-is but **not yet listed in `art/sprites.mjs` or used by the game** (the game is unchanged by them):
+pickups/key-glint, loot-beam · spawn/summon-rise, spawn-portal, respawn-beam · status/burning, stunned, cursed ·
+shadow/hex-sigil, necro-skulls · holy/divine-shield, heal-aoe, resurrection · impacts/ground-slam, heavy-landing,
+shield-block · water/ripples, drip, fountain · ui/level-up, quest-complete (plus each category's `_lib.js`).
+Dropped after previews: chest-open (draws its own chest), potion, soul-rise and life-steal (draw pixelfx's figure),
+chain-lightning (fixed three targets), fog and fireflies (full-screen meadow backdrops).
+
+Plan for each (previews: `node <scratchpad>/strips.mjs`-style bake of the effect alone):
+- stunned: loop over a stunned enemy's head. burning: loop on enemies the Burning trait lit; pass a small
+  custom `actor` (mask { w, h, data }) so its body flash isn't pixelfx's figure. cursed: on the player under the
+  tome curse (custom actor, no eyes).
+- divine-shield: the Aegis block ("WARDED"). shield-block: an enemy's guard stopping a hit (flip to face).
+- key-glint: over "+1 KEY". loot-beam: behind unopened vault (gold palette) and boss chests.
+- summon-rise with `until` ~1.2 s (before its own brute climbs out): where thralls rise, a mimic wakes.
+  spawn-portal (smaller `width`): boss arrival, Trial waves. respawn-beam with `until` ~0.8 s: checkpoint respawn.
+- hex-sigil: the Summoner's summon. necro-skulls: over the Cursed Crypt's chest.
+- heal-aoe (smaller `reach`): the Healing Spring. resurrection (custom empty actor): ad revive, Second Wind.
+- ground-slam (smaller `reach`): boss slams. heavy-landing: Hunter's leap, other slams.
+- level-up (custom empty actor): player level up. quest-complete: a daily quest finished mid-run.
+- ripples / drip: Flooded Catacombs props. fountain: the Healing Spring's centrepiece.
+Looping effects need a timed play in `GameEffects` (play for N ms) and per-body loops drawn in `Enemy.draw`.

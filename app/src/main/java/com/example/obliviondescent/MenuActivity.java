@@ -343,6 +343,7 @@ public class MenuActivity extends AppCompatActivity {
             {"CHARGER", "Charger", "Lowers its horns and rushes in a line. Sidestep, and let it crash into a wall."},
             {"NECROMANCER", "Necromancer", "Raises the fallen as thralls. Kill it first, before its army grows."},
             {"TANK", "Tank", "Huge health and a crushing hammer. Strike after its slam; never trade blows."},
+            {"THIEF", "Treasure Thief", "Turns up now and then with a purse of gold. Every hit spills coins; catch it before it slips away and the purse is yours, with a key."},
             {"BOSS_BRUTE", "Warlord", "Slams and charges. Below half health it whirls; below a quarter the ground quakes."},
             {"BOSS_SUMMONER", "Summoner", "Keeps away, raises thralls and fires bursts. Cut through to it."},
             {"BOSS_SORCERER", "Sorcerer", "Blinks beside you and fires aimed fans; wounded, it spins storms of bolts."},
@@ -467,10 +468,10 @@ public class MenuActivity extends AppCompatActivity {
         Wear.apply(dialog.getWindow().getDecorView());
     }
 
-    // Icon of each tutorial page
+    // Icon of each tutorial page, one per page of TUTORIAL (showTutorial falls back to the last for any extra)
     private static final int[] TUTORIAL_ICONS = {
             R.drawable.ic_boots, R.drawable.ic_sword, R.drawable.ic_warning,
-            R.drawable.ic_stairs, R.drawable.ic_key, R.drawable.ic_level
+            R.drawable.ic_stairs, R.drawable.ic_key, R.drawable.ic_map, R.drawable.ic_level
     };
 
     // Title and text of each tutorial page
@@ -532,7 +533,8 @@ public class MenuActivity extends AppCompatActivity {
         int[] page = {0};
         Runnable render = () -> {
             int p = page[0];
-            ((android.widget.ImageView) dialog.findViewById(R.id.tutorial_icon)).setImageResource(TUTORIAL_ICONS[p]);
+            ((android.widget.ImageView) dialog.findViewById(R.id.tutorial_icon))
+                    .setImageResource(TUTORIAL_ICONS[Math.min(p, TUTORIAL_ICONS.length - 1)]);
             ((TextView) dialog.findViewById(R.id.tutorial_title)).setText(TUTORIAL[p][0]);
             ((TextView) dialog.findViewById(R.id.tutorial_page)).setText((p + 1) + " / " + TUTORIAL.length);
             ((TextView) dialog.findViewById(R.id.tutorial_body)).setText(TUTORIAL[p][1]);

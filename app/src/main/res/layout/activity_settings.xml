@@ -770,7 +770,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/space_md"
                     android:gravity="center"
-                    android:text="Icons by Lorc, Delapouite and Skoll · game-icons.net · CC BY 3.0&#10;Pixel art made with pixelfx by Patch and Hugo Duprez · MIT License&#10;Font: Pixelify Sans · SIL Open Font License 1.1"
+                    android:text="Icons by Lorc, Delapouite and Skoll · game-icons.net · CC BY 3.0&#10;Pixel art made with pixelfx by Patch and Hugo Duprez · MIT License&#10;Font: Pixelify Sans, digits redrawn · SIL Open Font License 1.1"
                     android:textSize="@dimen/text_caption"
                     android:textColor="@color/bone_muted"
                     tools:ignore="HardcodedText"/>

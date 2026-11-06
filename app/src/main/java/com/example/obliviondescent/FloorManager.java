@@ -53,8 +53,9 @@ public class FloorManager {
     private float exitRoomCenterX = 0f;
     private float exitRoomCenterY = 0f;
     private boolean hasExitRoom   = false;
+    private boolean exitSideBySide = false; // the exit room's doorway is on its north or south side
 
-    // Vertical offset between exit portal and shop portal inside the exit room
+    // How far each portal stands from the exit room's centre (up / down, or left / right)
     private static final float PORTAL_OFFSET = 120f;
 
     /* ============================================================
@@ -111,10 +112,15 @@ public class FloorManager {
        PORTAL
        ============================================================ */
 
-    /** Called by GameActivity after each layout is generated. */
-    public void setExitRoomCenter(float x, float y) {
-        exitRoomCenterX = x;
-        exitRoomCenterY = y;
+    /**
+     * Called by GameActivity after each layout is generated, with the room the portals open in. Walking in from
+     * the north or south, two portals one above the other would put the near one in the way of the far one, so
+     * they stand side by side; walking in from the east or west they stack, one up and one down.
+     */
+    public void setExitRoom(Room room) {
+        exitRoomCenterX = room.centerX();
+        exitRoomCenterY = room.centerY();
+        exitSideBySide  = room.sideUsed[Room.NORTH] || room.sideUsed[Room.SOUTH];
         hasExitRoom     = true;
     }
 
@@ -126,12 +132,13 @@ public class FloorManager {
 //            boolean hasShop = !bossFloor && currentFloor >= 2;
             boolean hasShop = !bossFloor;
             if (hasShop) {
-                // Exit portal slightly above center, shop portal slightly below
-                portalX = exitRoomCenterX;
-                portalY = exitRoomCenterY - PORTAL_OFFSET;
+                // Next floor first (on top, or on the left), the shop second, either side of the centre
+                float dx = exitSideBySide ? PORTAL_OFFSET : 0f, dy = exitSideBySide ? 0f : PORTAL_OFFSET;
+                portalX = exitRoomCenterX - dx;
+                portalY = exitRoomCenterY - dy;
                 shopPortalOpen = true;
-                shopPortalX    = exitRoomCenterX;
-                shopPortalY    = exitRoomCenterY + PORTAL_OFFSET;
+                shopPortalX    = exitRoomCenterX + dx;
+                shopPortalY    = exitRoomCenterY + dy;
             } else {
                 portalX = exitRoomCenterX;
                 portalY = exitRoomCenterY;

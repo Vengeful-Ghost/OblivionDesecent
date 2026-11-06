@@ -28,6 +28,7 @@ import com.google.android.material.button.MaterialButton;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 /**
  * Main game activity — the core engine of Oblivion Descent.
@@ -218,6 +219,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private int[] altar = new int[Altar.values().length];
     private boolean secondWindUsed = false;
     private boolean adReviveUsed = false; // the ad revive works once a life
+
+    // The death card's "so close" lines: the best floor before this life (-1 until the player document
+    // arrives), and what landed the last hit ("an Archer", "a forge vent"; null when unknown)
+    private int bestFloorBefore = -1;
+    private volatile String lastHitBy;
 
     // Daily run (0 = not one): seeded, one life, best score per day on a leaderboard
     static final String EXTRA_DAILY_SEED = "daily_seed", EXTRA_DAILY_DAY = "daily_day";
@@ -414,9 +420,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         player.y = currentLayout.entryRoom.centerY();
         currentLayout.entryRoom.explored = true;
         if (currentLayout.exitRoom != null) {
-            floorManager.setExitRoomCenter(
-                    currentLayout.exitRoom.centerX(),
-                    currentLayout.exitRoom.centerY());
+            floorManager.setExitRoom(currentLayout.exitRoom);
         }
         spawnEnemiesForLayout(currentLayout);
         spawnRoomChest();
@@ -441,7 +445,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         statsManager = new StatsManager(dbManager, userId, gameId);
         Ads.preload(this);
         if (userId != null)
-            dbManager.loadPlayerStats(userId, data -> runOnUiThread(() -> applyAltar(Altar.ranks(data))));
+            dbManager.loadPlayerStats(userId, data -> runOnUiThread(() -> {
+                applyAltar(Altar.ranks(data));
+                Object best = data != null ? data.get("highestFloor") : null;
+                bestFloorBefore = best instanceof Number ? ((Number) best).intValue() : 1;
+            }));
 
         if (gameId == null && userId != null && !oneOffRun()) {
             // New game — create Firestore save, get back the ID
@@ -666,6 +674,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     e.applyState(f, sentAt, snap.at);
                     // The host's treasure chest just woke up as a mimic
                     if (created && e.mimic) mimicAwoke(e.x, e.y);
+                    if (created && e.thief) thiefAppeared(e);
                     if (e.isDead) deadEnemyAt.put(id, snap.at);
                 }
                 // Removed by the host without dying, e.g. re-spawned once the AI templates arrived
@@ -713,11 +722,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 float dirY = Float.parseFloat(f[5]);
                 if ("p".equals(f[0])) {
                     spawnHostileShot(x, y, dirX, dirY, Float.parseFloat(f[6]), Float.parseFloat(f[7]),
-                            Integer.parseInt(f[8]), Float.parseFloat(f[9]));
+                            Integer.parseInt(f[8]), Float.parseFloat(f[9]), null);
                 } else {
                     resolveStrike(x, y, dirX, dirY, Float.parseFloat(f[6]), Float.parseFloat(f[7]),
                             Integer.parseInt(f[8]), Float.parseFloat(f[9]), Float.parseFloat(f[10]),
-                            "1".equals(f[11]), now);
+                            "1".equals(f[11]), now, null);
                 }
             } catch (RuntimeException ex) {
                 Log.e("Coop", "Bad event: " + event.data);
@@ -1075,7 +1084,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         // Mark current room as explored for minimap
         if (currentLayout != null && !inShopRoom) {
             Room currentRoom = currentLayout.getRoomAt(player.x, player.y);
-            if (currentRoom != null) currentRoom.explored = true;
+            if (currentRoom != null) {
+                if (currentRoom == thiefRoom) spawnThief(currentRoom);
+                currentRoom.explored = true;
+            }
         }
 
         // --- 2. Update Camera --- (a fallen co-op player watches a teammate until the next floor)
@@ -1276,6 +1288,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 }
             }
         }
+        pickThiefRoom(layout, floor);
         Log.d("FloorLayout", "Pre-placed " + enemies.size() + " enemies for floor " + floor);
     }
 
@@ -1602,7 +1615,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 for (Enemy.Shot shot : e.pendingShots) {
                     float sx = e.x + shot.dirX * e.radius;
                     float sy = e.y + shot.dirY * e.radius;
-                    spawnHostileShot(sx, sy, shot.dirX, shot.dirY, shot.speed, shot.range, shot.damage, shot.radius);
+                    spawnHostileShot(sx, sy, shot.dirX, shot.dirY, shot.speed, shot.range, shot.damage, shot.radius, e.killerName());
                     if (coop != null) coop.publishEvent("p," + floor + "," + sx + "," + sy + "," + shot.dirX
                             + "," + shot.dirY + "," + shot.speed + "," + shot.range + "," + shot.damage + "," + shot.radius);
                 }
@@ -1618,7 +1631,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     float knockback = e.getWeapon().knockback;
                     int dealt = e.strikeDamage;
                     resolveStrike(e.x, e.y, e.strikeDirX, e.strikeDirY, e.strikeReach, e.strikeArc,
-                            e.strikeDamage, knockback, e.radius, slam, now);
+                            e.strikeDamage, knockback, e.radius, slam, now, e.killerName());
                     // Vampiric elites mend from a hit that landed on this phone's player
                     if (lastHurtAt == now && e.eliteTrait() == Enemy.EliteTrait.VAMPIRIC) {
                         e.heal(dealt);
@@ -1703,16 +1716,17 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     private void spawnHostileShot(float x, float y, float dirX, float dirY, float speed, float range,
-                                  int damage, float radius) {
+                                  int damage, float radius, String owner) {
         Projectile p = new Projectile(x, y, dirX, dirY, speed, range, damage, 0.15f, radius, HOSTILE_SHOT_COLOR);
         p.hostile = true;
+        p.owner = owner;
         projectiles.add(p);
         soundManager.play(SoundManager.Sfx.ENEMY_SHOT);
     }
 
     /** A slam on the floor leaves a scorch mark; a melee strike shows its arc. Hurts this phone's player if inside. */
     private void resolveStrike(float x, float y, float dirX, float dirY, float reach, float arc,
-                               int damage, float knockback, float bodyRadius, boolean slam, long now) {
+                               int damage, float knockback, float bodyRadius, boolean slam, long now, String by) {
         if (slam) {
             effects.burst(x, y, Color.rgb(255, 120, 40), 40, 16f); // slam shockwave
             effects.stain(x, y, 90f, Color.argb(110, 14, 11, 9));
@@ -1723,7 +1737,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             soundManager.playEnemySwing();
         }
         if (isInStrike(x, y, dirX, dirY, reach, arc, bodyRadius))
-            hitPlayer(damage, x, y, knockback, now);
+            hitPlayer(damage, x, y, knockback, now, by);
     }
 
     /** True when the player stands inside a strike: within reach and inside its cone. */
@@ -1743,7 +1757,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * Applies an enemy hit unless the player is invulnerable (dashing or just hit).
      * Adds a damage number, screen shake, vibration and knockback away from the source.
      */
-    private void hitPlayer(int damage, float fromX, float fromY, float knockback, long now) {
+    private void hitPlayer(int damage, float fromX, float fromY, float knockback, long now, String by) {
         if (playerHealth <= 0) return;
         if (now < invulnerableUntil) {
             checkPerfectDodge(now);
@@ -1761,6 +1775,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         damage = Math.max(1, Math.round(damage * (1f - 0.005f * perks[Perk.IRON_SKIN.ordinal()])));
         if (relic == Relic.SKULL) damage = Math.round(damage * 1.1f);
         if (tomeCurse) damage = Math.round(damage * TOME_CURSE);
+        lastHitBy = by;
         invulnerableUntil = now + HIT_INVULNERABILITY;
         lastRegen = now + 5000; // Bulwark pauses for 10s after a hit
         hitStop(60);
@@ -1846,7 +1861,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      */
     private void bestiary(Enemy e, boolean killed) {
         if (e.mimic || e.summoned || userId == null) return;
-        String key = e.type == Enemy.Type.BOSS ? "BOSS_" + e.getBossKind().name() : e.type.name();
+        String key = e.thief ? "THIEF" : e.type == Enemy.Type.BOSS ? "BOSS_" + e.getBossKind().name() : e.type.name();
         SharedPreferences prefs = getSharedPreferences("bestiary_" + userId, MODE_PRIVATE);
         if (bestiaryMet.add(key) && !prefs.getBoolean("met_" + key, false)) {
             prefs.edit().putBoolean("met_" + key, true).apply();
@@ -2143,9 +2158,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         currentLayout = generateLayout();
         gameDisplay.setFloorLayout(currentLayout);
         if (currentLayout.exitRoom != null) {
-            floorManager.setExitRoomCenter(
-                    currentLayout.exitRoom.centerX(),
-                    currentLayout.exitRoom.centerY());
+            floorManager.setExitRoom(currentLayout.exitRoom);
         }
 
         // Always place player at entry room center — checkpoint world coords are stale
@@ -2192,6 +2205,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void cleanupDeadEnemies() {
         synchronized (enemies) {
             for (Enemy e : enemies) {
+                if (e.thief) {
+                    tickThief(e);
+                    continue;
+                }
                 if (e.isDead && !e.counted) {
                     e.counted = true;
                     // Guests copy the host's count; mimics, thralls and the Trial's waves don't count at all
@@ -2547,7 +2564,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                             checkPerfectDodge(now); // dashing through it
                         } else {
                             p.isDead = true;
-                            hitPlayer(p.damage, p.x, p.y, p.knockback, now);
+                            hitPlayer(p.damage, p.x, p.y, p.knockback, now, p.owner);
                         }
                     }
                     continue;
@@ -3076,7 +3093,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void killAllActiveEnemies() {
         synchronized (enemies) {
             for (Enemy e : enemies) {
-                if (!e.isDead && !trialFoes.contains(e)) {
+                if (!e.isDead && !trialFoes.contains(e) && !e.thief) {
                     e.noGoldDrop = true;
                     e.takeDamage(Integer.MAX_VALUE);
                 }
@@ -3134,9 +3151,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         player.y = currentLayout.entryRoom.centerY();
         currentLayout.entryRoom.explored = true;
         if (currentLayout.exitRoom != null) {
-            floorManager.setExitRoomCenter(
-                    currentLayout.exitRoom.centerX(),
-                    currentLayout.exitRoom.centerY());
+            floorManager.setExitRoom(currentLayout.exitRoom);
         }
         spawnEnemiesForLayout(currentLayout);
         spawnRoomChest();
@@ -3356,6 +3371,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     cy = bossY + (float)(Math.sin(angle) * 80f);
                 }
 
+                float[] spot = landing(cx, cy, 48f, bossX, bossY);
+                cx = spot[0];
+                cy = spot[1];
                 TreasureChest chest = new TreasureChest(cx, cy, bossX, bossY, launch + i * 180L);
                 chest.boss = true;
                 pickChestReward(chest);
@@ -3403,7 +3421,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** A slain mimic coughs up a real chest with loot. */
     private void dropLootChest(float x, float y) {
-        TreasureChest chest = new TreasureChest(x, y, x, y, System.currentTimeMillis());
+        float[] spot = landing(x, y, 48f, x, y);
+        TreasureChest chest = new TreasureChest(spot[0], spot[1], x, y, System.currentTimeMillis());
         pickChestReward(chest);
         synchronized (treasureChests) { treasureChests.add(chest); }
     }
@@ -3434,6 +3453,96 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /** Removes the sleeping mimic chest and makes a show of it waking. */
+    /* ============================================================
+       TREASURE THIEF
+       ============================================================ */
+
+    // On about one floor in four (from floor 2, never a boss floor) a thief waits in one ordinary room and
+    // bolts the moment the player first walks in. Host only; guests mirror it like any other enemy.
+    private static final float THIEF_CHANCE = 0.25f;
+    private volatile Room thiefRoom;
+    private long lastThiefSparkle = 0;
+
+    private void pickThiefRoom(FloorLayout layout, int floor) {
+        thiefRoom = null;
+        // A daily run gives everyone the same thief; otherwise it's luck
+        Random rng = dailySeed != 0 ? new Random(dailySeed * 7919L + floor) : new Random();
+        if (floor < 2 || floorManager.isBossFloor() || rng.nextFloat() >= THIEF_CHANCE) return;
+        List<Room> rooms = new ArrayList<>();
+        for (Room r : layout.rooms) {
+            boolean plain = r.type == Room.Type.SMALL || r.type == Room.Type.MEDIUM
+                    || r.type == Room.Type.LARGE || r.type == Room.Type.HALLWAY;
+            if (plain && r.event == null && r != layout.treasureRoom && r != layout.vaultRoom) rooms.add(r);
+        }
+        if (!rooms.isEmpty()) thiefRoom = rooms.get(rng.nextInt(rooms.size()));
+    }
+
+    /** The thief shows itself in the room the player just walked into, as far from them as the room allows. */
+    private void spawnThief(Room room) {
+        thiefRoom = null;
+        int floor = floorManager.getCurrentFloor();
+        float bestX = room.centerX(), bestY = room.centerY(), best = -1f;
+        Random rng = new Random();
+        for (int i = 0; i < 10; i++) {
+            float[] p = room.randomSpawnPoint(rng, 90f);
+            if (p == null || room.blockNear(p[0], p[1], 60f) != null) continue;
+            float d = getDistance(p[0], p[1], player.x, player.y);
+            if (d > best) { best = d; bestX = p[0]; bestY = p[1]; }
+        }
+        Enemy thief = new Enemy(bestX, bestY, Enemy.Type.SPEEDER);
+        thief.applyFloorScaling(floor);
+        thief.makeThief();
+        thief.scaleHealth(3f * partyHealth()); // four or five good hits
+        thief.ascend(ascension());
+        thief.speed = player.speed * 0.85f;     // a little slower than you; a dash closes the gap
+        thief.setLayout(currentLayout);
+        synchronized (enemies) { enemies.add(thief); }
+        thiefAppeared(thief);
+    }
+
+    private void thiefAppeared(Enemy thief) {
+        int gold = Color.rgb(244, 215, 122);
+        effects.burst(thief.x, thief.y, gold, 24, 9f);
+        effects.banner(thief.x, thief.y - 90f, "TREASURE THIEF!", gold);
+        soundManager.play(SoundManager.Sfx.KEY);
+        buzz(40, 160);
+    }
+
+    /** Each tick: coins for every hit, a glint now and then, and the thief's end (caught, or gone). */
+    private void tickThief(Enemy e) {
+        int gold = Color.rgb(244, 215, 122);
+        if (e.spills > 0) {
+            spawnGoldCoins(e.x, e.y, withGreed(2 * e.spills));
+            e.spills = 0;
+        }
+        long now = System.currentTimeMillis();
+        if (!e.isDead && now - lastThiefSparkle > 160) {
+            lastThiefSparkle = now;
+            effects.burst(e.x, e.y - e.radius * 0.6f, gold, 2, 3f);
+        }
+        if (!e.isDead || e.counted) return;
+        e.counted = true;
+        effects.play("fx.poof", e.x, e.y + e.radius * 0.78f, false);
+        if (e.noGoldDrop) {
+            // its time ran out: it slips away with the rest of its purse
+            effects.banner(e.x, e.y - 90f, "IT GOT AWAY", Color.rgb(184, 172, 145));
+            return;
+        }
+        // Caught: the purse bursts open, with a key in it
+        statsManager.onEnemyKilled();
+        quest(Quests.KILLS, 1);
+        bestiary(e, true);
+        effects.banner(e.x, e.y - 110f, "THIEF CAUGHT!", gold);
+        effects.burst(e.x, e.y, gold, 40, 12f);
+        spawnGoldCoins(e.x, e.y, withGreed(Math.min(60, 20 + 2 * floorManager.getCurrentFloor())));
+        gainKey(e.x, e.y);
+        int xp = Math.round(e.getXpReward() * 3 * (1f + 0.05f * altar[Altar.WISDOM.ordinal()]));
+        runOnUiThread(() -> gainXp(xp));
+        hitStop(70);
+        if (camera != null) camera.startShake(200, 10f);
+        soundManager.play(SoundManager.Sfx.ENEMY_DEATH);
+    }
+
     private void mimicAwoke(float x, float y) {
         synchronized (treasureChests) { treasureChests.removeIf(c -> c.mimic); }
         effects.burst(x, y, Color.rgb(120, 84, 48), 30, 12f);
@@ -4531,6 +4640,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 statsManager.getRunBosses()) * (1f + 0.25f * ascension()))};
         TextView txtSouls = dialog.findViewById(R.id.txt_souls);
         txtSouls.setText("+" + souls[0] + " Souls");
+        Runnable refreshGoal = fillSoClose(dialog, souls, coopReason);
         recordRun();
         Runnable payout = () -> { if (userId != null) dbManager.addSouls(userId, souls[0]); };
         if (dailySeed != 0 && userId != null && dailyDay != null)
@@ -4545,6 +4655,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         adSouls.setOnClickListener(v -> Ads.show(this, () -> {
             souls[0] *= 2;
             txtSouls.setText("+" + souls[0] + " Souls");
+            refreshGoal.run();
         }, () -> {
             adSouls.setVisibility(View.GONE);
             adRevive.setVisibility(View.GONE);
@@ -4607,6 +4718,82 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         dialog.show();
         hideSystemUIOnWindow(dialog.getWindow());
+    }
+
+    /**
+     * The death card's "so close" lines, so every death shows the next thing to go for: what killed you, how far
+     * this floor was from your best (or that it is a new best), and the Soul Altar upgrade you're nearest to with
+     * this life's Souls counted in. Returns what redraws the Altar line once an ad doubles the Souls.
+     */
+    private Runnable fillSoClose(Dialog dialog, int[] souls, String coopReason) {
+        int floor = floorManager.getCurrentFloor();
+        if (coopReason == null && lastHitBy != null)
+            ((TextView) dialog.findViewById(R.id.txt_over_message)).setText("Slain by " + lastHitBy + " on floor " + floor);
+
+        // Daily and weekly runs have their own boards; the best floor is the ordinary game's
+        TextView best = dialog.findViewById(R.id.txt_best);
+        if (dailySeed == 0 && bestFloorBefore > 0) {
+            int icon;
+            if (floor > bestFloorBefore) {
+                best.setText("New best floor!");
+                best.setTextColor(getColor(R.color.gold_glow));
+                icon = R.drawable.ic_trophy;
+                bestFloorBefore = floor; // the next death this session measures against it
+            } else if (floor == bestFloorBefore) {
+                best.setText("Matched your best floor");
+                best.setTextColor(getColor(R.color.gold_glow));
+                icon = R.drawable.ic_trophy;
+            } else {
+                int toGo = bestFloorBefore - floor + 1;
+                best.setText(toGo + (toGo == 1 ? " floor" : " floors") + " from a new best");
+                icon = R.drawable.ic_stairs;
+            }
+            setLineIcon(best, icon);
+            best.setVisibility(View.VISIBLE);
+        }
+
+        // The Altar: the cheapest next rank is always the nearest; the Souls in the bank are fetched fresh
+        TextView goal = dialog.findViewById(R.id.txt_goal);
+        long[] bank = {-1};
+        Runnable show = () -> {
+            if (bank[0] < 0) return;
+            Altar next = null;
+            int cost = 0;
+            for (Altar a : Altar.values()) {
+                if (altar[a.ordinal()] >= a.maxRank) continue;
+                int c = a.cost(altar[a.ordinal()]);
+                if (next == null || c < cost) { next = a; cost = c; }
+            }
+            if (next == null) return; // everything bought
+            String name = next.title + (next.maxRank > 1 ? " " + roman(altar[next.ordinal()] + 1) : "");
+            long missing = cost - bank[0] - souls[0];
+            goal.setText(missing <= 0 ? "Enough Souls for " + name : missing + " Souls to " + name);
+            setLineIcon(goal, next.icon);
+            goal.setVisibility(View.VISIBLE);
+        };
+        if (userId != null)
+            dbManager.loadPlayerStats(userId, data -> runOnUiThread(() -> {
+                Object s = data != null ? data.get("souls") : null;
+                bank[0] = s instanceof Number ? ((Number) s).longValue() : 0;
+                if (dialog.isShowing()) show.run();
+            }));
+        return show;
+    }
+
+    /** A pixel icon before a line of the death card, in the line's own colour. */
+    private void setLineIcon(TextView line, int icon) {
+        android.graphics.drawable.Drawable d = getDrawable(icon);
+        if (d == null) return;
+        d = d.mutate();
+        int size = Math.round(18 * getResources().getDisplayMetrics().density);
+        d.setBounds(0, 0, size, size);
+        d.setTint(line.getCurrentTextColor());
+        line.setCompoundDrawablesRelative(d, null, null, null);
+    }
+
+    private static String roman(int n) {
+        String[] r = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
+        return n >= 0 && n < r.length ? r[n] : String.valueOf(n);
     }
 
     /** Keeps the last 10 lives on this phone for the menu's run history (MenuActivity.showHistory). */
@@ -5162,6 +5349,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (currentLayout != null) currentLayout.trialSealed = false;
         room.eventDone = true;
         float x = room.centerX(), y = room.centerY() + 150f;
+        float[] spot = landing(x, y, 48f, room.centerX(), room.centerY());
+        x = spot[0];
+        y = spot[1];
         TreasureChest chest = new TreasureChest(x, y, room.centerX(), room.centerY(), System.currentTimeMillis());
         chest.vault = true; // the rarest loot, gold and a chance at a relic
         pickChestReward(chest);
@@ -5244,7 +5434,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             if (d.burnedCycle == cycle) continue;
             d.burnedCycle = cycle;
             if (getDistance(player.x, player.y, d.x, d.y) < d.b + player.radius * 0.5f)
-                hitPlayer(burn, d.x, d.y, 0.6f, now);
+                hitPlayer(burn, d.x, d.y, 0.6f, now, "a forge vent");
             if (isGuest()) continue; // the host burns the enemies
             synchronized (enemies) {
                 for (Enemy e : enemies) {
@@ -5411,7 +5601,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             long[] b = it.next();
             if (now < b[3]) continue;
             it.remove();
-            resolveStrike(b[0], b[1], 1f, 0f, 170f, 180f, (int) b[2], 0.5f, 40f, true, now);
+            resolveStrike(b[0], b[1], 1f, 0f, 170f, 180f, (int) b[2], 0.5f, 40f, true, now, "an elite's blast");
         }
         checkRoomEvents();
         tickTrial(now);
@@ -5687,17 +5877,21 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * Each coin's constructor randomises its own spread offset so they
      * naturally scatter rather than stacking on top of each other.
      */
+    /** Where a dropped coin or chest comes to rest on this floor (FloorLayout.itemSpot); as given in the shop. */
+    private float[] landing(float x, float y, float r, float fromX, float fromY) {
+        FloorLayout layout = currentLayout;
+        if (layout == null || inShopRoom) return new float[]{x, y};
+        return layout.itemSpot(x, y, r, fromX, fromY);
+    }
+
     private void spawnGoldCoins(float x, float y, int amount) {
         synchronized (goldCoins) {
             for (int i = 0; i < amount; i++) {
                 GoldCoin coin = new GoldCoin(x, y);
-                // If the coin landed out of bounds (e.g. enemy died near a wall),
-                // snap it back to the enemy's exact drop position.
-                if (currentLayout != null && !inShopRoom
-                        && !currentLayout.isFloor(coin.x, coin.y)) {
-                    coin.x = x;
-                    coin.y = y;
-                }
+                // Never in a wall, up a wall's brick face or under a barrel: back along its flight if need be
+                float[] spot = landing(coin.x, coin.y, 18f, x, y);
+                coin.x = spot[0];
+                coin.y = spot[1];
                 goldCoins.add(coin);
             }
         }
@@ -6034,9 +6228,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 gameDisplay.setFloorLayout(currentLayout);
                 currentLayout.entryRoom.explored = true;
                 if (currentLayout.exitRoom != null) {
-                    floorManager.setExitRoomCenter(
-                            currentLayout.exitRoom.centerX(),
-                            currentLayout.exitRoom.centerY());
+                    floorManager.setExitRoom(currentLayout.exitRoom);
                 }
                 spawnEnemiesForLayout(currentLayout);
                 spawnRoomChest();

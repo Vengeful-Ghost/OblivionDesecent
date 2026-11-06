@@ -64,6 +64,13 @@ public class Enemy {
     // Special kinds, synced to guests: elites hit twice as hard, mimics and thralls come from GameActivity
     public boolean elite, mimic, summoned;
     public boolean shield; // shield-bearer: closes in behind a raised shield
+    // Treasure thief (GameActivity.spawnThief): runs from the player for THIEF_TIME, spilling coins when hit;
+    // caught, it bursts into a pile of gold and a key. Out of time it slips away (dies with noGoldDrop).
+    public boolean thief;
+    public int spills;   // hits since GameActivity last spilled coins for them
+    public static final long THIEF_TIME = 12000;
+    private long thiefUntil, nextTurn;
+    private float fleeX = 1f, fleeY = 0f;
     private CoopSession.Track remote; // guest: the host's recent positions
     private static final float[] REMOTE_POS = new float[2]; // logic thread only
     private long predictedUntil = 0;
@@ -421,6 +428,10 @@ public class Enemy {
         }
 
         long now = System.currentTimeMillis();
+        if (thief) {
+            updateThief(now, playerX, playerY);
+            return;
+        }
         float dx = playerX - x;
         float dy = playerY - y;
         float dist = (float) Math.sqrt(dx * dx + dy * dy);
@@ -1153,6 +1164,18 @@ public class Enemy {
         }
     }
 
+    private static final String[] BOSS_NAMES = {"Warlord", "Summoner", "Sorcerer", "Hunter"}; // as in the Bestiary
+
+    /** What the death screen says killed you: "a Grunt", "an Explosive Archer", "the Warlord". */
+    public String killerName() {
+        if (type == Type.BOSS) return "the " + BOSS_NAMES[bossKind.ordinal()];
+        String name = mimic ? "Mimic" : displayName != null ? displayName
+                : type.name().charAt(0) + type.name().substring(1).toLowerCase(java.util.Locale.US);
+        if (summoned) name += " thrall";
+        if (elite) name = eliteTrait().title + " " + name;
+        return ("AEIOU".indexOf(Character.toUpperCase(name.charAt(0))) >= 0 ? "an " : "a ") + name;
+    }
+
     /** The elite's trait, or null for others; picked from the id, so a co-op guest's mirror agrees. */
     public EliteTrait eliteTrait() {
         if (!elite) return null;
@@ -1175,6 +1198,50 @@ public class Enemy {
         displayName = "Thrall";
         displayColor = Color.rgb(181, 140, 224);
         bodyPaint.setColor(Color.rgb(90, 60, 120));
+    }
+
+    /** The treasure thief: a gold speeder that never fights, only runs. It doesn't count toward the floor. */
+    public void makeThief() {
+        thief = true;
+        isAwake = true;
+        displayName = "Thief";
+        displayColor = Color.rgb(244, 215, 122);
+        bodyPaint.setColor(Color.rgb(232, 184, 56));
+        thiefUntil = System.currentTimeMillis() + THIEF_TIME;
+    }
+
+    /**
+     * Treasure thief: every fifth of a second it picks, of sixteen ways, the open one that leads most directly
+     * away from the player (a little like the way it was going, so it doesn't dither), and runs that way; it
+     * bolts when you're close and jogs when you're not. Corridors and dead ends are where you catch it.
+     */
+    private void updateThief(long now, float playerX, float playerY) {
+        if (now >= thiefUntil) {
+            noGoldDrop = true; // slipped away: no loot, and a co-op guest sees it go the same way
+            takeDamage(Integer.MAX_VALUE);
+            return;
+        }
+        float ax = x - playerX, ay = y - playerY, dist = (float) Math.sqrt(ax * ax + ay * ay);
+        if (dist > 0.01f) { ax /= dist; ay /= dist; } else { ax = 1f; ay = 0f; }
+        if (now >= nextTurn) {
+            nextTurn = now + 200;
+            float best = -9f, bx = fleeX, by = fleeY;
+            for (int i = 0; i < 16; i++) {
+                double a = i * Math.PI / 8;
+                float cx = (float) Math.cos(a), cy = (float) Math.sin(a);
+                if (layout != null && !(layout.isFloor(x + cx * (radius + 80f), y + cy * (radius + 80f))
+                        && layout.isFloor(x + cx * (radius + 170f), y + cy * (radius + 170f)))) continue;
+                float score = cx * ax + cy * ay + 0.35f * (cx * fleeX + cy * fleeY) + (float) Math.random() * 0.2f;
+                if (score > best) { best = score; bx = cx; by = cy; }
+            }
+            fleeX = bx;
+            fleeY = by;
+        }
+        float step = dist < 550f ? speed : speed * 0.55f;
+        x += fleeX * step;
+        y += fleeY * step;
+        faceX = fleeX;
+        faceY = fleeY;
     }
 
     /** A treasure-room chest that bites; it doesn't count toward the floor. */
@@ -1260,12 +1327,13 @@ public class Enemy {
     private static final float[] OUTLINE = {1, 0, -1, 0, 0, 1, 0, -1, 1, 1, -1, 1, 1, -1, -1, -1};
     private static final int ELITE_GOLD = Color.rgb(244, 205, 90);
     private boolean faceLeft = false; // render thread only
+    private int way = 0;              // which of eight ways the sprite faces (Sprites.facing); render thread only
 
-    /** This body's walk or idle sprite, or null to fall back to the old shapes. */
+    /** This body's walk or idle sprite as seen facing its way, or null to fall back to the old shapes. */
     private Sprites.Anim sprite(boolean walking) {
-        if (mimic) return Sprites.get(walking ? "enemy.mimic.walk" : "enemy.mimic.idle");
-        if (type == Type.BOSS) return Sprites.get(walking ? BOSS_WALK[bossKind.ordinal()] : BOSS_IDLE[bossKind.ordinal()]);
-        return Sprites.get(walking ? WALK[type.ordinal()] : IDLE[type.ordinal()]);
+        if (mimic) return Sprites.get(walking ? "enemy.mimic.walk" : "enemy.mimic.idle", way);
+        if (type == Type.BOSS) return Sprites.get(walking ? BOSS_WALK[bossKind.ordinal()] : BOSS_IDLE[bossKind.ordinal()], way);
+        return Sprites.get(walking ? WALK[type.ordinal()] : IDLE[type.ordinal()], way);
     }
 
     /** Standing still to wind up, cast, block or reel; everything else walks (bats always flap). */
@@ -1348,11 +1416,14 @@ public class Enemy {
         // A lit bomber blinks faster and faster
         boolean blink = type == Type.BOMBER && behaviorState == BehaviorState.WINDUP
                 && (now - stateStartTime) / Math.max(40, 160 - (now - stateStartTime) / 6) % 2 == 0;
+        // Faces its target (or where it runs), one of eight ways: five drawn views, the left-facing three mirrored.
+        // Bats and mimics look the same every way, so they only turn left or right.
+        way = Sprites.facing(way, faceX, faceY);
+        faceLeft = Sprites.mirrored(way);
         Sprites.Anim body = sprite(moving());
         float headTop = drawY - radius * 1.3f; // the top of the body, for the health bar
         if (body != null) {
-            // Pixel art: faces its target, each body a little out of step with the rest
-            if (Math.abs(faceX) > 0.15f) faceLeft = faceX < 0;
+            // Pixel art: each body a little out of step with the rest
             float feet = drawY + radius * FEET, scale = spriteScale();
             headTop = Math.min(headTop, feet + body.top * scale);
             int frame = body.at(now + id * 137L);
@@ -1879,6 +1950,7 @@ public class Enemy {
      * @param dmg amount of damage to apply
      */
     public void takeDamage(int dmg) {
+        if (thief && !isDead && dmg < health) spills++;
         health -= dmg;
         hitFlashUntil = System.currentTimeMillis() + 90;
         if (health <= 0) {
@@ -1929,7 +2001,7 @@ public class Enemy {
                 .append(stateDuration).append(',')
                 .append((int) Math.toDegrees(Math.atan2(aimY, aimX))).append(',')
                 .append(bossMove.ordinal()).append(',').append(enraged ? (frenzied ? 2 : 1) : 0).append(',')
-                .append((elite ? 1 : 0) | (mimic ? 2 : 0) | (summoned ? 4 : 0) | (shield ? 8 : 0)).append(',')
+                .append((elite ? 1 : 0) | (mimic ? 2 : 0) | (summoned ? 4 : 0) | (shield ? 8 : 0) | (thief ? 16 : 0)).append(',')
                 .append((int) leapDist);
     }
 
@@ -1949,6 +2021,7 @@ public class Enemy {
         if ((kinds & 2) != 0 && !mimic) makeMimic();
         if ((kinds & 4) != 0 && !summoned) makeThrall();
         if ((kinds & 8) != 0) shield = true;
+        if ((kinds & 16) != 0 && !thief) makeThief();
         if (remote == null) {
             remote = new CoopSession.Track();
             x = hostX;
@@ -1993,6 +2066,7 @@ public class Enemy {
             takeDamage(health);
             return;
         }
+        if (thief) spills++;
         health -= damage;
         hitFlashUntil = now + 90;
     }

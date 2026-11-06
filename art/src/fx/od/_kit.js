@@ -146,6 +146,164 @@ export class Pix {
   }
 }
 
+// -----------------------------------------------------------------------------------------------------------
+// Rig: bodies built once in 3D and drawn facing any of eight ways. The game needs five views (the other three
+// are mirrors): e (side on, facing right), se (three-quarter, towards the viewer), s (facing the viewer),
+// ne (three-quarter, away) and n (back to the viewer). A part is placed by
+//   f  forward, along the way the body faces        z  across, + is the body's own right
+//   h  height above the floor
+// and is projected for the view: its x on screen, its depth (what is in front of what) and, seen from the
+// top-down camera, a little lower on screen the nearer the viewer it stands. Side on (e) nothing is
+// foreshortened, so side views keep their crisp profile. Parts are drawn far to near; parts at the same depth
+// in the order they were added (so add them back to front as for a side view). The far side of a body is a
+// shade darker. Marks (eyes, buckles, slits) face a way (n, default forward) and vanish when it faces away.
+// -----------------------------------------------------------------------------------------------------------
+
+export const VIEWS = { e: 0, se: 45, s: 90, ne: -45, n: -90 };
+
+export class Rig {
+  constructor(view = "e") {
+    const a = ((VIEWS[view] ?? 0) * Math.PI) / 180, r = (v) => Math.round(v * 1e6) / 1e6;
+    this.view = view;
+    this.c = r(Math.cos(a));
+    this.s = r(Math.sin(a));
+    this.K = 0.25 * Math.abs(this.s); // ground foreshortening: none side on
+    this.parts = [];
+  }
+
+  /** Screen [x, y] and depth of a point (feet at 0, 0; y up is negative, as on a Pix). */
+  P(f, z, h) {
+    const d = f * this.s + z * this.c;
+    return [f * this.c - z * this.s, -h + d * this.K, d];
+  }
+  /** How much of direction (nf, nz) faces the viewer: 1 straight at them, -1 straight away. */
+  facing(nf, nz) { return nf * this.s + nz * this.c; }
+  get front() { return this.s > 0.3; }   // towards the viewer
+  get back() { return this.s < -0.3; }   // away from the viewer
+
+  add(d, o, fn) {
+    const part = { d: o.on ? o.on.d + 1e-3 * (this.parts.length + 1) : d + (o.layer ?? 0), i: this.parts.length, fn };
+    part.fade = o.on ? o.on.fade : clamp(d * 0.1, -0.25, 0.06);
+    // a part that faces one way (o.n, e.g. a face plate) is left out while that way faces off from the viewer
+    if (o.n && this.facing(o.n[0], o.n[1]) < (o.min ?? -0.2)) return part;
+    this.parts.push(part);
+    return part;
+  }
+  tone(o, fade) { return { ...o, bias: (o.bias ?? 0) + (o.noFade ? 0 : fade) }; }
+
+  /** An ellipsoid: rf along the facing, rz across, rh up. */
+  ball(f, z, h, rf, rz, rh, ramp, o = {}) {
+    const [x, y, d] = this.P(f, z, h), rx = Math.max(0.7, Math.hypot(rf * this.c, rz * this.s));
+    return this.add(d, o, (g, fade) => g.blob(x, y, rx, rh, ramp, this.tone(o, fade)));
+  }
+  /** A box f0..f1 along, z0..z1 across, h0..h1 up. */
+  block(f0, f1, z0, z1, h0, h1, ramp, o = {}) {
+    const xs = [[f0, z0], [f0, z1], [f1, z0], [f1, z1]].map(([f, z]) => f * this.c - z * this.s);
+    const d = ((f0 + f1) / 2) * this.s + ((z0 + z1) / 2) * this.c;
+    return this.add(d, o, (g, fade) => g.box(Math.min(...xs), -h1 + d * this.K, Math.max(...xs), -h0 + d * this.K, ramp, this.tone(o, fade)));
+  }
+  /** A limb, a horn, a tail: a line w wide from a to b, each [f, z, h]. */
+  limb(a, b, w, ramp, o = {}) {
+    const [x0, y0, d0] = this.P(...a), [x1, y1, d1] = this.P(...b);
+    return this.add((d0 + d1) / 2, o, (g, fade) => g.stroke(x0, y0, x1, y1, w, ramp, this.tone(o, fade)));
+  }
+  /**
+   * A flat piece, outlined [[f, h], ...] in the body's side plane at z and w thick to each side: a cloak, an
+   * ear, a plume, a wing. Seen from the front it shows its thickness, swept across.
+   */
+  sheet(pts, z, w, ramp, o = {}) {
+    return this.flat(pts.map(([f, h]) => [f, z, h]), [0, 1, 0], w, ramp, o);
+  }
+  /** A flat piece outlined [[z, h], ...] across the body at f, w thick fore and aft: a tabard, a mask, a lid. */
+  plate(pts, f, w, ramp, o = {}) {
+    return this.flat(pts.map(([z, h]) => [f, z, h]), [1, 0, 0], w, ramp, o);
+  }
+  /** A flat piece through any [f, z, h] points, w thick up and down: an ear or a wing that juts out sideways. */
+  fin(pts3, w, ramp, o = {}) {
+    return this.flat(pts3, [0, 0, 1], w, ramp, o);
+  }
+  flat(pts3, [tf, tz, th], w, ramp, o) {
+    const pr = pts3.map(([f, z, h]) => this.P(f, z, h)), d = pr.reduce((a, p) => a + p[2], 0) / pr.length;
+    // the outline swept through its thickness: step along the screen shift of one unit of thickness
+    const sx = tf * this.c - tz * this.s, sy = -th + (tf * this.s + tz * this.c) * this.K;
+    const n = Math.max(1, Math.ceil((2 * w * Math.hypot(sx, sy)) / 0.5)), offs = [];
+    for (let i = 0; i <= n; i++) { const k = -w + (2 * w * i) / n; offs.push([k * sx, k * sy]); }
+    const xy = pr.map((p) => [p[0], p[1]]);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of xy) for (const [ox, oy] of offs) {
+      x0 = Math.min(x0, x + ox); y0 = Math.min(y0, y + oy); x1 = Math.max(x1, x + ox); y1 = Math.max(y1, y + oy);
+    }
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rx = (x1 - x0) / 2 || 1, ry = (y1 - y0) / 2 || 1;
+    // the outline at each step of its thickness (and its edges, so a piece seen edge on, its outline a line,
+    // still shows as the band it is). o.flare = [h0, w0, h1, w1] tapers the thickness with height: a robe
+    // narrow at the shoulders and wide at the hem.
+    const fl = o.flare, wAt = (y) => {
+      if (!fl) return w;
+      const h = -y, u = clamp((h - fl[0]) / (fl[2] - fl[0] || 1), 0, 1);
+      return fl[1] + (fl[3] - fl[1]) * u;
+    };
+    const ks = offs.map(([ox, oy], i) => [ox, oy, -w + (2 * w * i) / (offs.length - 1 || 1)]);
+    const sweeping = 2 * w * Math.hypot(sx, sy) > 0.3;
+    const test = (x, y) => !sweeping ? insidePoly(xy, x, y) : ks.some(([ox, oy, k]) => {
+      const px = x - ox, py = y - oy;
+      if (Math.abs(k) > wAt(py) + 1e-6) return false;
+      return insidePoly(xy, px, py) || (sweeping && nearOutline(xy, px, py, 0.55));
+    });
+    return this.add(d, o, (g, fade) => {
+      const t = this.tone(o, fade);
+      g.shape(test, (x, y) => (t.flat !== undefined ? t.flat : roundTone(ramp, ((x - cx) / rx) * 0.85, ((y - cy) / ry) * 0.85, t.bias)),
+        t.ink === undefined ? INK : t.ink);
+    });
+  }
+
+  /** Single pixels [[f, z, h], ...] in one colour, shown while their side (o.n = [nf, nz]) faces the viewer. */
+  dots(list, c, o = {}) {
+    const [nf, nz] = o.n ?? [1, 0];
+    if (this.facing(nf, nz) < (o.min ?? -0.2)) return null;
+    const pts = list.map((p) => this.P(...p)), d = pts.reduce((a, p) => a + p[2], 0) / pts.length;
+    return this.add(d, o, (g) => { for (const [x, y] of pts) g.set(x, y, c); });
+  }
+  /** A 1 px line in one colour through [f, z, h] points, shown while it faces the viewer (as dots). */
+  seg(list, c, o = {}) {
+    const [nf, nz] = o.n ?? [1, 0];
+    if (this.facing(nf, nz) < (o.min ?? -0.2)) return null;
+    const pts = list.map((p) => this.P(...p)), d = pts.reduce((a, p) => a + p[2], 0) / pts.length;
+    return this.add(d, o, (g) => { for (let i = 1; i < pts.length; i++) g.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], c); });
+  }
+  /** Pixels at fixed screen offsets [[dx, dy], ...] from a part's point: a glint that stays top left. */
+  glint(on, [f, z, h], list, c) {
+    const [x, y] = this.P(f, z, h);
+    return this.add(0, { on }, (g) => { for (const [dx, dy] of list) g.set(x + dx, y + dy, c); });
+  }
+
+  /** Draws every part far to near onto the grid g. */
+  draw(g) {
+    for (const p of [...this.parts].sort((a, b) => a.d - b.d || a.i - b.i)) p.fn(g, p.fade);
+  }
+}
+
+/** True when (x, y) lies within r of the polygon's outline. */
+function nearOutline(pts, x, y, r) {
+  for (let i = 0; i < pts.length; i++) {
+    const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length], dx = bx - ax, dy = by - ay;
+    const u = clamp(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+    if (Math.hypot(ax + dx * u - x, ay + dy * u - y) <= r) return true;
+  }
+  return false;
+}
+
+function insidePoly(pts, x, y) {
+  let c = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+
+/** Calls fn(+1) for the body's right and fn(-1) for its left: paired eyes, arms, legs, ears. */
+export const both = (fn) => { fn(1); fn(-1); };
+
 /** Walk-cycle helpers: frame 0..3 is contact, pass, contact (other foot), pass. */
 export const stride = (f) => [1, 0, -1, 0][f & 3];       // which way the front foot is out
 export const bob = (f) => (f & 1 ? -1 : 0);                // the body rises on the passing frames

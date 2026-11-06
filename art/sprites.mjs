@@ -23,8 +23,15 @@
 //   tint    the colour tools/look.mjs previews the dye in
 //   icon    also write the first frame, trimmed, to this path under app/src/main/res (for Android views)
 
-const body = (name, fx, anims, opts = {}, extra = {}) =>
-  anims.map((anim) => ({ name: `${name}.${anim}`, fx, opts: { anim, ...opts }, dye: true, ...extra }));
+// A character's idle and walk, in each view it can face: "player.walk" is side on facing right (e), and
+// "player.walk.se", ".s", ".ne", ".n" turn it towards and away from the viewer. The game mirrors these for
+// the other three of its eight ways (Sprites.facing). Bodies that look the same every way pass views: ["e"].
+const VIEWS = ["e", "se", "s", "ne", "n"];
+const body = (name, fx, anims, opts = {}, extra = {}, views = VIEWS) =>
+  anims.flatMap((anim) => views.map((view) => ({
+    name: view === "e" ? `${name}.${anim}` : `${name}.${anim}.${view}`,
+    fx, opts: { anim, view, ...opts }, dye: true, ...extra,
+  })));
 const WALKERS = ["idle", "walk"];
 // each type's own colour in Enemy.java, so previews show them as the game does (tools/look.mjs)
 // each biome's fire, dark to white-hot, around the flame colours in Biome.java
@@ -43,8 +50,8 @@ export const SPRITES = [
   { name: "tile.bricks", fx: "od/tiles", opts: { anim: "bricks" } },
   ...body("player", "od/player", WALKERS),
   ...["grunt", "speeder", "tank", "brute", "archer", "bomber", "bat", "charger", "necro"]
-    .flatMap((kind) => body(`enemy.${kind}`, "od/enemy", WALKERS, { kind }, { tint: TINTS[kind] })),
-  ...body("enemy.mimic", "od/enemy", WALKERS, { kind: "mimic" }, { dye: false }),
+    .flatMap((kind) => body(`enemy.${kind}`, "od/enemy", WALKERS, { kind }, { tint: TINTS[kind] }, kind === "bat" ? ["e"] : VIEWS)),
+  ...body("enemy.mimic", "od/enemy", WALKERS, { kind: "mimic" }, { dye: false }, ["e"]),
   ...Object.entries({ brute: "#b40000", summoner: "#2e1a3a", sorcerer: "#405cbe", hunter: "#70522e" })
     .flatMap(([kind, tint]) => body(`boss.${kind}`, "od/boss", WALKERS, { kind }, { tint })),
 
@@ -52,9 +59,10 @@ export const SPRITES = [
   { name: "fx.hit", fx: "impacts/hit-spark", fps: 20 },
   { name: "fx.crit", fx: "impacts/crit-hit", fps: 20 },
   { name: "fx.poof", fx: "od/poof" },
-  // the exit portal in arcane violet and the shop portal in gold: pixelfx's standing portal
-  { name: "fx.portal.exit", fx: "arcane/portal", fps: 10 },
-  { name: "fx.portal.shop", fx: "arcane/portal", fps: 10, opts: { palette: ["#1e1206", "#4a2c08", "#86520c", "#c48412", "#f0b424", "#ffe066", "#fff6c4", "#ffffff"] } },
+  // the exit portal in arcane violet and the shop portal in gold: pixelfx's standing portal, a little
+  // taller than the player (width / height are the rift's radii in art pixels; 17 x 29 is pixelfx's own size)
+  { name: "fx.portal.exit", fx: "arcane/portal", fps: 10, opts: { width: 8, height: 14 } },
+  { name: "fx.portal.shop", fx: "arcane/portal", fps: 10, opts: { width: 8, height: 14, palette: ["#1e1206", "#4a2c08", "#86520c", "#c48412", "#f0b424", "#ffe066", "#fff6c4", "#ffffff"] } },
   { name: "fx.blast", fx: "explosions/small-explosion", fps: 12, until: 2.6, opts: { size: 0.8 } },
   { name: "fx.heal", fx: "holy/heal", fps: 15 },
   // the dropped coin, small and spinning; its first frame is also the coin icon beside every price

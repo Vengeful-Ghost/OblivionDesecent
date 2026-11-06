@@ -130,6 +130,38 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"/>
 
+        <!-- "So close": this floor against your best, and the Soul Altar upgrade you're nearest to
+             (GameActivity.fillSoClose); hidden until there is something to say -->
+        <TextView
+            android:id="@+id/txt_best"
+            style="@style/OD.Text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_xs"
+            android:layout_marginTop="@dimen/space_sm"
+            android:textColor="@color/bone_white"
+            android:drawablePadding="@dimen/space_sm"
+            android:gravity="center_vertical"
+            android:maxLines="1"
+            android:visibility="gone"
+            tools:visibility="visible"
+            tools:text="2 floors from a new best"/>
+
+        <TextView
+            android:id="@+id/txt_goal"
+            style="@style/OD.Text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_xs"
+            android:layout_marginTop="@dimen/space_xs"
+            android:textColor="@color/arcane_glow"
+            android:drawablePadding="@dimen/space_sm"
+            android:gravity="center_vertical"
+            android:maxLines="1"
+            android:visibility="gone"
+            tools:visibility="visible"
+            tools:text="14 Souls to Strength III"/>
+
     </LinearLayout>
 
     <View

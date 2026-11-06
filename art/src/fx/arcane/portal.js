@@ -22,18 +22,21 @@ const wrapPi = (a) => a - TAU * Math.floor((a + Math.PI) / TAU);
 
 function setup(t, o) {
   const C = fit(o.palette, 8), rx = o.width, ry = o.height, ph = t / D, S = o.seed;
-  const CY = -(ry + 5);
+  // Oblivion Descent: k scales the fixed reach of the motes, glows and floor line with the rift, so a smaller
+  // portal (opts width / height) shrinks as a whole, not just its oval
+  const k = ry / 29;
+  const CY = -(ry + 5 * k);
   // the rim's radius (1 = the oval) at angle th: slow noise rolling round it, plus a three-lobed breath
   const rim = (th) => 1 + 0.05 * tileNoise((th / TAU) * 10 + ph * 10, ph * 4, 10, 4, S) + 0.018 * Math.sin(th * 3 - ph * TAU * 2);
   // where a point at angle th and radius rho (1 = the rim) sits; outside, the field widens so motes come from round about
   const at = (th, rho) => {
-    const out = Math.max(0, rho - 1), k = Math.min(1, rho);
-    return [Math.cos(th) * (k * rx + out * 21), Math.min(-1, CY + Math.sin(th) * (k * ry + out * 16))];
+    const out = Math.max(0, rho - 1), kk = Math.min(1, rho);
+    return [Math.cos(th) * (kk * rx + out * 21 * k), Math.min(-1, CY + Math.sin(th) * (kk * ry + out * 16 * k))];
   };
   // two hot spots chase round the rim with the spin, and a key light sits at the top left
   const spots = [ph * TAU * 2 - 0.6, ph * TAU * 2 + Math.PI - 0.6];
   const hot = (th) => Math.max(Math.exp(-(wrapPi(th - spots[0]) ** 2) / 0.12), 0.85 * Math.exp(-(wrapPi(th - spots[1]) ** 2) / 0.08)) + 0.35 * Math.max(0, Math.cos(th + 2.3));
-  return { C, rx, ry, ph, S, CY, rim, at, hot, spots };
+  return { C, rx, ry, ph, S, CY, rim, at, hot, spots, k };
 }
 
 // the rift itself: the dark well, the fibrous arms winding down into it, the lit rim
@@ -100,7 +103,7 @@ function orbit(p, s) {
 
 // motes and streaks pulled in from round about, spinning faster as they fall; inside they sink into the dark
 function infall(p, s) {
-  const { C, ph, S, rim, at } = s, t = ph * D;
+  const { C, ph, S, rim, at, k } = s, t = ph * D;
   cycle(t, D, 60, S * 7 + 1, (g) => g.range(0.3, 0.5), (age, life, r) => {
     const a0 = r.range(0, TAU), d0 = r.range(1.8, 3), spin = r.range(0.8, 1.8) * (r.chance(0.8) ? 1 : 0.35), size = r.range(0.8, 1.5), hue = r.next();
     const pos = (q) => at(a0 + spin * q * q, d0 * (1 - Math.pow(q, 1.4)));
@@ -118,18 +121,18 @@ function infall(p, s) {
       streak(p, x, y, (x2 - x) / (0.015 * life), (y2 - y) / (0.015 * life), C[6], Math.min(1, q * 5));
     } else {
       // it hits the rim: a pinprick of white
-      const k = 1 - (q - qc) / (1 - qc), [x, y] = pos(qc);
-      if (k > 0.55) p.px(x, y, WHITE);
-      p.glow(x, y, 7, C[6], 0.6 * k * k);
+      const kk = 1 - (q - qc) / (1 - qc), [x, y] = pos(qc);
+      if (kk > 0.55) p.px(x, y, WHITE);
+      p.glow(x, y, 7 * k, C[6], 0.6 * kk * kk);
     }
   });
 }
 
 // grit and sparks skating in along the floor, lifting into the foot of the rift
 function skaters(p, s) {
-  const { C, ph, S, CY, ry } = s, t = ph * D, foot = CY + ry;
+  const { C, ph, S, CY, ry, k } = s, t = ph * D, foot = CY + ry;
   cycle(t, D, 14, S * 7 + 3, (g) => g.range(0.7, 1.1), (age, life, r) => {
-    const side = r.sign(), x0 = side * r.range(22, 50), y0 = -1 - r.range(0, 1.5), q = age / life, e = ease.inCubic(q);
+    const side = r.sign(), x0 = side * r.range(22, 50) * k, y0 = -1 - r.range(0, 1.5), q = age / life, e = ease.inCubic(q);
     const x = x0 * (1 - e), y = y0 + (foot + 2) * smooth(0.55, 1, q);
     const [xb, yb] = [x0 * (1 - ease.inCubic(Math.max(0, q - 0.04))), y0 + (foot + 2) * smooth(0.55, 1, q - 0.04)];
     const big = r.chance(0.3);
@@ -138,9 +141,9 @@ function skaters(p, s) {
 }
 
 function floor(p, s) {
-  const { C, ph } = s, pulse = 0.85 + 0.15 * Math.sin(ph * TAU * 2);
-  for (let x = -36; x <= 36; x++) {
-    const u = Math.abs(x + 0.5) / 36, a = (u < 0.55 ? 1 : 1 - (u - 0.55) / 0.45) * (0.8 + 0.2 * pulse);
+  const { C, ph, k } = s, pulse = 0.85 + 0.15 * Math.sin(ph * TAU * 2), W = Math.max(8, Math.round(36 * k));
+  for (let x = -W; x <= W; x++) {
+    const u = Math.abs(x + 0.5) / W, a = (u < 0.55 ? 1 : 1 - (u - 0.55) / 0.45) * (0.8 + 0.2 * pulse);
     p.dot(x, 0, u < 0.2 ? WHITE : u < 0.5 ? C[6] : C[5], a);
     if (u < 0.3) p.dot(x, 1, u < 0.15 ? C[5] : C[4], u < 0.15 ? 1 : 0.5);
   }
@@ -151,7 +154,7 @@ export function drawBack(p, t, o) {
 }
 
 export function draw(p, t, o) {
-  const s = setup(t, o), { C, CY, rx, ry, ph, rim, spots } = s, pulse = 0.85 + 0.15 * Math.sin(ph * TAU * 2);
+  const s = setup(t, o), { C, CY, rx, ry, ph, rim, spots, k } = s, pulse = 0.85 + 0.15 * Math.sin(ph * TAU * 2);
   rift(p, s);
   well(p, s);
   orbit(p, s);
@@ -162,8 +165,8 @@ export function draw(p, t, o) {
   p.glow(0, CY, ry * 2.6, C[4], 0.1 * pulse);
   for (let i = 0; i < 16; i++) {
     const th = (i / 16) * TAU, R0 = rim(th) * 1.08;
-    p.glow(Math.cos(th) * R0 * rx, CY + Math.sin(th) * R0 * ry, 15, C[4], 0.15 * pulse);
+    p.glow(Math.cos(th) * R0 * rx, CY + Math.sin(th) * R0 * ry, 15 * k, C[4], 0.15 * pulse);
   }
-  for (const th of spots) p.glow(Math.cos(th) * rim(th) * rx, CY + Math.sin(th) * rim(th) * ry, 16, C[6], 0.42);
-  for (let i = -3; i <= 3; i++) p.glow(i * 7, -1, 16, C[5], 0.12 * pulse);
+  for (const th of spots) p.glow(Math.cos(th) * rim(th) * rx, CY + Math.sin(th) * rim(th) * ry, 16 * k, C[6], 0.42);
+  for (let i = -3; i <= 3; i++) p.glow(i * 7 * k, -1, 16 * k, C[5], 0.12 * pulse);
 }

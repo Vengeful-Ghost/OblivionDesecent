@@ -1,5 +1,8 @@
 Copyright 2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans)
 
+Modified for Oblivion Descent: the digits 0-9 are redrawn (art/tools/digits.mjs). The modified font
+is released under the same SIL Open Font License 1.1.
+
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
 https://scripts.sil.org/OFL
