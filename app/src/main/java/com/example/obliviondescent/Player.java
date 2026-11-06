@@ -56,6 +56,10 @@ public class Player {
     private final Paint chargePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private volatile boolean moving = false;
 
+    // Pixel art: the sprite's feet sit this far below the centre (in radii), on the contact shadow
+    private static final float FEET = 0.78f;
+    private boolean faceLeft = false; // render thread only
+
     // Round shading: light from the top left, shadow on the far side, so the body reads as a ball
     static final RadialGradient SHADE = new RadialGradient(-0.3f, -0.35f, 1.35f,
             new int[]{0x50FFFFFF, 0x00FFFFFF, 0x78000000}, new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP);
@@ -175,7 +179,14 @@ public class Player {
         if (isDying) {
             // The body flashes white and collapses while GameEffects.poof() scatters it
             float progress = Math.min(1f, (System.currentTimeMillis() - deathStartTime) / 220f);
-            if (progress < 1f) {
+            Sprites.Anim still = Sprites.get("player.idle");
+            if (progress < 1f && still != null) {
+                float feet = drawY + radius * FEET;
+                canvas.save();
+                canvas.scale(1f + progress * 0.3f, 1f - progress * 0.7f, drawX, feet);
+                Sprites.flash(canvas, still, 0, drawX, feet, faceLeft, 1f, Color.WHITE, (int) (255 * (1f - progress)));
+                canvas.restore();
+            } else if (progress < 1f) {
                 deathPaint.setAlpha((int) (255 * (1f - progress)));
                 canvas.drawCircle(drawX, drawY, radius * (1f - progress * 0.7f), deathPaint);
             }
@@ -198,7 +209,8 @@ public class Player {
         // Contact shadow on the floor; the body bobs above it while walking
         canvas.drawOval(drawX - radius * 0.9f, drawY + radius * 0.5f, drawX + radius * 0.9f, drawY + radius * 1.05f,
                 shadowPaint);
-        if (moving) drawY -= Math.abs((float) Math.sin(now / 95.0)) * 5f;
+        Sprites.Anim body = Sprites.get(moving ? "player.walk" : "player.idle");
+        if (moving && body == null) drawY -= Math.abs((float) Math.sin(now / 95.0)) * 5f; // the sprite walks by itself
 
         float length = weaponLength(weapon);
         long sinceSwing = now - swingStart;
@@ -211,6 +223,41 @@ public class Player {
         if (behind) drawWeapon(canvas, weapon, drawX, drawY, angle, length, extend, alpha);
 
         boolean squash = now < flashUntil;
+        if (body != null) {
+            // Pixel art: faces where it aims, squashes and flashes red on a hit
+            float cos = (float) Math.cos(Math.toRadians(aimAngle));
+            if (Math.abs(cos) > 0.15f) faceLeft = cos < 0;
+            float feet = drawY + radius * FEET;
+            int frame = body.at(now);
+            if (squash) {
+                canvas.save();
+                canvas.scale(1.12f, 0.88f, drawX, feet);
+            }
+            Sprites.draw(canvas, body, frame, drawX, feet, faceLeft, paint.getColor(), alpha);
+            if (squash) {
+                Sprites.flash(canvas, body, frame, drawX, feet, faceLeft, 1f, flashPaint.getColor(), 170);
+                canvas.restore();
+            }
+        } else {
+            drawBall(canvas, drawX, drawY, alpha, squash);
+        }
+
+        if (!behind) drawWeapon(canvas, weapon, drawX, drawY, angle, length, extend, alpha);
+
+        // Charging a heavy attack: a ring tightens round the body, then pulses gold when full
+        float c = charge;
+        if (c > 0f) {
+            boolean full = c >= 1f;
+            float pulse = full ? 0.75f + 0.25f * (float) Math.sin(now / 55.0) : 1f;
+            chargePaint.setColor(full ? Color.rgb(255, 214, 90) : Color.rgb(255, 150, 60));
+            chargePaint.setAlpha((int) ((90 + 150 * c) * pulse));
+            chargePaint.setStrokeWidth(4f + 5f * c);
+            canvas.drawCircle(drawX, drawY, radius + 12f + 26f * (1f - c), chargePaint);
+        }
+    }
+
+    /** The shaded ball the body was before the pixel art, kept for when the sprite pack is missing. */
+    private void drawBall(Canvas canvas, float drawX, float drawY, int alpha, boolean squash) {
         if (squash) {
             canvas.save();
             canvas.scale(1.12f, 0.88f, drawX, drawY + radius);
@@ -227,19 +274,6 @@ public class Player {
         if (squash) {
             canvas.drawCircle(drawX, drawY, radius, flashPaint);
             canvas.restore();
-        }
-
-        if (!behind) drawWeapon(canvas, weapon, drawX, drawY, angle, length, extend, alpha);
-
-        // Charging a heavy attack: a ring tightens round the body, then pulses gold when full
-        float c = charge;
-        if (c > 0f) {
-            boolean full = c >= 1f;
-            float pulse = full ? 0.75f + 0.25f * (float) Math.sin(now / 55.0) : 1f;
-            chargePaint.setColor(full ? Color.rgb(255, 214, 90) : Color.rgb(255, 150, 60));
-            chargePaint.setAlpha((int) ((90 + 150 * c) * pulse));
-            chargePaint.setStrokeWidth(4f + 5f * c);
-            canvas.drawCircle(drawX, drawY, radius + 12f + 26f * (1f - c), chargePaint);
         }
     }
 

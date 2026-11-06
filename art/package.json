@@ -1,0 +1,10 @@
+{
+  "name": "oblivion-art",
+  "private": true,
+  "type": "module",
+  "description": "Pixel art for Oblivion Descent, drawn in code with a copy of pixelfx (MIT, see LICENSE and NOTICE.md).",
+  "scripts": {
+    "export": "node tools/export.mjs",
+    "look": "node tools/look.mjs"
+  }
+}

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A weapon's trait under its stat grid: the name in gold beside its mark, what it does beneath -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="3dp"
+    android:layout_marginTop="@dimen/space_xs"
+    android:orientation="vertical"
+    android:background="@drawable/dialog_bg"
+    android:paddingHorizontal="@dimen/space_sm"
+    android:paddingVertical="@dimen/space_xs">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:layout_width="@dimen/icon_md"
+            android:layout_height="@dimen/icon_md"
+            android:layout_marginEnd="@dimen/space_xs"
+            android:src="@drawable/ic_level"
+            android:importantForAccessibility="no"/>
+
+        <TextView
+            android:id="@+id/trait_title"
+            style="@style/OD.Text.Value"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Trait"
+            android:textSize="@dimen/text_small"
+            android:maxLines="1"
+            android:ellipsize="end"
+            tools:ignore="HardcodedText"/>
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/trait_text"
+        style="@style/OD.Text.Caption"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="What the trait does"
+        android:textSize="@dimen/text_caption"
+        android:textColor="@color/bone_dim"
+        android:maxLines="3"
+        android:ellipsize="end"
+        tools:ignore="HardcodedText"/>
+
+</LinearLayout>

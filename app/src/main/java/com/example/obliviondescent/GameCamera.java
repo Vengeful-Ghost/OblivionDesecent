@@ -58,12 +58,13 @@ public class GameCamera {
         shakeY = getShakeOffset();
     }
 
+    // Snapped to whole art pixels, so the pixel-art world steps cleanly instead of shimmering as the camera glides
     public float getOffsetX() {
-        return offsetX + shakeX;
+        return Sprites.snap(offsetX + shakeX);
     }
 
     public float getOffsetY() {
-        return offsetY + shakeY;
+        return Sprites.snap(offsetY + shakeY);
     }
 
     /**

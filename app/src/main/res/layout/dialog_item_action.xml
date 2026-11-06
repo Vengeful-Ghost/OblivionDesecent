@@ -137,16 +137,17 @@
             android:translationZ="4dp"
             tools:ignore="HardcodedText"/>
 
-        <!-- Sell button (text set in Java with the gold it fetches) -->
+        <!-- Sell button (text set in Java with the gold it fetches); red, because the item is gone for good -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_remove"
-            style="@style/OD.Button.Secondary"
+            style="@style/OD.Button.Danger"
             android:layout_width="match_parent"
             android:layout_height="@dimen/touch_min"
             android:layout_marginTop="@dimen/space_md"
             android:text="Sell"
             android:textSize="@dimen/text_small"
             app:icon="@drawable/ic_coin"
+            app:iconTint="@color/gold_bright"
             tools:ignore="HardcodedText"/>
 
         <!-- Co-op only: hand this item to a teammate -->

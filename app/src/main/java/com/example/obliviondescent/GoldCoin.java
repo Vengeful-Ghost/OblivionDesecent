@@ -56,6 +56,13 @@ public class GoldCoin {
         float drawX = x - camera.getOffsetX();
         float drawY = y - camera.getOffsetY();
 
+        // Pixel art: pixelfx's spinning coin, each a little out of step with its neighbours
+        Sprites.Anim spin = Sprites.get("item.coin");
+        if (spin != null) {
+            Sprites.draw(canvas, spin, spin.at(System.currentTimeMillis() + (long) (x * 7 + y * 3)), drawX, drawY, false, 0, 255);
+            return;
+        }
+
         // Outer gold circle
         canvas.drawCircle(drawX, drawY, COIN_RADIUS, coinPaint);
 

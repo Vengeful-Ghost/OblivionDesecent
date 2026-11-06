@@ -264,6 +264,32 @@ public class GameEffects {
         }
         slashes.removeIf(s -> now - s.born >= SLASH_LIFE);
         stains.removeIf(s -> s.life > 0 && now - s.born >= s.life);
+        sprites.removeIf(s -> s.anim.done(now - s.born));
+    }
+
+    // Pixel art one-shots from the pixelfx library: hit sparks, death poofs, blasts, heals (see art/sprites.mjs)
+    private static class SpriteFx {
+        Sprites.Anim anim;
+        float x, y;
+        boolean flip;
+        long born;
+    }
+
+    private final List<SpriteFx> sprites = new ArrayList<>();
+    private static final int MAX_SPRITES = 40;
+
+    /** Plays a baked effect once with its pivot (its ground point) at x, y; mirrored when flip. */
+    public synchronized void play(String name, float x, float y, boolean flip) {
+        Sprites.Anim anim = Sprites.get(name);
+        if (anim == null) return;
+        if (sprites.size() >= MAX_SPRITES) sprites.remove(0);
+        SpriteFx s = new SpriteFx();
+        s.anim = anim;
+        s.x = x;
+        s.y = y;
+        s.flip = flip;
+        s.born = System.currentTimeMillis();
+        sprites.add(s);
     }
 
     /** Floor marks, drawn before coins and bodies so everything stands on them. */
@@ -323,6 +349,12 @@ public class GameEffects {
             canvas.drawCircle(p.x - offX, p.y - offY, p.size * (1f - progress * 0.5f), particlePaint);
         }
 
+        for (SpriteFx s : sprites) {
+            long age = now - s.born;
+            if (s.anim.done(age)) continue;
+            Sprites.draw(canvas, s.anim, s.anim.at(age), s.x - offX, s.y - offY, s.flip, 0, 255);
+        }
+
         for (FloatingText t : texts) {
             float progress = Math.min(1f, (float) (now - t.born) / t.life);
             textPaint.setColor(t.color);
@@ -338,5 +370,6 @@ public class GameEffects {
         texts.clear();
         slashes.clear();
         stains.clear();
+        sprites.clear();
     }
 }

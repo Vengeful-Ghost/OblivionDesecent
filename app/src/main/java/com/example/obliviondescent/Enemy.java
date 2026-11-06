@@ -1231,6 +1231,50 @@ public class Enemy {
      * @param canvas the canvas to draw on
      * @param camera game camera used to translate world position to screen position
      */
+    // Pixel art (see art/src/fx/od): sprite names by type and boss kind, and the radius each was drawn for
+    private static final String[] WALK = new String[Type.values().length], IDLE = new String[Type.values().length];
+    private static final String[] BOSS_WALK = new String[BossKind.values().length], BOSS_IDLE = new String[BossKind.values().length];
+    private static final float[] DRAWN_FOR = new float[Type.values().length];
+    static {
+        String[] kinds = {"grunt", "speeder", "tank", "brute", "archer", null, "bomber", "bat", "charger", "necro"};
+        float[] radii = {40f, 28f, 65f, 52f, 34f, 100f, 32f, 20f, 50f, 36f};
+        for (Type t : Type.values()) {
+            String k = t.ordinal() < kinds.length && kinds[t.ordinal()] != null ? kinds[t.ordinal()] : "grunt";
+            WALK[t.ordinal()] = "enemy." + k + ".walk";
+            IDLE[t.ordinal()] = "enemy." + k + ".idle";
+            DRAWN_FOR[t.ordinal()] = t.ordinal() < radii.length ? radii[t.ordinal()] : 40f;
+        }
+        for (BossKind b : BossKind.values()) {
+            BOSS_WALK[b.ordinal()] = "boss." + b.name().toLowerCase(java.util.Locale.ROOT) + ".walk";
+            BOSS_IDLE[b.ordinal()] = "boss." + b.name().toLowerCase(java.util.Locale.ROOT) + ".idle";
+        }
+    }
+    // The sprite's feet sit on the contact shadow, this many radii below the centre
+    private static final float FEET = 0.78f;
+    private boolean faceLeft = false; // render thread only
+
+    /** This body's walk or idle sprite, or null to fall back to the old shapes. */
+    private Sprites.Anim sprite(boolean walking) {
+        if (mimic) return Sprites.get(walking ? "enemy.mimic.walk" : "enemy.mimic.idle");
+        if (type == Type.BOSS) return Sprites.get(walking ? BOSS_WALK[bossKind.ordinal()] : BOSS_IDLE[bossKind.ordinal()]);
+        return Sprites.get(walking ? WALK[type.ordinal()] : IDLE[type.ordinal()]);
+    }
+
+    /** Standing still to wind up, cast, block or reel; everything else walks (bats always flap). */
+    private boolean moving() {
+        if (type == Type.BAT) return true;
+        switch (behaviorState) {
+            case WINDUP: case STUNNED: case CAST: case BLOCK: return false;
+            default: return true;
+        }
+    }
+
+    /** A template that makes a body much bigger or smaller than its sprite was drawn for scales the sprite. */
+    private float spriteScale() {
+        float k = radius / (mimic ? 36f : DRAWN_FOR[type.ordinal()]);
+        return Math.abs(k - 1f) < 0.15f ? 1f : k;
+    }
+
     public void draw(Canvas canvas, GameCamera camera) {
         float drawX = x - camera.getOffsetX();
         float drawY = y - camera.getOffsetY();
@@ -1250,6 +1294,13 @@ public class Enemy {
             float progress = (float) elapsed / DEATH_DURATION;
 
             // Shrink and fade
+            Sprites.Anim still = sprite(false);
+            if (still != null) {
+                float feet = drawY + radius * FEET;
+                Sprites.draw(canvas, still, 0, drawX, feet, faceLeft, spriteScale() * (1f - progress * 0.5f),
+                        bodyPaint.getColor(), (int) (255 * (1f - progress)));
+                return;
+            }
             bodyPaint.setAlpha((int)(255 * (1f - progress)));
             drawShape(canvas, drawX, drawY, radius * (1f - progress * 0.5f), bodyPaint);
             return; // Skip health bar during death
@@ -1286,26 +1337,44 @@ public class Enemy {
         if (behind) drawWeapon(canvas, drawX, drawY, weaponAngle);
         // A fresh hit squashes the body for a moment
         boolean squash = now < hitFlashUntil + 60;
-        if (squash) {
-            canvas.save();
-            canvas.scale(1.14f, 0.86f, drawX, drawY + radius);
-        }
-        bodyPaint.setAlpha(255); // Reset alpha in case it was changed
-        drawShape(canvas, drawX, drawY, radius, bodyPaint);
-        SHADE_MATRIX.setScale(radius, radius);
-        SHADE_MATRIX.postTranslate(drawX, drawY);
-        Player.SHADE.setLocalMatrix(SHADE_MATRIX);
-        drawShape(canvas, drawX, drawY, radius, SHADE_PAINT);
-        drawShape(canvas, drawX, drawY, radius, OUTLINE_PAINT);
-        if (now < hitFlashUntil) drawShape(canvas, drawX, drawY, radius, FLASH_PAINT);
         // A lit bomber blinks faster and faster
-        if (type == Type.BOMBER && behaviorState == BehaviorState.WINDUP
-                && (now - stateStartTime) / Math.max(40, 160 - (now - stateStartTime) / 6) % 2 == 0)
-            drawShape(canvas, drawX, drawY, radius, FLASH_PAINT);
-        if (squash) canvas.restore();
-        if (mimic) drawMimicFace(canvas, drawX, drawY, now);
+        boolean blink = type == Type.BOMBER && behaviorState == BehaviorState.WINDUP
+                && (now - stateStartTime) / Math.max(40, 160 - (now - stateStartTime) / 6) % 2 == 0;
+        Sprites.Anim body = sprite(moving());
+        float headTop = drawY - radius * 1.3f; // the top of the body, for the health bar
+        if (body != null) {
+            // Pixel art: faces its target, each body a little out of step with the rest
+            if (Math.abs(faceX) > 0.15f) faceLeft = faceX < 0;
+            float feet = drawY + radius * FEET, scale = spriteScale();
+            headTop = Math.min(headTop, feet + body.top * scale);
+            int frame = body.at(now + id * 137L);
+            if (squash) {
+                canvas.save();
+                canvas.scale(1.14f, 0.86f, drawX, feet);
+            }
+            Sprites.draw(canvas, body, frame, drawX, feet, faceLeft, scale, bodyPaint.getColor(), 255);
+            if (frenzied) Sprites.flash(canvas, body, frame, drawX, feet, faceLeft, scale, Color.rgb(255, 60, 30), 70);
+            if (now < hitFlashUntil || blink)
+                Sprites.flash(canvas, body, frame, drawX, feet, faceLeft, scale, FLASH_PAINT.getColor(), FLASH_PAINT.getAlpha());
+            if (squash) canvas.restore();
+        } else {
+            if (squash) {
+                canvas.save();
+                canvas.scale(1.14f, 0.86f, drawX, drawY + radius);
+            }
+            bodyPaint.setAlpha(255); // Reset alpha in case it was changed
+            drawShape(canvas, drawX, drawY, radius, bodyPaint);
+            SHADE_MATRIX.setScale(radius, radius);
+            SHADE_MATRIX.postTranslate(drawX, drawY);
+            Player.SHADE.setLocalMatrix(SHADE_MATRIX);
+            drawShape(canvas, drawX, drawY, radius, SHADE_PAINT);
+            drawShape(canvas, drawX, drawY, radius, OUTLINE_PAINT);
+            if (now < hitFlashUntil || blink) drawShape(canvas, drawX, drawY, radius, FLASH_PAINT);
+            if (squash) canvas.restore();
+            if (mimic) drawMimicFace(canvas, drawX, drawY, now);
+        }
         if (type == Type.BOMBER) drawFuse(canvas, drawX, drawY, now);
-        if (type == Type.NECROMANCER) {
+        if (type == Type.NECROMANCER && body == null) {
             DETAIL_PAINT.setColor(Color.rgb(140, 255, 170));
             canvas.drawCircle(drawX - radius * 0.18f, drawY - radius * 0.7f, radius * 0.09f, DETAIL_PAINT);
             canvas.drawCircle(drawX + radius * 0.18f, drawY - radius * 0.7f, radius * 0.09f, DETAIL_PAINT);
@@ -1330,7 +1399,7 @@ public class Enemy {
         }
 
         if (type == Type.BOSS) {
-            drawBossDetails(canvas, drawX, drawY, now);
+            if (body == null) drawBossDetails(canvas, drawX, drawY, now);
 
             // "BOSS" label is larger and red
             labelPaint.setColor(Color.rgb(255, 80, 80));
@@ -1341,7 +1410,7 @@ public class Enemy {
         float barWidth = radius * 2.6f;
         float barHeight = 13f;
         float barLeft = drawX - barWidth / 2f;
-        float barTop = drawY - radius * 1.3f - 24f;
+        float barTop = headTop - 24f;
         float barBottom = barTop + barHeight;
 
         canvas.drawRoundRect(

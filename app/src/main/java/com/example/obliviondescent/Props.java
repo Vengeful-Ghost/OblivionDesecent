@@ -167,7 +167,26 @@ public class Props {
         flame = biome.flame;
         flameCore = biome.flameCore;
         setFire(biome.light, biome.flameCore & 0xFFFFFF);
+        // Pixel fire in this biome's colours (art/sprites.mjs bakes a set per biome)
+        String key = biome.name().toLowerCase(java.util.Locale.ROOT);
+        torchNorth = "prop.torch.north." + key;
+        torchSide = "prop.torch.side." + key;
+        candle = "prop.candle." + key;
+        brazier = "prop.brazier." + key;
     }
+
+    /**
+     * How far the brick face of a north wall reaches down into a room, seen from above: about the height of
+     * a body, so walls stand taller than the people walking past them and torches hang on them, not above.
+     */
+    static final float WALL_FACE = 88f;
+    // North torches are placed 34 below the wall's top; their plate hangs 30 lower, low on the face, so the
+    // flame burns against the bricks and only its smoke climbs past the top of the wall
+    private static final float TORCH_DROP = 30f;
+    // Side torches are placed 24 in from their wall; the bar sits on the wall's inner edge, 8 in
+    private static final float TORCH_INSET = 16f;
+    private String torchNorth = "prop.torch.north.crypt", torchSide = "prop.torch.side.crypt";
+    private String candle = "prop.candle.crypt", brazier = "prop.brazier.crypt";
 
     /** Light pools and flame halos for a fire whose light is the RGB colour light. */
     private void setFire(int light, int halo) {
@@ -765,16 +784,20 @@ public class Props {
     }
 
     /** Empty shackles hanging off a wall point into the room (side = the wall they hang from). */
+    /**
+     * A pair of empty shackles fixed to a wall at (x, y), hanging straight down as chains do: down the brick
+     * face of a north wall, or down the side of a west or east wall from a ring part way up it.
+     */
     void drawChains(Canvas canvas, float x, float y, int side) {
-        float dx = side == Room.WEST ? 1 : side == Room.EAST ? -1 : 0;
-        float dy = side == Room.NORTH ? 1 : side == Room.SOUTH ? -1 : 0;
+        boolean north = side != Room.WEST && side != Room.EAST;
+        float in = side == Room.WEST ? 10 : side == Room.EAST ? -10 : 0;
         for (int s = -1; s <= 1; s += 2) {
-            float sx = x + dy * 14 * s, sy = y + dx * 14 * s;
-            float ex = sx + dx * 60, ey = sy + dy * 60;
-            drawChainLinks(canvas, sx, sy, ex, ey);
+            float sx = north ? x + 14 * s : x + in, sy = north ? y + 6 : y + 16 * s - 56;
+            float ey = sy + (north ? 54 : 44);
+            drawChainLinks(canvas, sx, sy, sx, ey);
             stroke.setColor(IRON);
             stroke.setStrokeWidth(4f);
-            canvas.drawCircle(ex + dx * 8, ey + dy * 8, 9, stroke);
+            canvas.drawCircle(sx, ey + 8, 9, stroke);
         }
     }
 
@@ -1207,11 +1230,64 @@ public class Props {
     private static final float[] RIFT_POINTS = {-1f, 0f, -0.6f, -0.07f, -0.3f, 0.06f, 0f, -0.05f, 0.25f, 0.07f,
             0.6f, -0.04f, 1f, 0.02f};
 
+    /**
+     * Pixel art for the props that have it (art/sprites.mjs): pixelfx fire for torches, candles and braziers,
+     * the game's own barrels, crates, pillars and bones. False leaves the prop to its shapes.
+     */
+    private boolean drawSprite(Canvas canvas, Decor d, long now) {
+        Sprites.Anim a;
+        switch (d.kind) {
+            case TORCH: {
+                // Mounted on the wall it was placed by: on the brick face of a north wall, or leaning out of a
+                // side wall from a bar on the wall line (mirrored for east walls). The flame always rises.
+                boolean side = d.b == Room.WEST || d.b == Room.EAST;
+                if ((a = Sprites.get(side ? torchSide : torchNorth)) == null) return false;
+                long at = now + (long) (d.a * 233);
+                if (!side) Sprites.draw(canvas, a, a.at(at), d.x, d.y + TORCH_DROP, false, 0, 255);
+                else if (d.b == Room.WEST) Sprites.draw(canvas, a, a.at(at), d.x - TORCH_INSET, d.y, false, 0, 255);
+                else Sprites.draw(canvas, a, a.at(at), d.x + TORCH_INSET, d.y, true, 0, 255);
+                return true;
+            }
+            case CANDLES:
+                // One baked cluster of three, at a real candle's size; clusters flicker out of step
+                if ((a = Sprites.get(candle)) == null) return false;
+                Sprites.draw(canvas, a, a.at(now + (long) (d.x * 3 + d.y)), d.x, d.y, ((int) d.x & 64) != 0, 0, 255);
+                return true;
+            case BRAZIER:
+                if ((a = Sprites.get(brazier)) == null) return false;
+                Sprites.draw(canvas, a, a.at(now + (long) d.x), d.x, d.y + d.a * 0.6f, false, 0, 255);
+                return true;
+            case BARREL:
+                return still(canvas, d, d.a >= 28 ? "prop.barrel.l" : "prop.barrel.s", false);
+            case CRATE:
+                return still(canvas, d, d.a >= 30 ? "prop.crate.l" : "prop.crate.s", false);
+            case PILLAR:
+                return still(canvas, d, d.a >= 34 ? "prop.pillar.l" : "prop.pillar.m", false);
+            case BONES:
+                return still(canvas, d, d.a < 180 ? "prop.bones.0" : "prop.bones.1", ((int) d.a & 1) == 1);
+            default:
+                return false;
+        }
+    }
+
+    /** A one-frame prop standing on a soft contact shadow. */
+    private boolean still(Canvas canvas, Decor d, String name, boolean flip) {
+        Sprites.Anim a = Sprites.get(name);
+        if (a == null) return false;
+        if (d.kind != BONES) {
+            fill.setColor(SHADOW);
+            canvas.drawOval(d.x - d.a, d.y + d.a * 0.2f, d.x + d.a * 1.1f, d.y + d.a * 0.75f, fill);
+        }
+        Sprites.draw(canvas, a, 0, d.x, d.y, flip, 0, 255);
+        return true;
+    }
+
     void drawDecor(Canvas canvas, Decor d, long now) {
         if (d.broken) {
             drawSplinters(canvas, d.x, d.y, d.a);
             return;
         }
+        if (drawSprite(canvas, d, now)) return;
         switch (d.kind) {
             case TORCH:   drawTorch(canvas, d.x, d.y, now, (int) d.a); break;
             case BARREL:  drawBarrel(canvas, d.x, d.y, d.a); break;
@@ -1297,7 +1373,8 @@ public class Props {
                 float cx = west ? l : rt, cy = north ? t : bt;
                 float sx = west ? 1 : -1, sy = north ? 1 : -1;
                 if (north && rng.nextInt(3) > 0) list.add(new Decor(COBWEB, cx, cy, sx, sy));
-                if (grand) list.add(new Decor(PILLAR, cx + sx * 50, cy + sy * 50, 30, 0));
+                // Corner pillars stand on the floor in front of the north wall's face, not inside it
+                if (grand) list.add(new Decor(PILLAR, cx + sx * 50, cy + sy * (north ? 110 : 50), 30, 0));
                 float px = cx + sx * (grand ? 140 : 90), py = cy + sy * (grand ? 140 : 100);
                 switch (rng.nextInt(6)) {
                     case 0:
@@ -1462,8 +1539,11 @@ public class Props {
                 // Empty shackles on the side walls, toward the back of the cell
                 float along = back == Room.NORTH || back == Room.WEST ? 0.3f : 0.7f;
                 for (int side : new int[]{(back + 1) % 4, (back + 3) % 4}) {
-                    float[] p = wallPoint(r, side, along);
-                    place(list, r, door, new Decor(CHAINS, p[0], p[1], side, 0));
+                    // From above only a south wall's top shows, so its shackles hang on the north wall instead
+                    int wall = side == Room.SOUTH ? Room.NORTH : side;
+                    float at = side == Room.SOUTH ? (along < 0.5f ? along + 0.3f : along - 0.3f) : along;
+                    float[] p = wallPoint(r, wall, at);
+                    place(list, r, door, new Decor(CHAINS, p[0], p[1], wall, 0));
                 }
                 float bx = back == Room.EAST || back == Room.SOUTH ? rt - 70 : l + 70;
                 float by = back == Room.NORTH || back == Room.EAST ? t + 80 : bt - 70;
@@ -1485,7 +1565,7 @@ public class Props {
                 for (int i = 0; i < 2; i++) {
                     float sx = i == 0 ? l + w * 0.22f : rt - w * 0.22f;
                     float sy = i == 0 ? t + h * 0.27f : bt - h * 0.27f;
-                    place(list, r, door, new Decor(BOOKSHELF, sx, t + 36, 150, 30));
+                    place(list, r, door, new Decor(BOOKSHELF, sx, t + 84, 150, 30)); // stands at the foot of the wall face
                     place(list, r, door, new Decor(BOOKSHELF, sx, bt - 36, 150, 30));
                     place(list, r, door, new Decor(BOOKSHELF, l + 34, sy, 30, 120));
                     place(list, r, door, new Decor(BOOKSHELF, rt - 34, sy, 30, 120));
@@ -1537,11 +1617,15 @@ public class Props {
         }
     }
 
-    /** A random point in the room keeping mx and my clear of the walls (the centre if it is too small). */
+    /**
+     * A random point in the room keeping mx and my clear of the walls (the centre if it is too small), and
+     * clear of the north wall's brick face too, so nothing lying on the floor is drawn up the wall.
+     */
     private static float[] inside(Room r, float mx, float my, Random rng) {
-        float w = r.width - 2 * mx, h = r.height - 2 * my;
+        float top = my + WALL_FACE / 2f;
+        float w = r.width - 2 * mx, h = r.height - my - top;
         return new float[]{w > 0 ? r.x + mx + rng.nextFloat() * w : r.centerX(),
-                h > 0 ? r.y + my + rng.nextFloat() * h : r.centerY()};
+                h > 0 ? r.y + top + rng.nextFloat() * h : r.centerY()};
     }
 
     /** The two torches beside the north wall's middle, as in every other room. */

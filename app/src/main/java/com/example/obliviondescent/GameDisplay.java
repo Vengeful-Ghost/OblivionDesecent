@@ -63,7 +63,7 @@ public class GameDisplay extends View {
     private Paint wallShadowPaint;
     private final Paint vignettePaint = new Paint();
     // Brick front faces under north walls, so the walls read as standing up
-    private static final float WALL_FACE = 44f;
+    private static final float WALL_FACE = Props.WALL_FACE;
     private final Paint wallFacePaint = new Paint(), mortarPaint = new Paint(), wallFootPaint = new Paint();
     // Low health in a fight: red edges that throb with each heartbeat (0 = off)
     private final Paint dangerPaint = new Paint();
@@ -144,9 +144,23 @@ public class GameDisplay extends View {
     private volatile long zoomStart = 0, zoomUntil = 0;
     private volatile float zoomAmount = 0f;
 
+    // The world is drawn small, one pixel per Sprites.PX units, and scaled up without smoothing: pixel art
+    private PixelCanvas pixels;
+    private final Paint blitPaint = Sprites.crisp();
+    // Flagstones and bricks repeated across the world, tinted to each room's and biome's colours
+    private final Paint floorTexPaint = Sprites.crisp(), brickTexPaint = Sprites.crisp();
+    private final android.graphics.Matrix texMatrix = new android.graphics.Matrix();
+    private final java.util.Map<Integer, android.graphics.ColorFilter> tints = new java.util.HashMap<>();
+
     public GameDisplay(Context context, AttributeSet attrs) {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
+        Sprites.load(context);
+        android.graphics.Bitmap floorTex = Sprites.texture("tile.floor"), brickTex = Sprites.texture("tile.bricks");
+        if (floorTex != null)
+            floorTexPaint.setShader(new android.graphics.BitmapShader(floorTex, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT));
+        if (brickTex != null)
+            brickTexPaint.setShader(new android.graphics.BitmapShader(brickTex, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT));
         floorPaint = new Paint();
         floorPaint.setColor(Color.DKGRAY);
         floorPaint.setStrokeWidth(2f);
@@ -459,17 +473,43 @@ public class GameDisplay extends View {
         dangerPaint.setShader(new RadialGradient(w / 2f, h / 2f, radius,
                 new int[]{0x00000000, 0x00000000, 0xD0B00010}, new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
         layoutMinimap(w);
+        if (w > 0 && h > 0) pixels = new PixelCanvas(w, h);
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        if (player == null || camera == null) return;
+        if (player == null || camera == null || pixels == null) return;
 
-        // World layers sit inside the zoom; the vignette and HUD layers don't
-        int world = canvas.save();
+        // The world goes through the pixel buffer; the vignette and HUD layers are drawn at full resolution
         long nowMs = System.currentTimeMillis();
+        PixelCanvas world = pixels;
+        int frame = world.begin();
+        drawWorld(world, nowMs);
+        world.restoreToCount(frame);
+        world.present(canvas, blitPaint);
+
+        if (vignettePaint.getShader() != null)
+            canvas.drawRect(0, 0, getWidth(), getHeight(), vignettePaint);
+        long beat = heartbeatAt;
+        if (beat > 0 && dangerPaint.getShader() != null) {
+            float throb = (float) Math.exp(-(nowMs - beat) / 220.0);
+            dangerPaint.setAlpha((int) (255 * (0.45f + 0.55f * throb)));
+            canvas.drawRect(0, 0, getWidth(), getHeight(), dangerPaint);
+        }
+
+        // 4. Minimap HUD overlay (always on top, hidden in shop), or the whole floor when tapped
+        if (!inShopRoom) {
+            if (mapExpanded && floorLayout != null) drawFullMap(canvas);
+            else drawMinimap(canvas);
+        }
+        drawCoopStatus(canvas);
+    }
+
+    /** Every world layer, in world (screen) coordinates, inside the punch zoom. */
+    private void drawWorld(Canvas canvas, long nowMs) {
+        int world = canvas.save();
         if (nowMs < zoomUntil) {
             float t = (float) (nowMs - zoomStart) / Math.max(1L, zoomUntil - zoomStart);
             float z = 1f + zoomAmount * (float) Math.sin(Math.PI * t);
@@ -558,22 +598,6 @@ public class GameDisplay extends View {
         if (effects != null) effects.draw(canvas, camera);
         if (!inShopRoom) drawEnemyArrows(canvas);
         canvas.restoreToCount(world);
-
-        if (vignettePaint.getShader() != null)
-            canvas.drawRect(0, 0, getWidth(), getHeight(), vignettePaint);
-        long beat = heartbeatAt;
-        if (beat > 0 && dangerPaint.getShader() != null) {
-            float throb = (float) Math.exp(-(nowMs - beat) / 220.0);
-            dangerPaint.setAlpha((int) (255 * (0.45f + 0.55f * throb)));
-            canvas.drawRect(0, 0, getWidth(), getHeight(), dangerPaint);
-        }
-
-        // 4. Minimap HUD overlay (always on top, hidden in shop), or the whole floor when tapped
-        if (!inShopRoom) {
-            if (mapExpanded && floorLayout != null) drawFullMap(canvas);
-            else drawMinimap(canvas);
-        }
-        drawCoopStatus(canvas);
     }
 
     /** Co-op: the teammate a fallen player is watching, or null. */
@@ -742,13 +766,19 @@ public class GameDisplay extends View {
     private void drawFloorLayout(Canvas canvas) {
         float offX = camera.getOffsetX();
         float offY = camera.getOffsetY();
+        Shader stones = floorTexPaint.getShader();
+        if (stones != null) {
+            // Flagstones anchored to the world, one texture pixel per art pixel
+            texMatrix.setScale(Sprites.PX, Sprites.PX);
+            texMatrix.postTranslate(-offX, -offY);
+            stones.setLocalMatrix(texMatrix);
+        }
 
         // Corridors drawn first so room floors paint over any seam
         for (Corridor c : floorLayout.corridors) {
             float left = c.x - offX;
             float top  = c.y - offY;
-            canvas.drawRect(left, top, left + c.width, top + c.height, corridorFloorPaint);
-            drawTiles(canvas, left, top, left + c.width, top + c.height);
+            floor(canvas, left, top, left + c.width, top + c.height, corridorFloorPaint);
         }
 
         for (Room r : floorLayout.rooms) {
@@ -757,8 +787,7 @@ public class GameDisplay extends View {
             float right  = left + r.width;
             float bottom = top + r.height;
             if (right < 0 || bottom < 0 || left > getWidth() || top > getHeight()) continue;
-            canvas.drawRect(left, top, right, bottom, roomPaintFor(r));
-            drawTiles(canvas, left, top, right, bottom);
+            floor(canvas, left, top, right, bottom, roomPaintFor(r));
             // Darker band along the walls gives the room some depth
             canvas.drawRect(left + 12f, top + 12f, right - 12f, bottom - 12f, wallShadowPaint);
             drawRoomWalls(canvas, r, offX, offY);
@@ -868,9 +897,40 @@ public class GameDisplay extends View {
         canvas.drawLine(x1, y1, x2, y2, wallPaint);
     }
 
+    /** A floor area in its colour: pixel flagstones tinted to it, or the old flat fill and tile grid. */
+    private void floor(Canvas canvas, float left, float top, float right, float bottom, Paint colour) {
+        if (floorTexPaint.getShader() == null) {
+            canvas.drawRect(left, top, right, bottom, colour);
+            drawTiles(canvas, left, top, right, bottom);
+            return;
+        }
+        floorTexPaint.setColorFilter(tintFor(colour.getColor()));
+        canvas.drawRect(left, top, right, bottom, floorTexPaint);
+    }
+
+    private android.graphics.ColorFilter tintFor(int color) {
+        android.graphics.ColorFilter f = tints.get(color);
+        if (f == null) {
+            if (tints.size() > 64) tints.clear();
+            tints.put(color, f = Sprites.tint(color));
+        }
+        return f;
+    }
+
     /** The brick front of a wall along y, seen from slightly above; bricks are anchored to the world. */
     private void wallFace(Canvas canvas, float x1, float x2, float y) {
         if (x2 <= x1 || y > getHeight() || y + WALL_FACE < 0) return;
+        Shader bricks = brickTexPaint.getShader();
+        if (bricks != null) {
+            // Pixel bricks, their courses starting at the top of this wall
+            texMatrix.setScale(Sprites.PX, Sprites.PX);
+            texMatrix.postTranslate(-camera.getOffsetX(), y);
+            bricks.setLocalMatrix(texMatrix);
+            brickTexPaint.setColorFilter(tintFor(wallFacePaint.getColor()));
+            canvas.drawRect(x1, y, x2, y + WALL_FACE, brickTexPaint);
+            canvas.drawRect(x1, y + WALL_FACE - 6f, x2, y + WALL_FACE, wallFootPaint);
+            return;
+        }
         float row = WALL_FACE / 2f, brick = 48f, offX = camera.getOffsetX();
         canvas.drawRect(x1, y, x2, y + WALL_FACE, wallFacePaint);
         canvas.drawLine(x1, y + row, x2, y + row, mortarPaint);

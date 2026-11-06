@@ -1605,7 +1605,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 if (e.strikeDamage > 0) {
                     boolean bomb = e.type == Enemy.Type.BOMBER;
                     boolean slam = bomb || (e.type == Enemy.Type.BOSS && e.strikeReach > e.radius * 2f);
-                    if (bomb) blastEnemies(e);
+                    if (bomb) {
+                        blastEnemies(e);
+                        effects.play("fx.blast", e.x, e.y + e.radius * 0.78f, false);
+                    }
                     float knockback = e.getWeapon().knockback;
                     int dealt = e.strikeDamage;
                     resolveStrike(e.x, e.y, e.strikeDirX, e.strikeDirY, e.strikeReach, e.strikeArc,
@@ -1792,6 +1795,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             if (showDamageNumbers) effects.number(e.x, e.y - e.radius, String.valueOf(damage), Color.WHITE);
             effects.burst(e.x, e.y, Color.rgb(255, 230, 150), 6, 6f);
         }
+        // A pixel spark where the blow lands, flying the way it was struck
+        effects.play(crit ? "fx.crit" : "fx.hit", e.x - nx * e.radius * 0.3f, e.y - ny * e.radius * 0.3f, nx < 0);
         int blood = e.mimic ? Color.rgb(120, 84, 48) : effects.gore ? BLOOD : Color.rgb(255, 230, 150);
         effects.spray(e.x + nx * e.radius * 0.5f, e.y + ny * e.radius * 0.5f, nx, ny, blood,
                 crit ? 14 : 7, crit ? 12f : 8f, 0.5f);
@@ -2200,6 +2205,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     if (e.elite) quest(Quests.ELITES, 1);
                     if (e.type == Enemy.Type.BAT) quest(Quests.BATS, 1);
                     effects.burst(e.x, e.y, e.getColor(), e.type == Enemy.Type.BOSS ? 60 : 16, 9f);
+                    effects.play("fx.poof", e.x, e.y + e.radius * 0.78f, false);
                     // The body lies a while over a pool of blood
                     effects.corpse(e.x, e.y, e.radius, e.getColor());
                     if (!e.mimic) effects.stain(e.x, e.y, e.radius * 0.8f, BLOOD_STAIN);
@@ -2841,7 +2847,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         nameView.setTextColor(rarityColor);
         typeView.setText(item.type.name());
         rarityView.setText(item.rarity.toUpperCase());
-        rarityView.setTextColor(rarityColor);
+        tintRarityBadge(rarityView, rarityColor);
         descView.setText(item.description);
         priceView.setText(String.valueOf(item.price));
         showDetailStats(statsView, item);
@@ -3013,17 +3019,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void showDetailStats(LinearLayout box, ShopItem item) {
         switch (item.type) {
             case WEAPON: {
-                Weapon held = player.getWeapon();
-                addStatRow(box, R.drawable.ic_crossed_swords, "Damage", compared(item.damage, held.damage, true, false));
-                addStatRow(box, R.drawable.ic_dagger, "Per second",
-                        compared(dps(item.damage, item.cooldown), dps(held.damage, held.cooldown), true, true));
-                addStatRow(box, R.drawable.ic_range, "Range", compared(item.range, held.range, true, false));
-                addStatRow(box, R.drawable.ic_hourglass, "Cooldown", item.cooldown + "ms");
-                addStatRow(box, R.drawable.ic_knockback, "Knockback", String.valueOf(item.knockback));
-                addStatRow(box, R.drawable.ic_target, "Style", Weapon.kindOf(item.name, item.isProjectile).title());
-                Weapon.Trait trait = Weapon.traitOf(item.name, item.rarity);
-                if (trait != null) addStatRow(box, R.drawable.ic_level, trait.title,
-                        trait.describe("LEGENDARY".equalsIgnoreCase(item.rarity)));
+                addWeaponGrid(box, item.name, item.damage, item.range, item.cooldown, item.knockback,
+                        Weapon.kindOf(item.name, item.isProjectile).title(), player.getWeapon());
+                addTraitBox(box, Weapon.traitOf(item.name, item.rarity), "LEGENDARY".equalsIgnoreCase(item.rarity));
                 break;
             }
             case ARMOR: {
@@ -4091,8 +4089,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (detail.getWindow() != null)
             detail.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
 
+        // The name in its rarity's colour, as in the shop, so rarity reads before anything else
         bindActionDialog(detail, weapon.name, "WEAPON", weapon.rarity.name(),
-                "", weapon.color);
+                "", getRarityColor(weapon.rarity.name()));
         showWeaponStats(detail.findViewById(R.id.action_stats), weapon);
 
         MaterialButton btn = detail.findViewById(R.id.btn_action);
@@ -4235,7 +4234,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         ((TextView) dialog.findViewById(R.id.action_name)).setTextColor(nameColor);
         ((TextView) dialog.findViewById(R.id.action_type)).setText(type);
         ((TextView) dialog.findViewById(R.id.action_rarity)).setText(rarity);
-        ((TextView) dialog.findViewById(R.id.action_rarity)).setTextColor(rarityColor);
+        tintRarityBadge(dialog.findViewById(R.id.action_rarity), rarityColor);
 
         TextView descView = dialog.findViewById(R.id.action_description);
         if (description == null || description.isEmpty()) {
@@ -4311,6 +4310,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             healPerStep = Math.max(1, Math.round(amount / 16f));
             healLeft = amount;
             effects.number(player.x, player.y - player.radius, "+" + amount, Color.rgb(90, 230, 110));
+            effects.play("fx.heal", player.x, player.y + player.radius * 0.78f, false);
             if (relic == Relic.VIAL && maxArmor > 0) {
                 int newArmor = Math.min(maxArmor, playerArmor + Math.max(1, Math.round(maxArmor * percent / 100f)));
                 runOnUiThread(() -> {
@@ -4339,20 +4339,148 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     private void showWeaponStats(LinearLayout box, Weapon weapon) {
         Weapon held = player.getWeapon() == weapon ? null : player.getWeapon();
-        addStatRow(box, R.drawable.ic_crossed_swords, "Damage",
-                held == null ? String.valueOf(weapon.damage) : compared(weapon.damage, held.damage, true, false));
-        float perSecond = dps(weapon.damage, weapon.cooldown);
-        addStatRow(box, R.drawable.ic_dagger, "Per second", held == null
-                ? String.format(java.util.Locale.US, "%.1f", perSecond)
-                : compared(perSecond, dps(held.damage, held.cooldown), true, true));
-        addStatRow(box, R.drawable.ic_range, "Range",
-                held == null ? String.valueOf((int) weapon.range) : compared(weapon.range, held.range, true, false));
-        addStatRow(box, R.drawable.ic_hourglass, "Cooldown", weapon.cooldown + "ms");
-        addStatRow(box, R.drawable.ic_knockback, "Knockback", String.valueOf(weapon.knockback));
-        addStatRow(box, R.drawable.ic_target, "Style", weapon.kind().title());
-        Weapon.Trait trait = weapon.trait();
-        if (trait != null) addStatRow(box, R.drawable.ic_level, trait.title,
-                trait.describe(weapon.rarity == Weapon.Rarity.LEGENDARY));
+        addWeaponGrid(box, weapon.name, weapon.damage, weapon.range, weapon.cooldown, weapon.knockback,
+                weapon.kind().title(), held);
+        addTraitBox(box, weapon.trait(), weapon.rarity == Weapon.Rarity.LEGENDARY);
+    }
+
+    // Better and worse than what you hold: the same green and red as every other comparison in the game
+    private static final int BETTER = 0xFF7AB85C, WORSE = 0xFFE04848;
+
+    /**
+     * A weapon's stats against the one you hold, made to be read in a second: a line on top saying whether it
+     * is stronger or weaker overall (by damage per second), then six cells in a two-column grid, each edged and
+     * marked green where it beats yours and red where it loses, with the difference ("+6", "-120ms").
+     * held is null for the weapon you are holding, which shows plain values.
+     */
+    private void addWeaponGrid(LinearLayout box, String name, int damage, float range, long cooldown,
+                               float knockback, String style, Weapon held) {
+        float perSecond = dps(damage, cooldown);
+        addCompareHeader(box, held, perSecond);
+        int[] icons = {R.drawable.ic_crossed_swords, R.drawable.ic_dagger, R.drawable.ic_range,
+                R.drawable.ic_hourglass, R.drawable.ic_knockback, R.drawable.ic_target};
+        String[] labels = {"Damage", "Per second", "Range", "Cooldown", "Knockback", "Style"};
+        CharSequence[] values = new CharSequence[6];
+        int[] verdicts = new int[6];
+        float[][] pairs = held == null ? null : new float[][]{
+                {damage, held.damage}, {perSecond, dps(held.damage, held.cooldown)}, {range, held.range},
+                {cooldown, held.cooldown}, {knockback, held.knockback}};
+        // the "ms" set small: Cinzel draws it as wide capitals, and the cell is only half a pane wide
+        android.text.SpannableString ms = new android.text.SpannableString(cooldown + "ms");
+        ms.setSpan(new android.text.style.RelativeSizeSpan(0.75f), ms.length() - 2, ms.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        CharSequence[] mine = {String.valueOf(damage), String.format(java.util.Locale.US, "%.1f", perSecond),
+                String.valueOf(Math.round(range)), ms, String.format(java.util.Locale.US, "%.1f", knockback)};
+        boolean[] decimals = {false, true, false, false, true};
+        for (int i = 0; i < 5; i++) {
+            if (pairs == null) { values[i] = mine[i]; continue; }
+            // a shorter cooldown is the better one; its difference drops the "ms" the value already shows
+            float diff = pairs[i][0] - pairs[i][1];
+            boolean tied = Math.abs(diff) < (decimals[i] ? 0.05f : 0.5f);
+            verdicts[i] = tied ? 0 : (diff > 0) == (i != 3) ? 1 : -1;
+            values[i] = tied ? mine[i] : delta(mine[i], diff, decimals[i], verdicts[i] > 0);
+        }
+        values[5] = style;
+
+        float dp = getResources().getDisplayMetrics().density;
+        int gap = Math.round(3 * dp);
+        LinearLayout row = null;
+        for (int i = 0; i < icons.length; i++) {
+            if (i % 2 == 0) {
+                row = new LinearLayout(this);
+                box.addView(row, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Math.round(44 * dp)));
+            }
+            View cell = getLayoutInflater().inflate(R.layout.item_stat_cell, row, false);
+            ((android.widget.ImageView) cell.findViewById(R.id.stat_icon)).setImageResource(icons[i]);
+            ((TextView) cell.findViewById(R.id.stat_label)).setText(labels[i]);
+            TextView value = cell.findViewById(R.id.stat_value);
+            value.setText(values[i]);
+            value.setTextColor(ContextCompat.getColor(this, R.color.bone_white));
+            value.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f);
+            if (verdicts[i] != 0) cell.setBackground(verdictCell(verdicts[i] > 0 ? BETTER : WORSE, dp));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+            lp.setMargins(gap, gap, gap, gap);
+            row.addView(cell, lp);
+        }
+    }
+
+    /**
+     * "24" with " +6" after it: the difference bold, green when it is better and red when it is worse, a
+     * touch smaller than the value so the pair fits its cell.
+     */
+    private static CharSequence delta(CharSequence value, float diff, boolean oneDecimal, boolean better) {
+        String d = (diff > 0 ? " +" : " -") + (oneDecimal ? String.format(java.util.Locale.US, "%.1f", Math.abs(diff))
+                : String.valueOf(Math.round(Math.abs(diff))));
+        android.text.SpannableStringBuilder s = new android.text.SpannableStringBuilder(value).append(d);
+        int from = value.length(), to = s.length(), flags = android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
+        s.setSpan(new android.text.style.ForegroundColorSpan(better ? BETTER : WORSE), from, to, flags);
+        s.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), from, to, flags);
+        s.setSpan(new android.text.style.RelativeSizeSpan(0.85f), from, to, flags);
+        return s;
+    }
+
+    /** A stat cell's stone, edged in the colour of its verdict. */
+    private static android.graphics.drawable.Drawable verdictCell(int color, float dp) {
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{blend(Color.rgb(38, 34, 30), color, 0.14f), Color.rgb(20, 18, 16)});
+        g.setCornerRadius(3 * dp);
+        g.setStroke(Math.round(1.5f * dp), (color & 0x00FFFFFF) | 0xC0000000);
+        return g;
+    }
+
+    private static int blend(int a, int b, float t) {
+        return Color.rgb(Math.round(Color.red(a) + (Color.red(b) - Color.red(a)) * t),
+                Math.round(Color.green(a) + (Color.green(b) - Color.green(a)) * t),
+                Math.round(Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t));
+    }
+
+    /**
+     * The one-glance verdict over the grid: "Stronger than your Iron Sword" in green, "Weaker than..." in red,
+     * by damage per second; for the weapon you hold, just that it is the one equipped.
+     */
+    private void addCompareHeader(LinearLayout box, Weapon held, float perSecond) {
+        TextView header = new TextView(this);
+        header.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, getResources().getDimension(R.dimen.text_caption));
+        header.setTypeface(getResources().getFont(R.font.cinzel_bold));
+        header.setGravity(android.view.Gravity.CENTER);
+        header.setMaxLines(1);
+        header.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        header.setTextColor(ContextCompat.getColor(this, R.color.bone_dim));
+        if (held == null) {
+            header.setText("Your equipped weapon");
+        } else {
+            float theirs = dps(held.damage, held.cooldown), diff = perSecond - theirs;
+            String verdict = Math.abs(diff) < 0.05f ? "As strong as" : diff > 0 ? "Stronger than" : "Weaker than";
+            android.text.SpannableString s = new android.text.SpannableString(verdict + " your " + held.name);
+            if (Math.abs(diff) >= 0.05f)
+                s.setSpan(new android.text.style.ForegroundColorSpan(diff > 0 ? BETTER : WORSE), 0, verdict.length(),
+                        android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            header.setText(s);
+        }
+        int pad = Math.round(2 * getResources().getDisplayMetrics().density);
+        header.setPadding(pad, 0, pad, pad);
+        box.addView(header);
+    }
+
+    /** A rarity badge in its rarity's colour: the word, its edge and a faint wash behind it. */
+    private void tintRarityBadge(TextView badge, int color) {
+        float dp = getResources().getDisplayMetrics().density;
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(blend(Color.rgb(24, 21, 18), color, 0.22f));
+        g.setCornerRadius(3 * dp);
+        g.setStroke(Math.round(1.5f * dp), color);
+        badge.setBackground(g);
+        badge.setTextColor(color);
+    }
+
+    /** The weapon's trait, if it has one, in its own box under the stats: always on screen, never scrolled to. */
+    private void addTraitBox(LinearLayout box, Weapon.Trait trait, boolean legendary) {
+        if (trait == null) return;
+        View view = getLayoutInflater().inflate(R.layout.item_trait_box, box, false);
+        ((TextView) view.findViewById(R.id.trait_title)).setText(trait.title);
+        ((TextView) view.findViewById(R.id.trait_text)).setText(trait.describe(legendary));
+        box.addView(view);
     }
 
     private void showArmorStats(LinearLayout box, Armor armor) {
@@ -5123,6 +5251,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     animateHealthBar(old, playerHealth);
                     int water = Color.rgb(96, 170, 200);
                     effects.burst(player.x, player.y, water, 24, 8f);
+                    effects.play("fx.heal", player.x, player.y + player.radius * 0.78f, false);
                     effects.banner(player.x, player.y - player.radius - 50f, "+" + (playerHealth - old) + " HP", water);
                     soundManager.play(SoundManager.Sfx.POTION);
                 });
