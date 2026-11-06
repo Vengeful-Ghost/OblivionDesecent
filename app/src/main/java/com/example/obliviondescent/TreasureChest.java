@@ -96,6 +96,12 @@ public class TreasureChest {
 
         if (t >= 1f && !opened) drawLoot(canvas, groundX, groundY, now);
 
+        // Pixel art from pixelfx (art/sprites.mjs) behind a waiting chest: a pillar of light over a vault's (gold)
+        // or a boss's (violet), skulls circling a cursed one
+        Sprites.Anim aura = t < 1f || opened || mimic ? null
+                : Sprites.get(vault ? "fx.beam.vault" : boss ? "fx.beam.boss" : cursed ? "fx.skulls" : "");
+        if (aura != null) Sprites.draw(canvas, aura, aura.at(now + (long) x), groundX, groundY + 24f, false, 0, 230);
+
         canvas.save();
         canvas.translate(groundX, groundY - lift);
         if (t < 1f) {

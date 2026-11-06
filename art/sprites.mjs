@@ -23,6 +23,28 @@
 //   tint    the colour tools/look.mjs previews the dye in
 //   icon    also write the first frame, trimmed, to this path under app/src/main/res (for Android views)
 
+import { draw as drawPlayer } from "./src/fx/od/player.js";
+
+// Bodies for pixelfx effects written round its stand-in character ("actor": a pixel mask, and colours):
+//   BLOB(w, h, lift)  a plain oval body, for effects that only need somewhere on a body to happen
+//   PLAYER            our own player, front on, so the revive, level-up and respawn light trace our knight
+const BLOB = (w, h, lift = 0) => {
+  const data = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++)
+    if (((x + 0.5 - w / 2) / (w / 2)) ** 2 + ((y + 0.5 - h / 2) / (h / 2)) ** 2 <= 1) data[y * w + x] = 1;
+  return { mask: { w, h, data }, pixels: null, x: -(w >> 1), y: -h - lift, w, h, k: 2, head: [0, -h - lift], chest: [0, -Math.round(h * 0.6) - lift] };
+};
+const PLAYER = (() => {
+  const px = new Map();
+  drawPlayer({ px: (x, y, c) => px.set(x + "," + y, c) }, 0, { anim: "idle", frame: 0, view: "s" });
+  const pts = [...px.keys()].map((k) => k.split(",").map(Number));
+  const x0 = Math.min(...pts.map((p) => p[0])), y0 = Math.min(...pts.map((p) => p[1]));
+  const w = Math.max(...pts.map((p) => p[0])) - x0 + 1, h = Math.max(...pts.map((p) => p[1])) - y0 + 1;
+  const data = new Uint8Array(w * h), pixels = new Uint32Array(w * h);
+  for (const [k, c] of px) { const [x, y] = k.split(",").map(Number), i = (y - y0) * w + (x - x0); data[i] = 1; pixels[i] = c; }
+  return { mask: { w, h, data }, pixels, x: x0, y: y0, w, h, k: 2, head: [0, y0], chest: [0, Math.round(y0 * 0.6)] };
+})();
+
 // A character's idle and walk, in each view it can face: "player.walk" is side on facing right (e), and
 // "player.walk.se", ".s", ".ne", ".n" turn it towards and away from the viewer. The game mirrors these for
 // the other three of its eight ways (Sprites.facing). Bodies that look the same every way pass views: ["e"].
@@ -65,6 +87,37 @@ export const SPRITES = [
   { name: "fx.portal.shop", fx: "arcane/portal", fps: 10, opts: { width: 8, height: 14, palette: ["#1e1206", "#4a2c08", "#86520c", "#c48412", "#f0b424", "#ffe066", "#fff6c4", "#ffffff"] } },
   { name: "fx.blast", fx: "explosions/small-explosion", fps: 12, until: 2.6, opts: { size: 0.8 } },
   { name: "fx.heal", fx: "holy/heal", fps: 15 },
+  // status on a body, drawn by Enemy.draw while it lasts: flames (the body itself left alone), stars round the head
+  { name: "fx.burn", fx: "status/burning", fps: 12, opts: { actor: BLOB(12, 16), bodyless: true } },
+  { name: "fx.stun", fx: "status/stunned", fps: 9, opts: { actor: BLOB(14, 2) } },
+  // the Warden's Aegis catching a hit; an enemy's raised guard catching one of yours
+  { name: "fx.ward", fx: "holy/divine-shield", fps: 9, opts: { radius: 21 } },
+  { name: "fx.block", fx: "impacts/shield-block", fps: 15 },
+  // pickups: a key over "+1 KEY"; a pillar of light over an unopened vault (gold) or boss chest (violet)
+  { name: "fx.key", fx: "pickups/key-glint", fps: 9 },
+  // a healing draught bobbing where a barrel broke open (GameActivity.dropBarrelPotion), red like the heal
+  { name: "fx.potion", fx: "pickups/potion", fps: 9, opts: { palette: ["#1a0508", "#4a0c14", "#8a1622", "#c8283a", "#f04a5a", "#ff8a94", "#ffd0d4", "#ffffff"] } },
+  { name: "fx.beam.vault", fx: "pickups/loot-beam", fps: 9, opts: { palette: ["#1e1206", "#4a2c08", "#86520c", "#c48412", "#f0b424", "#ffe066", "#fff6c4", "#ffffff"] } },
+  { name: "fx.beam.boss", fx: "pickups/loot-beam", fps: 9 },
+  // arrivals: the rune circle and burst where the dead rise (cut before pixelfx's own brute climbs out),
+  // a rift for a boss or a Trial wave, the light that writes the player back in at a checkpoint
+  { name: "fx.summon", fx: "spawn/summon-rise", fps: 12, until: 1.3 },
+  { name: "fx.rift", fx: "spawn/spawn-portal", fps: 9, opts: { width: 16 } },
+  { name: "fx.respawn", fx: "spawn/respawn-beam", fps: 10, opts: { actor: PLAYER } },
+  // dark magic: the Summoner's sigil; skulls circling the Cursed Crypt's chest
+  { name: "fx.hex", fx: "shadow/hex-sigil", fps: 7 },
+  { name: "fx.skulls", fx: "shadow/necro-skulls", fps: 9 },
+  // the Healing Spring's ring; a revive (ad, Second Wind); a level up; a daily quest done mid-run
+  { name: "fx.spring", fx: "holy/heal-aoe", fps: 9, opts: { reach: 60 } },
+  { name: "fx.revive", fx: "holy/resurrection", fps: 8, until: 3.6, opts: { actor: PLAYER } },
+  { name: "fx.levelup", fx: "ui/level-up", fps: 9, until: 2.6, opts: { actor: PLAYER } },
+  { name: "fx.quest", fx: "ui/quest-complete", fps: 8 },
+  // heavy blows on the floor: a boss's slam, and smaller landings (the Hunter's leap, a Tank's hammer)
+  { name: "fx.slam", fx: "impacts/ground-slam", fps: 9, until: 1.7, opts: { reach: 58 } },
+  { name: "fx.land", fx: "impacts/heavy-landing", fps: 15 },
+  // water: drops falling from the dark into the Flooded Catacombs' pools, the Healing Spring's fountain
+  { name: "prop.drip", fx: "water/drip", fps: 12, opts: { source: false } },
+  { name: "prop.fountain", fx: "water/fountain", fps: 9 },
   // the dropped coin, small and spinning; its first frame is also the coin icon beside every price
   { name: "item.coin", fx: "od/coin", opts: { anim: "spin" }, icon: "drawable-nodpi/px_coin.png" },
 
@@ -74,7 +127,7 @@ export const SPRITES = [
     { name: `prop.torch.north.${biome}`, fx: "od/torch", opts: { anim: "north", palette } },
     { name: `prop.torch.side.${biome}`, fx: "od/torch", opts: { anim: "side", palette } },
     { name: `prop.candle.${biome}`, fx: "od/candles", opts: { anim: "burn", palette } },
-    { name: `prop.brazier.${biome}`, fx: "fire/brazier", fps: 8, opts: { palette, light: 0.7 } },
+    { name: `prop.brazier.${biome}`, fx: "fire/brazier", fps: 6, opts: { palette, light: 0.7 } },
   ]),
 
   // rugs at the sizes Props.java lays them (its half sizes in world units / 4)

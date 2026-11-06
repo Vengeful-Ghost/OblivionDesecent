@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- One shop card (GameActivity.populateShopGridFromItems): the item's picture on a glow in its rarity colour,
+     rarity, name, a stat line against what you have now, and a price tag; a ribbon (UPGRADE, SALE) on top -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="0dp"
     android:layout_height="match_parent"
     android:layout_weight="1"
-    android:orientation="vertical"
     android:layout_margin="@dimen/space_xs"
     android:clickable="true"
     android:focusable="true"
@@ -12,50 +14,108 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:padding="@dimen/space_md"
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/space_sm"
         android:gravity="center_vertical">
 
-        <TextView
-            android:id="@+id/item_name"
-            style="@style/OD.Text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Item Name"
-            android:textStyle="bold"
-            android:maxLines="2"
-            android:ellipsize="end"/>
+        <FrameLayout
+            android:id="@+id/item_icon_box"
+            android:layout_width="52dp"
+            android:layout_height="52dp">
+
+            <ImageView
+                android:id="@+id/item_icon"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="center"
+                android:scaleType="fitCenter"
+                android:importantForAccessibility="no"/>
+
+        </FrameLayout>
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="@dimen/space_xs"
-            android:gravity="center_vertical">
+            android:layout_weight="1"
+            android:layout_marginStart="@dimen/space_sm"
+            android:orientation="vertical">
 
             <TextView
-                android:id="@+id/item_type_badge"
+                android:id="@+id/item_rarity"
                 style="@style/OD.Text.Label"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="WEAPON"
-                android:maxLines="1"
-                android:ellipsize="end"/>
-
-            <TextView
-                android:id="@+id/item_price"
-                style="@style/OD.Text.Value"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:text="50"
+                android:textSize="@dimen/text_caption"
+                android:maxLines="1"
+                tools:text="EPIC WEAPON"/>
+
+            <TextView
+                android:id="@+id/item_name"
+                style="@style/OD.Text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textStyle="bold"
                 android:textSize="@dimen/text_small"
-                android:drawableLeft="@drawable/ic_coin_px"
-                android:drawablePadding="@dimen/space_xs"/>
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="Item Name"/>
+
+            <TextView
+                android:id="@+id/item_stat"
+                style="@style/OD.Text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/text_caption"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="34 damage  +6"/>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/item_price"
+                    style="@style/OD.Text.Value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:textSize="@dimen/text_small"
+                    android:drawableLeft="@drawable/ic_coin_px"
+                    android:drawablePadding="@dimen/space_xs"
+                    tools:text="50"/>
+
+                <TextView
+                    android:id="@+id/item_old_price"
+                    style="@style/OD.Text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/space_xs"
+                    android:textSize="@dimen/text_caption"
+                    android:textColor="@color/bone_muted"
+                    android:visibility="gone"
+                    tools:visibility="visible"
+                    tools:text="72"/>
+
+            </LinearLayout>
 
         </LinearLayout>
 
     </LinearLayout>
 
-</LinearLayout>
+    <TextView
+        android:id="@+id/item_ribbon"
+        style="@style/OD.Text.Label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:paddingHorizontal="@dimen/space_xs"
+        android:textSize="@dimen/text_caption"
+        android:textColor="@color/bone_white"
+        android:visibility="gone"
+        tools:visibility="visible"
+        tools:text="UPGRADE"/>
+
+</FrameLayout>

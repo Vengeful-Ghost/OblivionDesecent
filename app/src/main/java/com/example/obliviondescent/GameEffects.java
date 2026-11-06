@@ -264,7 +264,7 @@ public class GameEffects {
         }
         slashes.removeIf(s -> now - s.born >= SLASH_LIFE);
         stains.removeIf(s -> s.life > 0 && now - s.born >= s.life);
-        sprites.removeIf(s -> s.anim.done(now - s.born));
+        sprites.removeIf(s -> s.over(now));
     }
 
     // Pixel art one-shots from the pixelfx library: hit sparks, death poofs, blasts, heals (see art/sprites.mjs)
@@ -273,13 +273,29 @@ public class GameEffects {
         float x, y;
         boolean flip;
         long born;
+        long hold; // a looping effect plays this long (ms), fading out over its last FADE; 0 = once through
+
+        boolean over(long now) {
+            return hold > 0 ? now - born >= hold : anim.done(now - born);
+        }
+
+        int alpha(long now) {
+            long left = hold - (now - born);
+            return hold > 0 && left < FADE ? (int) (255 * Math.max(0, left) / FADE) : 255;
+        }
     }
+    private static final long FADE = 250;
 
     private final List<SpriteFx> sprites = new ArrayList<>();
     private static final int MAX_SPRITES = 40;
 
     /** Plays a baked effect once with its pivot (its ground point) at x, y; mirrored when flip. */
     public synchronized void play(String name, float x, float y, boolean flip) {
+        play(name, x, y, flip, 0);
+    }
+
+    /** Plays a baked effect with its pivot at x, y: a looping one for holdMs (then it fades), any other once. */
+    public synchronized void play(String name, float x, float y, boolean flip, long holdMs) {
         Sprites.Anim anim = Sprites.get(name);
         if (anim == null) return;
         if (sprites.size() >= MAX_SPRITES) sprites.remove(0);
@@ -289,6 +305,7 @@ public class GameEffects {
         s.y = y;
         s.flip = flip;
         s.born = System.currentTimeMillis();
+        s.hold = anim.loop ? Math.max(1, holdMs > 0 ? holdMs : anim.durationMs()) : 0;
         sprites.add(s);
     }
 
@@ -351,8 +368,8 @@ public class GameEffects {
 
         for (SpriteFx s : sprites) {
             long age = now - s.born;
-            if (s.anim.done(age)) continue;
-            Sprites.draw(canvas, s.anim, s.anim.at(age), s.x - offX, s.y - offY, s.flip, 0, 255);
+            if (s.over(now)) continue;
+            Sprites.draw(canvas, s.anim, s.anim.at(age), s.x - offX, s.y - offY, s.flip, 0, s.alpha(now));
         }
 
         for (FloatingText t : texts) {

@@ -139,7 +139,7 @@ coins in flight and the small poof in `art/records/scenes/ENTRY.png`. Not played
 
 Last checked: release APK builds (15.6 MB). Not played on a phone.
 
-### Next: the pixelfx shortlist (started 2026-11-06, paused for the usage limit)
+### The pixelfx shortlist (planned 2026-11-06, done in Round 5 below)
 
 The user approved downloading them. pixelfx's latest `src/core` is identical to ours, so these are copied in
 as-is but **not yet listed in `art/sprites.mjs` or used by the game** (the game is unchanged by them):
@@ -163,3 +163,59 @@ Plan for each (previews: `node <scratchpad>/strips.mjs`-style bake of the effect
 - level-up (custom empty actor): player level up. quest-complete: a daily quest finished mid-run.
 - ripples / drip: Flooded Catacombs props. fountain: the Healing Spring's centrepiece.
 Looping effects need a timed play in `GameEffects` (play for N ms) and per-body loops drawn in `Enemy.draw`.
+
+### Round 5 (2026-11-07): pixelfx effects in the game
+
+All in `art/sprites.mjs` (section after `fx.heal`) and exported; the pack is now 7 sheets, about 28 MB once
+loaded (long effects run at 7 to 10 fps and some stop early with `until` to keep it there; braziers went to 6 fps).
+- **Our own bodies for pixelfx's stand-in** (`BLOB(w, h)` and `PLAYER` at the top of `art/sprites.mjs`): effects
+  that trace "the body" trace an oval or our knight (front view) instead of pixelfx's grey figure. Burning got a
+  `bodyless` option in our copy (`status/burning.js`): flames, smoke and sparks only.
+- **Where each plays** (GameActivity unless noted):
+  - fx.burn: flames on an enemy the Burning trait lit (`Enemy.burningUntil`, drawn in `Enemy.draw`).
+  - fx.stun: stars round the head while stunned (`Enemy.draw`; the old dots are the fallback).
+  - fx.ward: the Aegis catching a hit. fx.block: an enemy's guard stopping your hit (`showBlocked`).
+  - fx.key: over "+1 KEY" (`gainKey`).
+  - fx.beam.vault / fx.beam.boss / fx.skulls: behind a waiting vault, boss or cursed chest (`TreasureChest.draw`).
+  - fx.summon: where the Necromancer and the Summoner raise the dead, each Trial wave foe, a mimic waking.
+  - fx.rift: the boss coming up (`spawnBoss`). fx.hex: the Summoner's sigil when it raises its thralls.
+  - fx.respawn: at a checkpoint respawn. fx.revive: the ad revive and Second Wind. fx.levelup: each level.
+  - fx.quest: a daily quest finished mid-run, a ribbon above the player (the old text banner is the fallback).
+  - fx.spring: the Healing Spring's ring when you drink.
+  - fx.slam: a boss's slam. fx.land: other enemies' slams and the hammer finisher.
+  - prop.fountain: the Healing Spring until it's drunk dry. prop.drip: drops falling into the Catacombs'
+    pools (`Props.drawSprite`, PUDDLE / FOUNTAIN).
+- `GameEffects.play(name, x, y, flip, holdMs)`: a looping effect plays for holdMs and fades out.
+- Not used after previews: chest-open, potion, soul-rise, life-steal, chain-lightning, fog, fireflies, ripples,
+  cursed (removed from `art/src/fx`).
+- Renders: `art/records/scenes/FX_ROOM.png` (chests, ward, key, stun, burn, block), `FX_SPRING.png`,
+  `FX_POOLS.png`, `FX_SHOTS.png`. Co-op guests don't see the host-only ones (rift, hex, summon) yet.
+
+Last checked: release APK builds (18.5 MB). Not played on a phone.
+
+### Round 6 (2026-11-07): the ideas list
+
+Working from `../OblivionDesecentIdeasAndBugFixes.txt` (the user's list; done items are moved to its DONE
+section with what changed). In code:
+- Co-op fallen player invisible: `prepareNextFloor` revives anyone dying, level ups and Vigor don't heal the
+  fallen (`gainXp`, `spendStatPoint`), `Player.isDying` is volatile.
+- Barrel potions: `dropBarrelPotion` (6%), `fx.potion` in `art/sprites.mjs` (pixelfx pickups/potion, red).
+- RTL: `android:supportsRtl="false"`. Tutorial: `tutorialKey()` ("guest" when signed out), hint brought to
+  front; How to Play opens on the first menu visit (`MenuActivity`, prefs `guide_<uid>`).
+- Walls: `FloorLayout.isOnFloor` reaches past the north brick face for small bodies and checks diagonals.
+  Thief: `Enemy.updateThief` scores ways by how far its body fits, turns when stuck.
+- Altar: `MenuActivity.renderAltar(dialog, data, bought)` updates cells in place.
+- Bosses: `loadBossIdentity` / `bossDataOrOffline` / `bossKindFor` (offline content when a range hasn't
+  arrived, never the same kind twice running); new runs skip the local content cache.
+- Spawns: bomber / charger / necromancer rows in `SPAWN_TABLE`, elites 11% up to 3, thief 33%,
+  biome favour x2.2 (`Biome` lists widened).
+- Perks: values in `Perk` (share()), all formulas read them. Level up is a stat sheet (`showPerkDialog`,
+  `fillStatSheet`, `spendStatPoint`); perks renamed as stats; ad reroll removed.
+- Stagger / perfect dodge: `skillHeal()` +2 HP.
+- Weapon traits on the held weapon: `Player.drawTrait`.
+- Boss ultimates: `BossMove.ULTIMATE` (at 10% HP, once, 1.4 s crimson tell), announced "LAST STAND".
+- Shop cards: `dialog_shop_item.xml`, `bindShopCard`, `shopIcon`, `shopStatLine`, `applyFloorSale`
+  (`ShopItem.fullPrice`). Render: `art/records/dialogs/SHOP_NEW.png`.
+- Biome gear: `biomeGear` (`ShopItem.biomeTilted`), `withAdjective` / `withNoun`.
+
+Last checked: release APK builds. Not played on a phone.

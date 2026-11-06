@@ -108,6 +108,13 @@ public class MenuActivity extends AppCompatActivity {
         findViewById(R.id.btn_bestiary).setOnClickListener(v -> { click(); showBestiary(); });
         findViewById(R.id.btn_weekly).setOnClickListener(v -> { click(); showDaily(true); });
         Ads.gatherConsent(this);
+
+        // First visit to the menu on this phone: open How to Play by itself, once
+        SharedPreferences guide = getSharedPreferences("guide_" + (userId != null ? userId : "guest"), MODE_PRIVATE);
+        if (savedInstanceState == null && !guide.getBoolean("seen", false)) {
+            guide.edit().putBoolean("seen", true).apply();
+            findViewById(R.id.btn_tutorial).post(this::showTutorial);
+        }
     }
 
     private void click() {
@@ -134,8 +141,16 @@ public class MenuActivity extends AppCompatActivity {
         hideSystemUIOnWindow(dialog);
     }
 
-    /** Fills the altar with one cell per upgrade, two per row, from the player document. */
+    /**
+     * Fills the altar with one cell per upgrade, two per row, from the player document. The cells are built once;
+     * after a purchase the same cells are updated in place (rank, price, which can be afforded) and the one
+     * just bought flashes, so the card never empties and refills.
+     */
     private void renderAltar(Dialog dialog, java.util.Map<String, Object> data) {
+        renderAltar(dialog, data, null);
+    }
+
+    private void renderAltar(Dialog dialog, java.util.Map<String, Object> data, Altar bought) {
         if (!dialog.isShowing()) return;
         Object soulsValue = data != null ? data.get("souls") : null;
         long souls = soulsValue instanceof Number ? ((Number) soulsValue).longValue() : 0;
@@ -143,24 +158,34 @@ public class MenuActivity extends AppCompatActivity {
         ((TextView) dialog.findViewById(R.id.txt_altar_souls)).setText(String.valueOf(souls));
 
         LinearLayout grid = dialog.findViewById(R.id.altar_grid);
-        grid.removeAllViews();
+        boolean build = grid.getChildCount() == 0;
         int gap = getResources().getDimensionPixelSize(R.dimen.space_xs);
         LinearLayout row = null;
         for (Altar a : Altar.values()) {
-            if (a.ordinal() % 2 == 0) {
-                row = new LinearLayout(this);
-                grid.addView(row);
+            View cell;
+            if (build) {
+                if (a.ordinal() % 2 == 0) {
+                    row = new LinearLayout(this);
+                    grid.addView(row);
+                }
+                cell = getLayoutInflater().inflate(R.layout.item_altar_cell, row, false);
+                ((android.widget.ImageView) cell.findViewById(R.id.altar_icon)).setImageResource(a.icon);
+                ((TextView) cell.findViewById(R.id.altar_title)).setText(a.title);
+                ((TextView) cell.findViewById(R.id.altar_effect)).setText(a.effect);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+                lp.setMargins(gap, gap, gap, gap);
+                row.addView(cell, lp);
+            } else {
+                cell = ((LinearLayout) grid.getChildAt(a.ordinal() / 2)).getChildAt(a.ordinal() % 2);
             }
-            View cell = getLayoutInflater().inflate(R.layout.item_altar_cell, row, false);
             int rank = ranks[a.ordinal()];
-            ((android.widget.ImageView) cell.findViewById(R.id.altar_icon)).setImageResource(a.icon);
-            ((TextView) cell.findViewById(R.id.altar_title)).setText(a.title);
-            ((TextView) cell.findViewById(R.id.altar_effect)).setText(a.effect);
             ((TextView) cell.findViewById(R.id.altar_rank)).setText("Rank " + rank + " / " + a.maxRank);
             MaterialButton buy = cell.findViewById(R.id.altar_buy);
             if (rank >= a.maxRank) {
                 buy.setText("MAX");
                 buy.setEnabled(false);
+                buy.setAlpha(1f);
+                buy.setOnClickListener(null);
             } else {
                 int cost = a.cost(rank);
                 boolean afford = souls >= cost;
@@ -168,18 +193,33 @@ public class MenuActivity extends AppCompatActivity {
                 buy.setEnabled(afford);
                 buy.setAlpha(afford ? 1f : 0.4f);
                 buy.setOnClickListener(v -> {
-                    buy.setEnabled(false);
+                    // every button waits for the answer, so a double tap can't buy twice
+                    setAltarButtonsEnabled(grid, false);
                     dbManager.buyAltarRank(userId, a.name(), rank, cost, ok -> {
                         sounds.play(ok ? SoundManager.Sfx.PURCHASE : SoundManager.Sfx.GATE_LOCKED);
-                        dbManager.loadPlayerStats(userId, fresh -> renderAltar(dialog, fresh));
+                        dbManager.loadPlayerStats(userId, fresh -> renderAltar(dialog, fresh, ok ? a : null));
                     });
                 });
             }
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
-            lp.setMargins(gap, gap, gap, gap);
-            row.addView(cell, lp);
+            if (a == bought) {
+                // the upgrade just bought pulses gold
+                cell.animate().cancel();
+                cell.setScaleX(1.08f);
+                cell.setScaleY(1.08f);
+                cell.animate().scaleX(1f).scaleY(1f).setDuration(260).start();
+                TextView rankText = cell.findViewById(R.id.altar_rank);
+                rankText.setTextColor(getColor(R.color.gold_glow));
+                rankText.postDelayed(() -> rankText.setTextColor(getColor(R.color.bone_muted)), 700);
+            }
         }
-        Wear.apply(grid);
+        if (build) Wear.apply(grid);
+    }
+
+    private static void setAltarButtonsEnabled(LinearLayout grid, boolean enabled) {
+        for (int i = 0; i < grid.getChildCount(); i++) {
+            LinearLayout row = (LinearLayout) grid.getChildAt(i);
+            for (int j = 0; j < row.getChildCount(); j++) row.getChildAt(j).findViewById(R.id.altar_buy).setEnabled(enabled);
+        }
     }
 
     /**
@@ -503,8 +543,9 @@ public class MenuActivity extends AppCompatActivity {
                     + "Every 5 floors, past each boss, the dungeon changes: flooded catacombs slow your steps, "
                     + "the forge's vents erupt, and in the void the light reaches less far."},
             {"Grow Stronger",
-                    "Kills give XP. When you level up, tap the glowing badge and pick a perk. "
-                    + "Two perks at 3 stacks each awaken a synergy.\n\n"
+                    "Kills give XP. Each level gives a point: tap the glowing badge and put it into any stat, "
+                    + "all in on Strength for a glass cannon, Vigor and Defense for a tank. "
+                    + "Two stats at 3 points each awaken a synergy.\n\n"
                     + "Every run earns Souls, even the ones you lose: spend them at the Soul Altar on lasting upgrades.\n\n"
                     + "Your run saves at the start of every floor. Try the Daily Run to race everyone on the same dungeon."}
     };

@@ -32,8 +32,8 @@ public class Player {
     private Paint outlinePaint, flashPaint, shadowPaint, highlightPaint;
 
     // Death animation
-    private boolean isDying = false;
-    private long deathStartTime = 0;
+    private volatile boolean isDying = false; // set on the UI thread, read while drawing
+    private volatile long deathStartTime = 0;
     private static final long PLAYER_DEATH_DURATION = 1000; // ms
     private Paint deathPaint;
 
@@ -313,8 +313,46 @@ public class Player {
                             float extend, int alpha) {
         double rad = Math.toRadians(angle);
         float hand = radius * 0.7f + extend;
-        Weapon.draw(canvas, weapon.kind(), weapon.color, cx + (float) Math.cos(rad) * hand,
-                cy + (float) Math.sin(rad) * hand, angle, length, alpha);
+        float hx = cx + (float) Math.cos(rad) * hand, hy = cy + (float) Math.sin(rad) * hand;
+        Weapon.draw(canvas, weapon.kind(), weapon.color, hx, hy, angle, length, alpha);
+        drawTrait(canvas, weapon.trait(), hx, hy, rad, length, alpha);
+    }
+
+    private static final Paint TRAIT_PAINT = Sprites.crisp();
+
+    /**
+     * A trait shows on the held blade, one art pixel at a time: embers rising off a Burning one, sparks crackling
+     * on a Chain Lightning one, drops of blood falling from a Lifesteal one, a glint sliding up a Keen one.
+     */
+    private void drawTrait(Canvas canvas, Weapon.Trait trait, float hx, float hy, double rad, float length, int alpha) {
+        if (trait == null) return;
+        long now = System.currentTimeMillis();
+        float dx = (float) Math.cos(rad), dy = (float) Math.sin(rad), px = Sprites.PX;
+        int[] colors;
+        float period, drift;
+        switch (trait) {
+            case BURNING:   colors = new int[]{0xFFFFE26B, 0xFFFF8A2A, 0xFFF2561D}; period = 650f; drift = -26f; break;
+            case CHAIN:     colors = new int[]{0xFFFFFFFF, 0xFFA6ECFF, 0xFF62C8F4}; period = 220f; drift = 0f; break;
+            case LIFESTEAL: colors = new int[]{0xFFFF6A6A, 0xFFE02838, 0xFF8A1622}; period = 900f; drift = 22f; break;
+            default:        colors = new int[]{0xFFFFFFFF, 0xFFFFF3B0, 0xFFFFE26B}; period = 1100f; drift = 0f; break;
+        }
+        int motes = trait == Weapon.Trait.KEEN ? 1 : 4;
+        for (int i = 0; i < motes; i++) {
+            float phase = ((now / period) + i * 0.618f) % 1f;
+            // where on the blade it starts (a glint runs from the hilt to the tip instead)
+            float u = trait == Weapon.Trait.KEEN ? phase : 0.3f + 0.7f * ((i * 0.37f + (int) (now / period + i * 0.618f) * 0.29f) % 1f);
+            float x = hx + dx * length * u, y = hy + dy * length * u + drift * phase;
+            if (trait == Weapon.Trait.CHAIN) {
+                // a jagged little spark that jumps about the blade every flicker
+                x += ((now / 60 + i * 7) % 3 - 1) * px;
+                y += ((now / 45 + i * 5) % 3 - 1) * px;
+            }
+            TRAIT_PAINT.setColor(colors[Math.min(colors.length - 1, (int) (phase * colors.length))]);
+            TRAIT_PAINT.setAlpha((int) (alpha * (trait == Weapon.Trait.KEEN ? 1f : 1f - phase * 0.7f)));
+            float sx = Sprites.snap(x), sy = Sprites.snap(y);
+            canvas.drawRect(sx, sy, sx + px, sy + px, TRAIT_PAINT);
+            if (trait == Weapon.Trait.KEEN) canvas.drawRect(sx - px, sy, sx + 2 * px, sy + px, TRAIT_PAINT);
+        }
     }
 
     /** A fading arc behind the blade's tip as it sweeps; heavy swings leave a thick gold one. */

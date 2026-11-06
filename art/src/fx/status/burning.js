@@ -21,6 +21,7 @@ export const meta = {
     char: ["#120c0a", "#2a1a14", "#4a2c1c"],
     smoke: "#5b5566",
     seed: 3,
+    bodyless: false,
   },
 };
 
@@ -89,14 +90,16 @@ export function drawBack(p, t, o) {
 export function draw(p, t, o) {
   const F = fit(o.palette, 9).reverse(), CH = fit(o.char, 3), a = o.actor, S = shape(a), { list, scorch } = spots(a, o.seed);
   const ph = since(t), tick = Math.floor(t / TICK) % 2, fl = flare(t);
-  // the tick: the body's own pixels flash white for a frame, then orange, fading
-  if (ph < 0.034) for (const [mx, my] of S.body) p.px(a.x + mx, a.y + my, WHITE);
+  // the tick: the body's own pixels flash white for a frame, then orange, fading. Oblivion Descent: o.bodyless
+  // leaves the body (and the scorch marks on it) alone, for a game that draws its own bodies and hit flashes
+  if (o.bodyless) { /* flames, smoke and sparks only */ }
+  else if (ph < 0.034) for (const [mx, my] of S.body) p.px(a.x + mx, a.y + my, WHITE);
   else if (ph < 0.22) {
     const k = 1 - (ph - 0.034) / 0.186;
     for (const [mx, my] of S.body) p.blend(a.x + mx, a.y + my, F[4], 0.55 * k);
   }
   // scorch marks spreading over the clothes from this tick, ember-edged, cooling and fading by the next
-  for (const sc of scorch[tick]) {
+  for (const sc of o.bodyless ? [] : scorch[tick]) {
     const grow = clamp(ph / 0.14), fade = 1 - clamp((ph - 0.25) / 0.33), r = sc.r * (0.4 + 0.6 * grow);
     if (fade <= 0) continue;
     for (const [mx, my] of S.body) {

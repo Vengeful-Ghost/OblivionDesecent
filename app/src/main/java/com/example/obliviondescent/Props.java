@@ -1288,6 +1288,22 @@ public class Props {
                 Sprites.draw(canvas, a, 0, d.x, d.y, false, 0, 255);
                 return true;
             }
+            case FOUNTAIN: {
+                // The Healing Spring: pixelfx's fountain, its jet playing until the one drink is taken; dry, the old
+                // stone basin
+                if (d.used || (a = Sprites.get("prop.fountain")) == null) return false;
+                fill.setColor(SHADOW);
+                canvas.drawOval(d.x - d.a, d.y + d.a * 0.1f, d.x + d.a, d.y + d.a * 0.7f, fill);
+                Sprites.draw(canvas, a, a.at(now), d.x, d.y + d.a * 0.45f, false, 0, 255);
+                return true;
+            }
+            case PUDDLE: {
+                // Flooded Catacombs: a pool of black water, and drops falling into it from the dark above
+                drawPuddle(canvas, d.x, d.y, d.a, d.b, now);
+                if ((a = Sprites.get("prop.drip")) != null)
+                    Sprites.draw(canvas, a, a.at(now + (long) (d.x * 7 + d.y * 3)), d.x + d.a * 0.2f, d.y, false, 0, 255);
+                return true;
+            }
             default:
                 return false;
         }

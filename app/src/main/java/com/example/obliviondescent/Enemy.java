@@ -68,9 +68,10 @@ public class Enemy {
     // caught, it bursts into a pile of gold and a key. Out of time it slips away (dies with noGoldDrop).
     public boolean thief;
     public int spills;   // hits since GameActivity last spilled coins for them
+    public volatile long burningUntil; // the Burning trait has it alight until then (drawn as flames)
     public static final long THIEF_TIME = 12000;
     private long thiefUntil, nextTurn;
-    private float fleeX = 1f, fleeY = 0f;
+    private float fleeX = 1f, fleeY = 0f, lastFleeX, lastFleeY;
     private CoopSession.Track remote; // guest: the host's recent positions
     private static final float[] REMOTE_POS = new float[2]; // logic thread only
     private long predictedUntil = 0;
@@ -135,7 +136,11 @@ public class Enemy {
     private long lastSwingAt = 0; // when the last strike swung, for the weapon animation
 
     // Boss move set (new moves go at the end: the order is synced to co-op guests)
-    private enum BossMove { SLAM, CHARGE, BURST, SUMMON, FAN, BLINK, SPIRAL, WHIRL, LEAP, VOLLEY, QUAKE, STORM }
+    private enum BossMove { SLAM, CHARGE, BURST, SUMMON, FAN, BLINK, SPIRAL, WHIRL, LEAP, VOLLEY, QUAKE, STORM, ULTIMATE }
+    // The last stand: at a tenth of its health, once, a boss winds up its ultimate (GameActivity announces it)
+    private boolean ultimateUsed;
+    public boolean justUltimate;
+    private static final long ULTIMATE_TELL = 1400;
     /** Boss archetype, chosen by the AI for each range; each one moves, attacks and looks different. */
     public enum BossKind { BRUTE, SUMMONER, SORCERER, HUNTER }
     private BossKind bossKind = BossKind.BRUTE;
@@ -888,6 +893,14 @@ public class Enemy {
             frenzied = true;
             justFrenzied = true;
         }
+        if (!ultimateUsed && health > 0 && health <= maxHealth / 10 && behaviorState != BehaviorState.WINDUP) {
+            ultimateUsed = true;
+            justUltimate = true;
+            bossMove = BossMove.ULTIMATE;
+            if (dist > 0.01f) { aimX = dx / dist; aimY = dy / dist; }
+            enterState(BehaviorState.WINDUP, ULTIMATE_TELL);
+            return;
+        }
         float pace = frenzied ? 0.7f : enraged ? 0.85f : 1f;
 
         switch (behaviorState) {
@@ -1067,6 +1080,28 @@ public class Enemy {
                 strike((int) (damage * 1.4f), BOSS_SLAM_RADIUS * 1.2f, 180f);
                 ring(14, shot);
                 break;
+            case ULTIMATE:
+                switch (bossKind) {
+                    case BRUTE:     // Cataclysm: the whole floor round it caves in, and the rubble flies
+                        strike(damage * 2, BOSS_SLAM_RADIUS * 1.8f, 180f);
+                        ring(20, shot);
+                        break;
+                    case SUMMONER:  // Legion: six of the dead at once, and a ring of bolts
+                        pendingSummons = 6;
+                        ring(18, shot);
+                        break;
+                    case SORCERER:  // Starfall: a ring now, then a long storm of bolts
+                        ring(16, shot);
+                        bossMove = BossMove.STORM;
+                        lastCastBeat = 0;
+                        enterState(BehaviorState.CAST, 2600);
+                        return;
+                    default:        // The Pack: four hounds and a wide volley
+                        pendingSummons = 4;
+                        volley(9, shot);
+                        break;
+                }
+                break;
             default: // SPIRAL, STORM and WHIRL channel for a while
                 lastCastBeat = 0;
                 enterState(BehaviorState.CAST, bossMove == BossMove.WHIRL ? 1500 : 1800);
@@ -1223,15 +1258,26 @@ public class Enemy {
         }
         float ax = x - playerX, ay = y - playerY, dist = (float) Math.sqrt(ax * ax + ay * ay);
         if (dist > 0.01f) { ax /= dist; ay /= dist; } else { ax = 1f; ay = 0f; }
-        if (now >= nextTurn) {
+        // Pressed against a wall (it barely moved since last tick): choose again now, and not that way
+        boolean stuck = Math.abs(x - lastFleeX) + Math.abs(y - lastFleeY) < speed * 0.3f;
+        lastFleeX = x;
+        lastFleeY = y;
+        if (now >= nextTurn || stuck) {
             nextTurn = now + 200;
             float best = -9f, bx = fleeX, by = fleeY;
             for (int i = 0; i < 16; i++) {
                 double a = i * Math.PI / 8;
                 float cx = (float) Math.cos(a), cy = (float) Math.sin(a);
-                if (layout != null && !(layout.isFloor(x + cx * (radius + 80f), y + cy * (radius + 80f))
-                        && layout.isFloor(x + cx * (radius + 170f), y + cy * (radius + 170f)))) continue;
-                float score = cx * ax + cy * ay + 0.35f * (cx * fleeX + cy * fleeY) + (float) Math.random() * 0.2f;
+                if (stuck && cx * fleeX + cy * fleeY > 0.9f) continue;
+                // how far its whole body could run this way, in 60-unit steps up to 360
+                int clear = 0;
+                for (int k = 1; k <= 6; k++) {
+                    if (layout != null && !layout.isOnFloor(x + cx * 60f * k, y + cy * 60f * k, radius)) break;
+                    clear = k;
+                }
+                if (clear == 0) continue;
+                float score = cx * ax + cy * ay + 0.35f * (cx * fleeX + cy * fleeY) + 0.12f * clear
+                        + (float) Math.random() * 0.15f;
                 if (score > best) { best = score; bx = cx; by = cy; }
             }
             fleeX = bx;
@@ -1401,6 +1447,14 @@ public class Enemy {
             float t = Math.min(1f, (float) (now - stateStartTime) / stateDuration);
             drawY -= (float) Math.sin(Math.PI * t) * 90f;
         }
+        if (behaviorState == BehaviorState.WINDUP && bossMove == BossMove.ULTIMATE) {
+            // The ultimate's tell: a crimson field swelling out to what it will hit, throbbing faster as it fills
+            float k = Math.min(1f, (now - stateStartTime) / (float) ULTIMATE_TELL);
+            float reach = bossKind == BossKind.BRUTE ? BOSS_SLAM_RADIUS * 1.8f : radius * 3f;
+            GLOW_PAINT.setColor(Color.rgb(224, 40, 40));
+            GLOW_PAINT.setAlpha((int) (40 + 90 * k * (0.6f + 0.4f * (float) Math.sin(now / (90.0 - 50.0 * k)))));
+            canvas.drawCircle(drawX, drawY, reach * (0.35f + 0.65f * k), GLOW_PAINT);
+        }
         if (frenzied) {
             // Final phase: a burning aura
             float pulse = 0.7f + 0.3f * (float) Math.sin(now / 90.0);
@@ -1470,8 +1524,17 @@ public class Enemy {
         if (!behind) drawWeapon(canvas, drawX, drawY, weaponAngle);
         if (behaviorState == BehaviorState.BLOCK) drawGuard(canvas, drawX, drawY, now);
 
-        // Stars circling the head while stunned
-        if (behaviorState == BehaviorState.STUNNED) {
+        // Status in pixelfx's art (art/sprites.mjs): flames licking off the body while the Burning trait has it
+        // alight, stars and birds circling the head while it reels
+        Sprites.Anim burn = now < burningUntil ? Sprites.get("fx.burn") : null;
+        if (burn != null) {
+            float middle = (drawY + radius * FEET + headTop) / 2f;
+            Sprites.draw(canvas, burn, burn.at(now + id * 91L), drawX, middle + 8 * Sprites.PX, faceLeft, 0, 255);
+        }
+        Sprites.Anim stars = behaviorState == BehaviorState.STUNNED ? Sprites.get("fx.stun") : null;
+        if (stars != null) {
+            Sprites.draw(canvas, stars, stars.at(now + id * 53L), drawX, headTop + 2 * Sprites.PX, false, 0, 255);
+        } else if (behaviorState == BehaviorState.STUNNED) {
             for (int i = 0; i < 3; i++) {
                 double a = now / 150.0 + i * Math.PI * 2 / 3;
                 canvas.drawCircle(drawX + (float) Math.cos(a) * radius * 0.6f,
@@ -2047,6 +2110,7 @@ public class Enemy {
         aimX = (float) Math.cos(aim);
         aimY = (float) Math.sin(aim);
         bossMove = BossMove.values()[Integer.parseInt(f[11])];
+        if (bossMove == BossMove.ULTIMATE && !ultimateUsed) { ultimateUsed = true; justUltimate = true; }
         int rage = Integer.parseInt(f[12]);
         if (rage >= 1 && !enraged) justEnraged = true;
         if (rage >= 2 && !frenzied) justFrenzied = true;

@@ -671,11 +671,18 @@ public class FloorLayout {
 
     /** True when a body of radius r at (cx, cy) is fully on walkable floor. */
     boolean isOnFloor(float cx, float cy, float r) {
+        // Upwards it reaches past a north wall's brick face (drawn WALL_FACE down from the wall line), so a small
+        // body's feet (0.78 r below its centre) never stand on the bricks; diagonals keep it off block corners
+        float up = Math.max(r, Props.WALL_FACE - r * 0.78f), d = r * 0.6f;
         return isFloor(cx,     cy    )
             && isFloor(cx + r, cy    )
             && isFloor(cx - r, cy    )
             && isFloor(cx,     cy + r)
-            && isFloor(cx,     cy - r);
+            && isFloor(cx,     cy - up)
+            && isFloor(cx + d, cy + d)
+            && isFloor(cx - d, cy + d)
+            && isFloor(cx + d, cy - d)
+            && isFloor(cx - d, cy - d);
     }
 
     /**

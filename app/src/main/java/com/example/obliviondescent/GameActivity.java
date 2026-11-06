@@ -496,8 +496,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 effects.banner(player.x, player.y - player.radius - 120f, weeklyMod.title.toUpperCase(),
                         Color.rgb(224, 72, 72));
             // First solo run on this phone: a guided first floor
-            if (coop == null && dailySeed == 0 && userId != null
-                    && !getSharedPreferences("tutorial_" + userId, MODE_PRIVATE).getBoolean("done", false))
+            if (coop == null && dailySeed == 0
+                    && !getSharedPreferences("tutorial_" + tutorialKey(), MODE_PRIVATE).getBoolean("done", false))
                 setTutorialStep(0);
         });
 
@@ -1258,8 +1258,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                         enemy.applyTemplate(pool.get(enemy.templateIndex));
                     }
                     enemy.scaleHealth(partyHealth());
-                    // Elites from floor 4, at most two a floor
-                    if (floor >= 4 && elites < 2 && Math.random() < 0.08) {
+                    // Elites from floor 4, at most three a floor
+                    if (floor >= 4 && elites < 3 && Math.random() < 0.11) {
                         enemy.makeElite();
                         elites++;
                     }
@@ -1307,7 +1307,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             float[] row = SPAWN_TABLE[i];
             if (floor < row[0]) continue;
             chance[i] = Math.min(row[3], row[1] + row[2] * (floor - row[0]));
-            if (biome.favours(SPAWN_TYPES[i])) chance[i] *= 1.5f;
+            if (biome.favours(SPAWN_TYPES[i])) chance[i] *= 2.2f; // each biome has its own crowd
             total += chance[i];
         }
         // Deep floors would crowd grunts out entirely; scale the rest back so grunts keep 15%
@@ -1330,9 +1330,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             {6, 10f, 1f, 15f},   // brute
             {10, 5f, 1f, 12f},   // tank
             {2, 4f, 1f, 25f},    // bat
-            {4, 3f, 1f, 16f},    // bomber
-            {6, 3f, 1f, 14f},    // charger
-            {8, 3f, 1f, 10f},    // necromancer
+            {3, 7f, 1.5f, 20f},  // bomber      (the unique ones: sooner, likelier and capped higher than before)
+            {5, 7f, 1.5f, 18f},  // charger
+            {6, 6f, 1f, 14f},    // necromancer
     };
 
     /**
@@ -1499,7 +1499,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (!batchesInFlight.add(rangeStart)) return;
 
         // Check local storage first — avoids a network call on load game. Co-op never touches the solo cache.
-        String cachedJson = !oneOffRun() ? BatchGenerator.loadRawBatch(this, rangeStart) : null;
+        // Only a loaded save reuses it: a new run draws fresh content, or every run met the same bosses and shops
+        boolean resuming = getIntent().hasExtra("game_id");
+        String cachedJson = !oneOffRun() && resuming ? BatchGenerator.loadRawBatch(this, rangeStart) : null;
         if (cachedJson != null) {
             try {
                 BatchResult result = batchGenerator.parseBatch(cachedJson, rangeStart, rangeEnd);
@@ -1597,6 +1599,16 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     effects.burst(e.x, e.y, Color.rgb(140, 190, 255), 26, 10f);
                     soundManager.play(SoundManager.Sfx.BLINK);
                 }
+                if (e.justUltimate) {
+                    // the boss's last stand: everything stops a beat while it gathers itself
+                    e.justUltimate = false;
+                    effects.banner(e.x, e.y - e.radius - 90f, "LAST STAND", Color.rgb(224, 40, 40));
+                    effects.play("fx.hex", e.x, e.y + e.radius * 0.78f, false);
+                    soundManager.play(SoundManager.Sfx.ENRAGE);
+                    if (camera != null) camera.startShake(600, 16f);
+                    slowMo(500, 0.5f);
+                    buzz(120, 255);
+                }
                 if (e.justFrenzied) {
                     e.justFrenzied = false;
                     effects.banner(e.x, e.y - e.radius - 60f, "FINAL FURY", Color.rgb(255, 120, 40));
@@ -1608,6 +1620,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     if (e.type == Enemy.Type.NECROMANCER) raiseDead(e, e.pendingSummons, raised);
                     else raiseThralls(e, e.pendingSummons, raised);
                     if (raised.size() > before) soundManager.play(SoundManager.Sfx.SUMMON);
+                    if (e.type == Enemy.Type.BOSS && e.getBossKind() == Enemy.BossKind.SUMMONER)
+                        effects.play("fx.hex", e.x, e.y + e.radius * 0.78f, false); // its sigil burns in the air
                     e.pendingSummons = 0;
                 }
 
@@ -1630,6 +1644,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     }
                     float knockback = e.getWeapon().knockback;
                     int dealt = e.strikeDamage;
+                    // a slam cracks the floor: the boss's with a shock wave and a dust cloud, a smaller one with a dust ring
+                    if (slam && !bomb) effects.play(e.type == Enemy.Type.BOSS ? "fx.slam" : "fx.land", e.x, e.y + e.radius * 0.78f, false);
                     resolveStrike(e.x, e.y, e.strikeDirX, e.strikeDirY, e.strikeReach, e.strikeArc,
                             e.strikeDamage, knockback, e.radius, slam, now, e.killerName());
                     // Vampiric elites mend from a hit that landed on this phone's player
@@ -1671,6 +1687,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             thrall.setLayout(currentLayout);
             out.add(thrall);
             effects.burst(spot[0], spot[1], Color.rgb(140, 255, 170), 18, 8f);
+            effects.play("fx.summon", spot[0], spot[1] + thrall.radius * 0.78f, false);
         }
     }
 
@@ -1712,6 +1729,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             thrall.setLayout(currentLayout);
             out.add(thrall);
             effects.burst(sx, sy, Color.rgb(139, 95, 191), 18, 8f);
+            effects.play("fx.summon", sx, sy + thrall.radius * 0.78f, false);
         }
     }
 
@@ -1768,11 +1786,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             invulnerableUntil = now + 400;
             int pale = Color.rgb(200, 220, 255);
             effects.banner(player.x, player.y - player.radius - 50f, "WARDED", pale);
+            effects.play("fx.ward", player.x, playerFeet(), false, 700);
             effects.burst(player.x, player.y, pale, 20, 8f);
             soundManager.play(SoundManager.Sfx.BLOCK);
             return;
         }
-        damage = Math.max(1, Math.round(damage * (1f - 0.005f * perks[Perk.IRON_SKIN.ordinal()])));
+        damage = Math.max(1, Math.round(damage * (1f - Math.min(0.6f, Perk.IRON_SKIN.share(perks[Perk.IRON_SKIN.ordinal()])))));
         if (relic == Relic.SKULL) damage = Math.round(damage * 1.1f);
         if (tomeCurse) damage = Math.round(damage * TOME_CURSE);
         lastHitBy = by;
@@ -1829,6 +1848,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** A hit glances off a raised guard: sparks, a clang and a small recoil, but no damage. */
     private void showBlocked(Enemy e, float nx, float ny) {
+        // the hit lands on its guard: a dome of light on the side facing the player
+        effects.play("fx.block", e.x, e.y + e.radius * 0.78f, nx > 0);
         effects.spray(e.x - nx * e.radius, e.y - ny * e.radius, -nx, -ny, Color.rgb(255, 230, 160), 10, 9f, 0.7f);
         effects.number(e.x, e.y - e.radius - 30f, "BLOCKED", Color.rgb(200, 220, 255));
         soundManager.play(SoundManager.Sfx.BLOCK);
@@ -1848,7 +1869,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     /** Counts daily quest progress and cheers when one is done. */
     private void quest(Quests q, int amount) {
         if (!Quests.add(this, q, amount)) return;
-        effects.banner(player.x, player.y - player.radius - 90f, "QUEST COMPLETE", Color.rgb(244, 215, 122));
+        // pixelfx's ribbon unrolls over the player; the plain banner if the pack lacks it
+        if (Sprites.get("fx.quest") != null) effects.play("fx.quest", player.x, player.y - player.radius - 200f, false);
+        else effects.banner(player.x, player.y - player.radius - 90f, "QUEST COMPLETE", Color.rgb(244, 215, 122));
         soundManager.play(SoundManager.Sfx.PERK_PICK);
     }
 
@@ -1913,7 +1936,39 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             soundManager.play(SoundManager.Sfx.CRATE_SMASH);
             buzz(15, 90);
             if (Math.random() < 0.3) spawnGoldCoins(d.x, d.y, 1 + (int) (Math.random() * 3));
+            // Now and then a barrel (not a crate) holds a small healing draught; none in the Dry Throat week
+            if (d.kind == Props.BARREL && weeklyMod != WeeklyMod.NO_POTIONS && Math.random() < BARREL_POTION_CHANCE)
+                dropBarrelPotion(d.x, d.y);
         }
+    }
+
+    private static final double BARREL_POTION_CHANCE = 0.06;
+
+    /** A small healing draught out of a smashed barrel: it bobs there a moment and joins the potions at once. */
+    private void dropBarrelPotion(float x, float y) {
+        ShopItem potion = new ShopItem();
+        potion.type = ShopItem.ItemType.CONSUMABLE;
+        potion.name = "Barrel Draught";
+        potion.effect = "heal";
+        potion.effectValue = 20; // percent of max health, like the shop's smallest potions
+        potion.rarity = "COMMON";
+        potion.colorHex = "#E04848";
+        potion.color = Color.rgb(224, 72, 72);
+        potion.price = 5;
+        potion.description = "A small healing draught found in a barrel. Restores 20% of your health.";
+        runOnUiThread(() -> purchaseItem(potion)); // stacks with other Barrel Draughts
+        effects.play("fx.potion", x, y + 20f, false, 1400);
+        effects.banner(x, y - 80f, "+1 POTION", Color.rgb(240, 90, 100));
+        soundManager.play(SoundManager.Sfx.POTION);
+    }
+
+    /** A stagger or a perfect dodge is rewarded with a little health. */
+    private static final int SKILL_HEAL = 2;
+
+    private void skillHeal() {
+        if (playerHealth <= 0 || playerHealth >= maxHealth) return;
+        healPlayer(SKILL_HEAL);
+        effects.number(player.x + 30f, player.y - player.radius - 20f, "+" + SKILL_HEAL + " HP", Color.rgb(122, 184, 92));
     }
 
     /** Interrupts an enemy's wind-up, so a well-timed heavy hit cancels its attack. */
@@ -1921,6 +1976,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (e.stagger()) {
             effects.number(e.x, e.y - e.radius - 40f, "STAGGER", Color.rgb(120, 200, 255));
             soundManager.play(SoundManager.Sfx.STAGGER);
+            skillHeal();
         }
     }
 
@@ -1959,6 +2015,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         invulnerableUntil = Math.max(invulnerableUntil, now + 900);
         int blue = Color.rgb(120, 200, 255);
         effects.banner(player.x, player.y - player.radius - 50f, "PERFECT", blue);
+        skillHeal();
         effects.burst(player.x, player.y, blue, 24, 9f);
         effects.slash(player.x, player.y, 0f, player.radius + 90f, 180f, blue);
         soundManager.play(SoundManager.Sfx.PERFECT_DODGE);
@@ -2076,6 +2133,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 animateHealthBar(0, playerHealth);
                 invulnerableUntil = System.currentTimeMillis() + 1500;
                 effects.banner(player.x, player.y - player.radius - 50f, "SECOND WIND", Color.rgb(244, 215, 122));
+                effects.play("fx.revive", player.x, playerFeet(), false);
                 effects.burst(player.x, player.y, Color.rgb(244, 215, 122), 40, 12f);
                 soundManager.play(SoundManager.Sfx.REVIVE);
             }
@@ -2178,6 +2236,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         spawnEnemiesForLayout(currentLayout);
         spawnRoomChest();
         effects.clear();
+        effects.play("fx.respawn", player.x, playerFeet(), false); // the light writes the player back in
         invulnerableUntil = 0;
         healLeft = 0;
         deathSpots.clear();
@@ -2318,6 +2377,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 finisher ? Color.rgb(255, 210, 90) : Color.WHITE);
         if (finisher && kind == Weapon.Kind.HAMMER) {
             // The hammer's finisher slams the ground all around
+            effects.play("fx.land", player.x, playerFeet(), false);
             effects.burst(player.x, player.y, Color.rgb(150, 140, 125), 16, 8f);
             if (camera != null) camera.startShake(120, 6f);
             soundManager.play(SoundManager.Sfx.THUD);
@@ -2805,6 +2865,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         LinearLayout[] rows = {dialog.findViewById(R.id.shop_row_0), dialog.findViewById(R.id.shop_row_1)};
         for (LinearLayout row : rows) row.removeAllViews();
 
+        applyFloorSale(shopItems);
         for (int i = 0; i < Math.min(shopItems.size(), 6); i++) {
             ShopItem item = shopItems.get(i);
             final int index = i;
@@ -2813,24 +2874,27 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     .inflate(R.layout.dialog_shop_item, rows[i / 3], false);
 
             TextView nameView  = card.findViewById(R.id.item_name);
-            TextView typeView  = card.findViewById(R.id.item_type_badge);
             TextView priceView = card.findViewById(R.id.item_price);
 
             int rarityColor = getRarityColor(item.rarity);
             applyRarityBorder(card, rarityColor, item.name);
+            bindShopCard(card, item, rarityColor);
 
             nameView.setText(item.name);
             nameView.setTextColor(rarityColor);
-            typeView.setText(item.type.name());
             priceView.setText(String.valueOf(item.price));
+            boolean afford = playerGold >= item.price;
+            priceView.setTextColor(getColor(afford ? R.color.gold_glow : R.color.crimson_glow));
 
             if (shopBoughtIndices.contains(index)) {
                 // Already purchased — dim and disable the card
                 card.setAlpha(0.3f);
                 priceView.setText("SOLD");
                 priceView.setCompoundDrawablesRelative(null, null, null, null);
-            } else if (playerGold < item.price) {
-                card.setAlpha(0.5f);
+                card.findViewById(R.id.item_ribbon).setVisibility(View.GONE);
+                card.findViewById(R.id.item_old_price).setVisibility(View.GONE);
+            } else if (!afford) {
+                card.setAlpha(0.6f);
                 card.setOnClickListener(v ->
                         showItemDetailDialog(dialog, item, goldDisplay, shopBoughtIndices, index));
             } else {
@@ -2840,6 +2904,127 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
             rows[i / 3].addView(card);
         }
+    }
+
+    /** One item a floor (not a potion) goes on sale at 30% off; its full price is kept so the card can show it. */
+    private void applyFloorSale(List<ShopItem> items) {
+        if (items.isEmpty()) return;
+        for (ShopItem item : items) if (item.fullPrice > 0) return; // this stock already has its sale
+        int n = Math.min(items.size(), 6), start = Math.floorMod(floorManager.getCurrentFloor() * 31 + 7, n);
+        for (int k = 0; k < n; k++) {
+            ShopItem item = items.get((start + k) % n);
+            if (item.type == ShopItem.ItemType.CONSUMABLE || item.price < 4) continue;
+            item.fullPrice = item.price;
+            item.price = Math.max(1, Math.round(item.price * 0.7f));
+            return;
+        }
+    }
+
+    /**
+     * Fills a shop card the way a mobile game's store reads at a glance: the item's pixel picture on a glow in its
+     * rarity colour, rarity and kind, a stat line against what you carry now (green better, red worse), and a
+     * ribbon: SALE with the old price struck through, or UPGRADE when it beats what you have.
+     */
+    private void bindShopCard(View card, ShopItem item, int rarityColor) {
+        float dp = getResources().getDisplayMetrics().density;
+        ((android.widget.ImageView) card.findViewById(R.id.item_icon)).setImageDrawable(shopIcon(item, rarityColor));
+        android.graphics.drawable.GradientDrawable glow = new android.graphics.drawable.GradientDrawable();
+        glow.setGradientType(android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT);
+        glow.setColors(new int[]{(rarityColor & 0x00FFFFFF) | 0x70000000, 0x00000000});
+        glow.setGradientRadius(26 * dp);
+        card.findViewById(R.id.item_icon_box).setBackground(glow);
+
+        // the rarity alone: the picture already says what kind of thing it is
+        TextView rarity = card.findViewById(R.id.item_rarity);
+        rarity.setText(item.rarity != null ? item.rarity : "COMMON");
+        rarity.setTextColor(rarityColor);
+        ((TextView) card.findViewById(R.id.item_stat)).setText(shopStatLine(item));
+
+        TextView ribbon = card.findViewById(R.id.item_ribbon);
+        if (item.fullPrice > 0) {
+            ribbon.setText("SALE -30%");
+            ribbon.setBackgroundColor(0xFFB02A2A);
+            ribbon.setVisibility(View.VISIBLE);
+            TextView old = card.findViewById(R.id.item_old_price);
+            old.setText(String.valueOf(item.fullPrice));
+            old.setPaintFlags(old.getPaintFlags() | android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
+            old.setVisibility(View.VISIBLE);
+        } else if (shopDelta(item) > 0) {
+            ribbon.setText("UPGRADE");
+            ribbon.setBackgroundColor(0xFF3F7A2E);
+            ribbon.setVisibility(View.VISIBLE);
+        }
+    }
+
+    /** How much better (+) or worse (-) the item is than what is carried now: damage, or defense in its slot. */
+    private int shopDelta(ShopItem item) {
+        switch (item.type) {
+            case WEAPON:
+                return item.damage - player.getWeapon().damage;
+            case ARMOR: {
+                Armor worn;
+                try {
+                    worn = equippedArmor.get(Armor.Slot.valueOf(item.armorSlot));
+                } catch (RuntimeException e) {
+                    worn = null;
+                }
+                return item.defense - (worn != null ? worn.defense : 0);
+            }
+            default:
+                return 0;
+        }
+    }
+
+    private CharSequence shopStatLine(ShopItem item) {
+        String base;
+        switch (item.type) {
+            case WEAPON: base = item.damage + " damage"; break;
+            case ARMOR:  base = item.defense + " defense"; break;
+            default:
+                return "heal".equals(item.effect) ? "Heals " + item.effectValue + "%" : "Restores " + item.effectValue + "% armor";
+        }
+        int delta = shopDelta(item);
+        if (delta == 0) return base;
+        android.text.SpannableStringBuilder line = new android.text.SpannableStringBuilder(base).append("  ");
+        int from = line.length();
+        line.append(delta > 0 ? "+" + delta : String.valueOf(delta));
+        line.setSpan(new android.text.style.ForegroundColorSpan(delta > 0 ? 0xFF7AB85C : 0xFFE04848), from, line.length(), 0);
+        line.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), from, line.length(), 0);
+        return line;
+    }
+
+    /** The item's picture: the weapon itself drawn in pixels, the armor piece's icon, a potion flask. */
+    private android.graphics.drawable.Drawable shopIcon(ShopItem item, int rarityColor) {
+        android.graphics.Bitmap art = null;
+        int icon = 0;
+        switch (item.type) {
+            case WEAPON: {
+                // drawn at the world's pixel size (a quarter scale), held diagonally, then scaled up sharp
+                art = android.graphics.Bitmap.createBitmap(20, 20, android.graphics.Bitmap.Config.ARGB_8888);
+                android.graphics.Canvas c = new android.graphics.Canvas(art);
+                c.scale(1f / Sprites.PX, 1f / Sprites.PX);
+                Weapon w = item.toWeapon();
+                Weapon.draw(c, w.kind(), item.color, 16f, 64f, -45f, 64f, 255);
+                break;
+            }
+            case ARMOR: {
+                String slot = String.valueOf(item.armorSlot);
+                icon = "HEAD".equals(slot) ? R.drawable.ic_helmet : "CHEST".equals(slot) ? R.drawable.ic_chest_armor
+                        : "LEGS".equals(slot) ? R.drawable.ic_leg_armor : R.drawable.ic_boots;
+                break;
+            }
+            default:
+                if ("heal".equals(item.effect)) art = Sprites.texture("fx.potion");
+                if (art == null) icon = "heal".equals(item.effect) ? R.drawable.ic_heart : R.drawable.ic_shield;
+        }
+        if (art != null) {
+            android.graphics.drawable.BitmapDrawable d = new android.graphics.drawable.BitmapDrawable(getResources(), art);
+            d.setFilterBitmap(false);
+            return d;
+        }
+        android.graphics.drawable.Drawable d = getDrawable(icon).mutate();
+        d.setTint(rarityColor);
+        return d;
     }
 
     private void showItemDetailDialog(android.app.Dialog shopDialog,
@@ -2961,7 +3146,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             shopBoughtIndices.clear();
             loading.setVisibility(View.GONE);
             container.setVisibility(View.VISIBLE);
-            populateShopGridFromItems(dialog, container, goldDisplay, withoutPotions(restockedShop));
+            populateShopGridFromItems(dialog, container, goldDisplay, biomeGear(withoutPotions(restockedShop), floor));
             soundManager.play(SoundManager.Sfx.PURCHASE);
         }, () -> {
             restock.setVisibility(View.GONE);
@@ -3108,8 +3293,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void prepareNextFloor() {
         floorManager.advanceFloor();
         if (coop != null) {
-            if (playerHealth <= 0) {
-                // Fallen players rejoin at half health
+            if (playerHealth <= 0 || player.isDying()) {
+                // Fallen players rejoin at half health (dying counts too: nothing may lift a fallen player's health)
                 player.resetDeathAnimation();
                 soundManager.play(SoundManager.Sfx.REVIVE);
                 playerHealth = maxHealth / 2;
@@ -3203,18 +3388,41 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Boss name, title and colour for this floor, from the AI batch when it has one. */
     private void loadBossIdentity() {
-        BatchResult bossData = getBossDataForFloor(floorManager.getCurrentFloor());
-        if (bossData != null) {
-            currentBossName  = bossData.bossName;
-            currentBossTitle = bossData.bossTitle;
-            currentBossColor = bossData.bossColor;
-            currentBossKind  = bossData.bossKind != null ? bossData.bossKind : Enemy.BossKind.BRUTE;
-        } else {
-            currentBossName  = "THE ANCIENT ONE";
-            currentBossTitle = "Ruler of the Void";
-            currentBossColor = android.graphics.Color.RED;
-            currentBossKind  = Enemy.BossKind.BRUTE;
-        }
+        int floor = floorManager.getCurrentFloor();
+        BatchResult bossData = bossDataOrOffline(floor);
+        currentBossName  = bossData.bossName;
+        currentBossTitle = bossData.bossTitle;
+        currentBossColor = bossData.bossColor;
+        currentBossKind  = bossKindFor(floor);
+    }
+
+    // Offline boss identities for ranges whose content hadn't come in by their boss floor, kept so a re-fight
+    // after a respawn meets the same boss
+    private final Map<Integer, BatchResult> offlineBosses = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * The range's content, or offline content for it when it hasn't arrived by the boss floor (before, every such
+     * boss was the same "Ancient One", which is how one tester met the same boss for 20 floors).
+     */
+    private BatchResult bossDataOrOffline(int floor) {
+        BatchResult data = getBossDataForFloor(floor);
+        if (data != null) return data;
+        int rangeStart = getRangeStart(floor);
+        return offlineBosses.computeIfAbsent(rangeStart,
+                rs -> BatchGenerator.fallbackBatch(rs, rs + 4, fallbackSeed(rs)));
+    }
+
+    /** The boss archetype for a boss floor: its content's, but never the same as the boss five floors before. */
+    private Enemy.BossKind bossKindFor(int floor) {
+        BatchResult data = bossDataOrOffline(floor);
+        Enemy.BossKind kind = data.bossKind != null ? data.bossKind : Enemy.BossKind.BRUTE;
+        if (floor <= 5) return kind;
+        BatchResult before = bossDataOrOffline(floor - 5);
+        Enemy.BossKind last = before.bossKind != null ? before.bossKind : Enemy.BossKind.BRUTE;
+        if (kind != last) return kind;
+        // the same twice running: step round to another, the same way on every co-op phone
+        Enemy.BossKind[] kinds = Enemy.BossKind.values();
+        return kinds[(last.ordinal() + 1 + (floor / 5) % (kinds.length - 1)) % kinds.length];
     }
 
     /**
@@ -3280,6 +3488,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             activeBoss.displayColor = currentBossColor;
         }
 
+        // it comes up through a rift in the floor
+        effects.play("fx.rift", activeBoss.x, activeBoss.y + activeBoss.radius * 0.78f, false);
         enemies.add(activeBoss);
         if (activeBoss.isAwake) announceBoss();
     }
@@ -3459,7 +3669,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     // On about one floor in four (from floor 2, never a boss floor) a thief waits in one ordinary room and
     // bolts the moment the player first walks in. Host only; guests mirror it like any other enemy.
-    private static final float THIEF_CHANCE = 0.25f;
+    private static final float THIEF_CHANCE = 0.33f;
     private volatile Room thiefRoom;
     private long lastThiefSparkle = 0;
 
@@ -3544,6 +3754,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     private void mimicAwoke(float x, float y) {
+        effects.play("fx.summon", x, y + 30f, false);
         synchronized (treasureChests) { treasureChests.removeIf(c -> c.mimic); }
         effects.burst(x, y, Color.rgb(120, 84, 48), 30, 12f);
         effects.banner(x, y - 90f, "MIMIC!", Color.rgb(224, 72, 72));
@@ -3617,6 +3828,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     /** A key for vault gates; every phone gets its own. */
     private void gainKey(float x, float y) {
         keys++;
+        effects.play("fx.key", x, y - 40f, false, 1400); // the key hangs there a moment, glinting
         soundManager.play(SoundManager.Sfx.KEY);
         effects.banner(x, y - 70f, "+1 KEY", Color.rgb(244, 215, 122));
         updateKeysHUD();
@@ -4796,6 +5008,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return n >= 0 && n < r.length ? r[n] : String.valueOf(n);
     }
 
+    /** Where the player's feet touch the floor: the pivot for effects that stand there. */
+    private float playerFeet() {
+        return player.y + player.radius * 0.78f;
+    }
+
     /** Keeps the last 10 lives on this phone for the menu's run history (MenuActivity.showHistory). */
     private void recordRun() {
         SharedPreferences prefs = getSharedPreferences("runs_" + userId, MODE_PRIVATE);
@@ -4837,6 +5054,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         effects.burst(player.x, player.y, Color.rgb(244, 215, 122), 40, 12f);
         soundManager.play(SoundManager.Sfx.REVIVE);
         effects.banner(player.x, player.y - player.radius - 50f, "REVIVED", Color.rgb(244, 215, 122));
+        effects.play("fx.revive", player.x, playerFeet(), false);
         isGamePaused = false;
         hideSystemUI();
     }
@@ -4907,15 +5125,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Level-up blessings: small on purpose, they add up over a long run. The stat word shows in its colour. */
     enum Perk {
-        MIGHT("Might", 1f, "%", "damage", 0xFFE04848, R.drawable.ic_crossed_swords),
-        VIGOR("Vigor", 5f, "", "max HP", 0xFF7AB85C, R.drawable.ic_heart),
-        SWIFTNESS("Swiftness", 1f, "%", "move speed", 0xFF4F8FFF, R.drawable.ic_boots),
-        KEEN_EYE("Keen Eye", 0.5f, "%", "crit chance", 0xFFFF9A3C, R.drawable.ic_target),
-        QUICK_HANDS("Quick Hands", 1f, "%", "attack speed", 0xFFE86AD0, R.drawable.ic_hourglass),
-        WHIRLWIND("Whirlwind", 1f, "%", "Spin recharge", 0xFF4FD8E0, R.drawable.ic_knockback),
-        SHADOW_STEP("Shadow Step", 1f, "%", "Dash recharge", 0xFFA070E8, R.drawable.ic_range),
-        IRON_SKIN("Iron Skin", 0.5f, "%", "damage resist", 0xFFB4BEC8, R.drawable.ic_shield),
-        GREED("Greed", 1f, "%", "gold", 0xFFF4D77A, R.drawable.ic_coin);
+        MIGHT("Strength", 5f, "%", "damage", 0xFFE04848, R.drawable.ic_crossed_swords),
+        VIGOR("Vigor", 15f, "", "max HP", 0xFF7AB85C, R.drawable.ic_heart),
+        SWIFTNESS("Agility", 3f, "%", "move speed", 0xFF4F8FFF, R.drawable.ic_boots),
+        KEEN_EYE("Precision", 2f, "%", "crit chance", 0xFFFF9A3C, R.drawable.ic_target),
+        QUICK_HANDS("Dexterity", 5f, "%", "attack speed", 0xFFE86AD0, R.drawable.ic_hourglass),
+        WHIRLWIND("Whirlwind", 6f, "%", "Spin recharge", 0xFF4FD8E0, R.drawable.ic_knockback),
+        SHADOW_STEP("Shadow Step", 6f, "%", "Dash recharge", 0xFFA070E8, R.drawable.ic_range),
+        IRON_SKIN("Defense", 3f, "%", "damage resist", 0xFFB4BEC8, R.drawable.ic_shield),
+        GREED("Fortune", 8f, "%", "gold", 0xFFF4D77A, R.drawable.ic_coin);
 
         final String title, unit, stat;
         final float step;
@@ -4928,6 +5146,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             this.stat = stat;
             this.color = color;
             this.icon = icon;
+        }
+
+        /** The bonus that many stacks give as a fraction (Might 5% a stack: 3 stacks = 0.15). */
+        float share(int stacks) {
+            return step * stacks / 100f;
         }
 
         /** "+3% damage" for that many stacks, with the stat in its colour. */
@@ -5063,6 +5286,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 break;
             case BURNING:
                 burns.add(new Burn(e, Math.max(1, damage * power / 100), System.currentTimeMillis()));
+                e.burningUntil = System.currentTimeMillis() + 2300; // four ticks, half a second apart
                 break;
             case CHAIN: {
                 if (Math.random() * 100 >= power) break;
@@ -5336,6 +5560,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 enemies.add(foe);
                 trialFoes.add(foe);
                 effects.burst(foe.x, foe.y, crimson, 24, 10f);
+                effects.play("fx.summon", foe.x, foe.y + foe.radius * 0.78f, false);
             }
         }
         effects.banner(room.centerX(), room.centerY() - 160f, "WAVE " + wave + " / " + TRIAL_WAVES, crimson);
@@ -5418,6 +5643,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     int water = Color.rgb(96, 170, 200);
                     effects.burst(player.x, player.y, water, 24, 8f);
                     effects.play("fx.heal", player.x, player.y + player.radius * 0.78f, false);
+                    effects.play("fx.spring", spring.x, spring.y, false);
                     effects.banner(player.x, player.y - player.radius - 50f, "+" + (playerHealth - old) + " HP", water);
                     soundManager.play(SoundManager.Sfx.POTION);
                 });
@@ -5525,6 +5751,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             "Defeat the enemies to open the portal",
             "Step into the portal to go deeper"};
 
+    /** Whose tutorial it is on this phone: the account, or "guest" for a player who never signed in. */
+    private String tutorialKey() {
+        return userId != null ? userId : "guest";
+    }
+
     private void setTutorialStep(int step) {
         tutorialStep = step;
         tutorialStepAt = System.currentTimeMillis();
@@ -5538,13 +5769,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
             hint.setText(TUTORIAL[step] + "\n(tap to skip)");
             hint.setVisibility(View.VISIBLE);
+            hint.bringToFront(); // over the sticks and buttons laid out after it
+            hint.setElevation(20f);
         });
     }
 
     private void finishTutorial(boolean skipped) {
         setTutorialStep(-1);
-        if (userId != null)
-            getSharedPreferences("tutorial_" + userId, MODE_PRIVATE).edit().putBoolean("done", true).apply();
+        getSharedPreferences("tutorial_" + tutorialKey(), MODE_PRIVATE).edit().putBoolean("done", true).apply();
         if (skipped) return;
         effects.banner(player.x, player.y - player.radius - 60f, "TUTORIAL COMPLETE", Color.rgb(244, 215, 122));
         soundManager.play(SoundManager.Sfx.PERK_PICK);
@@ -5611,7 +5843,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Player damage multiplier: +1% per Might, +2% per Altar Strength; levels give perks, not raw stats. */
     private float damageMultiplier() {
-        float m = 1f + 0.01f * stacks(Perk.MIGHT) + 0.02f * altar[Altar.STRENGTH.ordinal()];
+        float m = 1f + Perk.MIGHT.share(stacks(Perk.MIGHT)) + 0.02f * altar[Altar.STRENGTH.ordinal()];
         if (relic == Relic.SKULL) m *= 1.12f;
         if (weeklyMod == WeeklyMod.GLASS_CANNON) m *= 1.5f;
         return m;
@@ -5624,7 +5856,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     static int maxHealth(int vigor, int vitality) {
-        return 100 + 5 * vigor + 5 * vitality;
+        return 100 + Math.round(Perk.VIGOR.step) * vigor + 5 * vitality;
     }
 
     /** New Altar ranks: refresh max HP, topping up a player who was at full health. */
@@ -5641,7 +5873,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     private float critChance() {
         if (System.currentTimeMillis() < perfectCritUntil) return 1f;
-        float chance = CRIT_CHANCE + 0.005f * stacks(Perk.KEEN_EYE);
+        float chance = CRIT_CHANCE + Perk.KEEN_EYE.share(stacks(Perk.KEEN_EYE));
         Weapon w = player.getWeapon();
         if (w.trait() == Weapon.Trait.KEEN) chance += Weapon.Trait.KEEN.power(w.rarity == Weapon.Rarity.LEGENDARY) / 100f;
         if (relic == Relic.EYE) chance += 0.06f;
@@ -5649,28 +5881,28 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     private long attackCooldown(Weapon w) {
-        return (long) (w.cooldown / (1f + 0.01f * stacks(Perk.QUICK_HANDS)));
+        return (long) (w.cooldown / (1f + Perk.QUICK_HANDS.share(stacks(Perk.QUICK_HANDS))));
     }
 
     private long spinCooldown() {
-        return (long) (SPIN_COOLDOWN / (1f + 0.01f * stacks(Perk.WHIRLWIND)));
+        return (long) (SPIN_COOLDOWN / (1f + Perk.WHIRLWIND.share(stacks(Perk.WHIRLWIND))));
     }
 
     private long dashCooldown() {
-        long cooldown = (long) (DASH_COOLDOWN / (1f + 0.01f * stacks(Perk.SHADOW_STEP)));
+        long cooldown = (long) (DASH_COOLDOWN / (1f + Perk.SHADOW_STEP.share(stacks(Perk.SHADOW_STEP))));
         return relic == Relic.FEATHER ? cooldown * 4 / 5 : cooldown;
     }
 
     /** Gold after Greed; the fraction becomes a chance at one more coin. */
     private int withGreed(int gold) {
-        float total = gold * (1f + 0.01f * stacks(Perk.GREED) + 0.05f * altar[Altar.FORTUNE.ordinal()]
+        float total = gold * (1f + Perk.GREED.share(stacks(Perk.GREED)) + 0.05f * altar[Altar.FORTUNE.ordinal()]
                 + (relic == Relic.IDOL ? 0.2f : 0f));
         int whole = (int) total;
         return whole + (Math.random() < total - whole ? 1 : 0);
     }
 
     private void applySpeedPerk() {
-        player.speed = 10f * (1f + 0.01f * stacks(Perk.SWIFTNESS));
+        player.speed = 10f * (1f + Math.min(0.6f, Perk.SWIFTNESS.share(stacks(Perk.SWIFTNESS))));
     }
 
     /**
@@ -5688,13 +5920,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
         if (gained > 0) {
             maxHealth = computeMaxHealth();
-            playerHealth = Math.min(maxHealth, playerHealth + 20);
+            // a fallen co-op player still levels up from teammates' kills, but stays down until the next floor
+            if (playerHealth > 0) playerHealth = Math.min(maxHealth, playerHealth + 20);
             playerHealthBar.setMax(maxHealth);
             animateHealthBar(playerHealthBar.getProgress(), playerHealth);
             effects.banner(player.x, player.y - player.radius - 50f, "LEVEL " + playerLevel,
                     Color.rgb(255, 215, 0));
             effects.burst(player.x, player.y, Color.rgb(255, 215, 0), 30, 10f);
             soundManager.play(SoundManager.Sfx.LEVEL_UP);
+            effects.play("fx.levelup", player.x, playerFeet(), false);
             pendingPerks += gained;
             updateLevelBadge();
         }
@@ -5724,6 +5958,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * Level-up cards: three random perks grow in face down, flip one by one from left to right,
      * and only then can one be picked. Solo pauses while choosing; co-op keeps running.
      */
+    /**
+     * Level up: a stat sheet instead of three random cards. Every level gives a point to put into any stat
+     * (the perks: Strength, Vigor, Agility, Precision, Dexterity, Whirlwind, Shadow Step, Defense, Fortune), so a
+     * run can go all in on one play style: a glass cannon, a tank, a dodger. Two stats at 3 points each still
+     * awaken their synergy. The sheet stays open while points are left and closes on the last one (Back keeps the rest).
+     */
     private void showPerkDialog() {
         if (pendingPerks <= 0 || perkDialogOpen) return;
         perkDialogOpen = true;
@@ -5731,86 +5971,72 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         dialog.setContentView(R.layout.dialog_level_up);
-        dialog.setCancelable(false);
+        // Back closes the sheet; points not spent wait on the badge
+        dialog.setOnCancelListener(d -> {
+            perkDialogOpen = false;
+            if (coop == null) isGamePaused = false;
+            hideSystemUI();
+        });
         if (dialog.getWindow() != null)
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        ((TextView) dialog.findViewById(R.id.txt_perk_title)).setText("Level " + playerLevel);
-
-        LinearLayout row = dialog.findViewById(R.id.perk_cards);
-        boolean[] ready = {false};
-        dealPerkCards(dialog, row, ready);
-        // Opt-in ad: one fresh hand per level-up, once the cards have turned
-        MaterialButton reroll = dialog.findViewById(R.id.btn_perk_reroll);
-        if (Ads.isReady()) reroll.setVisibility(View.VISIBLE);
-        reroll.setOnClickListener(v -> {
-            if (!ready[0]) return;
-            Ads.show(this, () -> {
-                reroll.setVisibility(View.GONE);
-                row.removeAllViews();
-                ready[0] = false;
-                dealPerkCards(dialog, row, ready);
-            }, () -> {
-                reroll.setVisibility(View.GONE);
-                hideSystemUIOnWindow(dialog.getWindow());
-            });
-        });
+        dialog.findViewById(R.id.btn_perk_reroll).setVisibility(View.GONE); // nothing random left to reroll
+        LinearLayout grid = dialog.findViewById(R.id.perk_cards);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        fillStatSheet(dialog, grid);
         dialog.show();
         hideSystemUIOnWindow(dialog.getWindow());
     }
 
-    /** Three random perk cards grow in face down, then flip left to right; ready[0] turns true after the last. */
-    private void dealPerkCards(Dialog dialog, LinearLayout row, boolean[] ready) {
-        List<Perk> offer = new ArrayList<>(java.util.Arrays.asList(Perk.values()));
-        Collections.shuffle(offer);
-        float cameraDistance = 8000f * getResources().getDisplayMetrics().density;
-        for (int i = 0; i < 3; i++) {
-            Perk perk = offer.get(i);
-            boolean last = i == 2;
-            View card = getLayoutInflater().inflate(R.layout.item_perk_card, row, false);
-            bindPerkCard(card, perk);
-            card.setCameraDistance(cameraDistance);
-            card.setScaleX(0f);
-            card.setScaleY(0f);
-            card.setOnClickListener(v -> { if (ready[0]) choosePerk(dialog, perk); });
-            row.addView(card);
-            Wear.apply(card); // after addView, so each slot keeps its own cracks
-            card.animate().scaleX(1f).scaleY(1f).setStartDelay(i * 90L).setDuration(320)
-                    .setInterpolator(new android.view.animation.OvershootInterpolator(1.2f)).start();
-            card.postDelayed(() -> flipCard(card, () -> { if (last) ready[0] = true; }), 650 + i * 380L);
+    /** One cell per stat, three to a row: its points, what a point gives, and what it adds up to now. */
+    private void fillStatSheet(Dialog dialog, LinearLayout grid) {
+        ((TextView) dialog.findViewById(R.id.txt_perk_title)).setText("Level " + playerLevel + "  ·  "
+                + pendingPerks + (pendingPerks == 1 ? " point" : " points"));
+        grid.removeAllViews();
+        float dp = getResources().getDisplayMetrics().density;
+        int gap = Math.round(3 * dp);
+        Perk[] all = Perk.values();
+        LinearLayout row = null;
+        for (int i = 0; i < all.length; i++) {
+            Perk perk = all[i];
+            if (i % 3 == 0) {
+                row = new LinearLayout(this);
+                grid.addView(row, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Math.round(50 * dp)));
+            }
+            View cell = getLayoutInflater().inflate(R.layout.item_stat_cell, row, false);
+            android.widget.ImageView icon = cell.findViewById(R.id.stat_icon);
+            icon.setImageResource(perk.icon);
+            icon.setImageTintList(android.content.res.ColorStateList.valueOf(perk.color));
+            int have = stacks(perk);
+            ((TextView) cell.findViewById(R.id.stat_value)).setText(perk.title + "  " + have);
+            android.text.SpannableStringBuilder label = new android.text.SpannableStringBuilder(perk.describe(1)).append(" each");
+            Synergy synergy = Synergy.of(perk);
+            if (synergy != null && !has(synergy)) label.append(" · ").append(synergy.title);
+            ((TextView) cell.findViewById(R.id.stat_label)).setText(label);
+            cell.setOnClickListener(v -> {
+                spendStatPoint(perk);
+                if (pendingPerks <= 0 || !dialog.isShowing()) {
+                    closeStatSheet(dialog);
+                } else {
+                    fillStatSheet(dialog, grid);
+                }
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+            lp.setMargins(gap, gap, gap, gap);
+            row.addView(cell, lp);
         }
+        Wear.apply(grid);
     }
 
-    private void bindPerkCard(View card, Perk perk) {
-        android.widget.ImageView icon = card.findViewById(R.id.perk_icon);
-        icon.setImageResource(perk.icon);
-        icon.setImageTintList(android.content.res.ColorStateList.valueOf(perk.color));
-        ((TextView) card.findViewById(R.id.perk_name)).setText(perk.title);
-        ((TextView) card.findViewById(R.id.perk_desc)).setText(perk.describe(1));
-        Synergy synergy = Synergy.of(perk);
-        String hint = synergy == null || has(synergy) ? ""
-                : "\n" + synergy.title + ": 3x " + synergy.a.title + " + 3x " + synergy.b.title;
-        ((TextView) card.findViewById(R.id.perk_owned)).setText("Owned: " + stacks(perk) + hint);
-    }
-
-    /** Turns a card edge-on, swaps its back for its front, then turns it face up. */
-    private void flipCard(View card, Runnable done) {
-        soundManager.play(SoundManager.Sfx.CARD_FLIP);
-        card.animate().rotationY(90f).setStartDelay(0).setDuration(170)
-                .setInterpolator(new android.view.animation.AccelerateInterpolator())
-                .withEndAction(() -> {
-                    card.findViewById(R.id.perk_back).setVisibility(View.INVISIBLE);
-                    card.findViewById(R.id.perk_front).setVisibility(View.VISIBLE);
-                    card.setRotationY(-90f);
-                    card.animate().rotationY(0f).setStartDelay(0).setDuration(170)
-                            .setInterpolator(new android.view.animation.DecelerateInterpolator())
-                            .withEndAction(done).start();
-                }).start();
-    }
-
-    /** Applies the picked perk; the badge stays while more picks are waiting. */
-    private void choosePerk(Dialog dialog, Perk perk) {
+    private void closeStatSheet(Dialog dialog) {
         dialog.dismiss();
         perkDialogOpen = false;
+        if (coop == null) isGamePaused = false;
+        hideSystemUI();
+    }
+
+    /** Puts a level's point into a stat; the badge stays while more points are waiting. */
+    private void spendStatPoint(Perk perk) {
+        if (pendingPerks <= 0) return;
         pendingPerks--;
         Synergy synergy = Synergy.of(perk);
         boolean awakened = synergy != null && !has(synergy);
@@ -5819,21 +6045,19 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (perk == Perk.VIGOR) {
             maxHealth = computeMaxHealth();
             int old = playerHealth;
-            playerHealth = Math.min(maxHealth, playerHealth + 5);
+            if (playerHealth > 0) playerHealth = Math.min(maxHealth, playerHealth + Math.round(Perk.VIGOR.step));
             playerHealthBar.setMax(maxHealth);
             animateHealthBar(old, playerHealth);
         }
         applySpeedPerk();
         updateLevelBadge();
-        effects.banner(player.x, player.y - player.radius - 50f, perk.title, perk.color);
+        effects.banner(player.x, player.y - player.radius - 50f, perk.title + " " + stacks(perk), perk.color);
         if (awakened) {
             effects.banner(player.x, player.y - player.radius - 110f, synergy.title.toUpperCase() + " AWAKENS",
                     Color.rgb(244, 215, 122));
             effects.burst(player.x, player.y, Color.rgb(244, 215, 122), 40, 12f);
         }
         soundManager.play(SoundManager.Sfx.PERK_PICK);
-        if (coop == null) isGamePaused = false;
-        hideSystemUI();
     }
 
     private void updateLevelHUD() {
@@ -6083,13 +6307,79 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * @param floor the floor number
      * @return list of shop items (empty if the batch is not yet available)
      */
+    /**
+     * Each biome sells its own gear: the stock is renamed and its stats tilted to the place, once per item.
+     * The Crypt keeps its plain grave-goods. Flooded Catacombs: Drowned weapons with long reach (tridents among
+     * them) and light hands, Barnacle armor. Infernal Forge: Molten weapons that hit harder and knock back more but
+     * swing slower (mauls among them), Forged armor that holds more. Hollow Void, where the light is short: half
+     * its blades become Hollow staves and bows, Starweave armor.
+     */
+    private List<ShopItem> biomeGear(List<ShopItem> items, int floor) {
+        Biome biome = Biome.forFloor(floor);
+        for (ShopItem it : items) {
+            if (it.biomeTilted || it.type == ShopItem.ItemType.CONSUMABLE || it.name == null) continue;
+            it.biomeTilted = true;
+            java.util.Random r = new java.util.Random(it.name.hashCode() * 31L + floor);
+            boolean weapon = it.type == ShopItem.ItemType.WEAPON;
+            switch (biome) {
+                case CATACOMBS:
+                    if (weapon && !it.isProjectile) {
+                        it.range *= 1.3f;
+                        it.knockback *= 0.85f;
+                        if (r.nextFloat() < 0.4f) it.name = withNoun(it.name, "Trident");
+                    }
+                    it.name = withAdjective(it.name, weapon ? "Drowned" : "Barnacle");
+                    break;
+                case FORGE:
+                    if (weapon) {
+                        it.knockback *= 1.4f;
+                        it.damage = Math.round(it.damage * 1.1f);
+                        it.cooldown = (long) (it.cooldown * 1.1f);
+                        if (!it.isProjectile && r.nextFloat() < 0.35f) it.name = withNoun(it.name, "Maul");
+                    } else {
+                        it.defense = Math.round(it.defense * 1.15f);
+                        it.maxDurability *= 1.2f;
+                    }
+                    it.name = withAdjective(it.name, weapon ? "Molten" : "Forged");
+                    break;
+                case VOID:
+                    if (weapon && !it.isProjectile && r.nextFloat() < 0.5f) {
+                        it.isProjectile = true;
+                        it.range = 550 + r.nextInt(250);
+                        it.damage = Math.max(1, Math.round(it.damage * 0.8f)); // shots trade a little bite for reach
+                        it.name = withNoun(it.name, r.nextBoolean() ? "Staff" : "Bow");
+                    }
+                    it.name = withAdjective(it.name, weapon ? "Hollow" : "Starweave");
+                    break;
+                default:
+                    break;
+            }
+        }
+        return items;
+    }
+
+    /** "Emberfang Blade" with "Molten" = "Molten Blade"; a one-word name gets the word in front. */
+    private static String withAdjective(String name, String adjective) {
+        String[] words = name.trim().split(" +");
+        if (words.length < 2) return adjective + " " + name.trim();
+        words[0] = adjective;
+        return String.join(" ", words);
+    }
+
+    /** "Emberfang Blade" with "Maul" = "Emberfang Maul": the noun decides the weapon's kind (Weapon.kindOf). */
+    private static String withNoun(String name, String noun) {
+        String[] words = name.trim().split(" +");
+        words[words.length - 1] = noun;
+        return String.join(" ", words);
+    }
+
     private List<ShopItem> getShopItemsForFloor(int floor) {
         if (floor == restockedFloor && restockedShop != null) return withoutPotions(restockedShop);
         int rangeStart = getRangeStart(floor);
         BatchResult result = batchCache.get(rangeStart);
         if (result == null || result.shopByFloor == null) return new ArrayList<>();
         List<ShopItem> items = result.shopByFloor.get(floor);
-        return items != null ? withoutPotions(items) : new ArrayList<>();
+        return items != null ? biomeGear(withoutPotions(items), floor) : new ArrayList<>();
     }
 
     /**

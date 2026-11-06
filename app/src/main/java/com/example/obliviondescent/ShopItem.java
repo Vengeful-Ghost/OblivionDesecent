@@ -32,6 +32,8 @@ public class ShopItem {
 
     // Consumable fields (type == CONSUMABLE)
     public String effect;       // "heal" / "armor_restore"
+    public boolean biomeTilted; // GameActivity.biomeGear has fitted it to its floor's biome
+    public int    fullPrice;    // the shop's sale item: its price before the discount (0 = not on sale)
     public int    effectValue;  // amount to heal/restore
 
     /**
