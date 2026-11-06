@@ -18,9 +18,12 @@ import java.util.Random;
  * 2. Grows inner rooms (count scales with floor): mostly a winding path, but more and more often a
  *    branch off an earlier room, so deeper floors sprawl with rooms of up to four doors.
  * 3. Hangs the boss room (boss floors) and the exit room off the room farthest from the entry.
- * 4. Sometimes turns an ordinary room into an enemy-free treasure room with a single chest,
+ * 4. Solo runs: grows up to two event rooms (RoomEvent) as dead ends off ordinary rooms, each at
+ *    its event's fixed size. They never hold enemies.
+ * 5. Sometimes turns an ordinary room into an enemy-free treasure room with a single chest,
  *    and from floor 2 may seal a dead end as a vault that needs a key.
- * 5. Distributes enemies across eligible rooms according to the floor quota, then places decorations.
+ * 6. Distributes enemies across eligible rooms according to the floor quota, then places decorations
+ *    in the floor's biome (Biome).
  */
 public class FloorLayout {
 
@@ -47,6 +50,11 @@ public class FloorLayout {
     public Corridor vaultCorridor; // the corridor the gate seals
     public float[] vaultGate;      // gate line across that corridor's open end: {x1, y1, x2, y2}
     public volatile boolean vaultLocked; // per phone: the gate blocks the corridor until a key opens it
+    public final List<Room> eventRooms = new ArrayList<>(); // dead ends holding a RoomEvent (solo only)
+    public Corridor trialCorridor; // the Trial arena's corridor, sealed while its waves fight
+    public float[] trialGate;      // gate line across that corridor's arena end: {x1, y1, x2, y2}
+    public volatile boolean trialSealed;
+    public Biome biome = Biome.CRYPT;
     public List<Props.Decor> decor = new ArrayList<>(); // drawn by GameDisplay; barrels, crates and pillars are solid
 
     // Navigation graph: rooms are nodes 0..R-1, corridors are nodes R..R+C-1
@@ -63,9 +71,12 @@ public class FloorLayout {
      * @param isBossFloor Whether a boss room should be attached before the exit.
      * @param killCount   Total enemies that must be distributed across rooms.
      * @param seed        Same seed, same layout: co-op phones build identical floors.
+     * @param withEvents  Grow event rooms (solo runs; co-op has none).
      */
-    public static FloorLayout generate(int floor, boolean isBossFloor, int killCount, long seed) {
+    public static FloorLayout generate(int floor, boolean isBossFloor, int killCount, long seed,
+                                       boolean withEvents) {
         FloorLayout layout = new FloorLayout();
+        layout.biome = Biome.forFloor(floor);
         Random rng = new Random(seed);
 
         // Inner room count scales with floor, capped so layouts don't get absurd.
@@ -114,6 +125,9 @@ public class FloorLayout {
         float xs   = 4 * Room.TILE;
         layout.exitRoom = growAtEnd(layout, rng, deepest, xs, xs, Room.Type.EXIT);
 
+        // ── 5. Event rooms (solo) ─────────────────────────────────────────────
+        if (withEvents) placeEventRooms(layout, rng, floor);
+
         layout.buildNavigation();
 
         // Treasure room: an enemy-free room with one chest, likelier on boss floors
@@ -121,7 +135,7 @@ public class FloorLayout {
         // Vault: a locked dead end with better loot, from floor 2
         if (floor >= 2 && rng.nextFloat() < 0.35f) pickVault(layout, rng);
 
-        // ── 5. Enemy distribution ─────────────────────────────────────────────
+        // ── 6. Enemy distribution ─────────────────────────────────────────────
         distributeEnemies(layout, killCount, rng);
         layout.decor = Props.decorate(layout);
 
@@ -166,6 +180,57 @@ public class FloorLayout {
             if (r != null) return r;
         }
         return null;
+    }
+
+    /**
+     * Grows this floor's event rooms: one on most floors, a second now and then from floor 4. Each is a
+     * dead end at its event's fixed size, hung off an ordinary room, so it has exactly one doorway.
+     */
+    private static void placeEventRooms(FloorLayout layout, Random rng, int floor) {
+        int count = rng.nextFloat() < 0.6f ? 1 : 0;
+        if (count == 1 && floor >= 4 && rng.nextFloat() < 0.3f) count = 2;
+        java.util.EnumSet<RoomEvent> taken = java.util.EnumSet.noneOf(RoomEvent.class);
+        for (int i = 0; i < count; i++) {
+            RoomEvent event = RoomEvent.pick(rng, floor, taken);
+            if (event == null) return;
+            taken.add(event);
+            Room room = growEventRoom(layout, rng, event.tilesW * Room.TILE, event.tilesH * Room.TILE);
+            if (room == null) continue; // no space left for a room that big
+            room.event = event;
+            layout.eventRooms.add(room);
+            if (event == RoomEvent.TRIAL) sealableDoor(layout, room);
+        }
+    }
+
+    /** An EVENT room off a random ordinary room; never off the entry, exit, boss or another event room. */
+    private static Room growEventRoom(FloorLayout layout, Random rng, float w, float h) {
+        List<Room> sources = new ArrayList<>();
+        for (Room r : layout.rooms) {
+            if (r.type != Room.Type.ENTRY && r.type != Room.Type.EXIT
+                    && r.type != Room.Type.BOSS && r.type != Room.Type.EVENT) sources.add(r);
+        }
+        Collections.shuffle(sources, rng);
+        for (Room src : sources) {
+            Room r = tryGrow(layout, rng, src, -1, w, h, Room.Type.EVENT);
+            if (r != null) return r;
+        }
+        return null;
+    }
+
+    /** The Trial arena's gate: across its corridor's arena end, so a sealed door keeps the fight inside. */
+    private static void sealableDoor(FloorLayout layout, Room arena) {
+        for (Corridor c : layout.corridors) {
+            if (c.roomIdA != arena.id && c.roomIdB != arena.id) continue;
+            if (c.width >= c.height) {
+                float x = arena.x > c.x ? c.x + c.width : c.x;
+                layout.trialGate = new float[]{x, c.y, x, c.y + c.height};
+            } else {
+                float y = arena.y > c.y ? c.y + c.height : c.y;
+                layout.trialGate = new float[]{c.x, y, c.x + c.width, y};
+            }
+            layout.trialCorridor = c;
+            return;
+        }
     }
 
     /** Turns an ordinary room, preferably a dead end, into the treasure room; keeps rooms for enemies. */
@@ -414,8 +479,13 @@ public class FloorLayout {
      */
     public boolean isFloor(float px, float py) {
         for (Room r     : rooms)     if (r.contains(px, py)) return true;
-        for (Corridor c : corridors) if (c.contains(px, py) && !(vaultLocked && c == vaultCorridor)) return true;
+        for (Corridor c : corridors) if (c.contains(px, py) && !gated(c)) return true;
         return false;
+    }
+
+    /** A corridor behind a shut gate: a locked vault, or the Trial arena while its waves fight. */
+    private boolean gated(Corridor c) {
+        return (vaultLocked && c == vaultCorridor) || (trialSealed && c == trialCorridor);
     }
 
     /**

@@ -496,6 +496,11 @@ public class MenuActivity extends AppCompatActivity {
                     "Gold-marked rooms hold a treasure chest, but some chests are mimics that bite back.\n\n"
                     + "A gold gate seals a vault. Walk up to it with a key to open it: vaults hold the best loot. "
                     + "Keys drop from elites, mimics and now and then other enemies."},
+            {"Event Rooms & Depths",
+                    "Side rooms off the path hold events: a blood shrine, a gambler, a cursed crypt, a trial arena, "
+                    + "a prisoner, a forgotten library or a healing spring. Walk up to what waits inside.\n\n"
+                    + "Every 5 floors, past each boss, the dungeon changes: flooded catacombs slow your steps, "
+                    + "the forge's vents erupt, and in the void the light reaches less far."},
             {"Grow Stronger",
                     "Kills give XP. When you level up, tap the glowing badge and pick a perk. "
                     + "Two perks at 3 stacks each awaken a synergy.\n\n"

@@ -10,7 +10,7 @@ import java.util.Random;
  */
 public class Room {
 
-    public enum Type { ENTRY, EXIT, SMALL, MEDIUM, LARGE, HALLWAY, BOSS }
+    public enum Type { ENTRY, EXIT, SMALL, MEDIUM, LARGE, HALLWAY, BOSS, EVENT }
 
     // Direction indices shared across the layout system
     public static final int NORTH = 0, EAST = 1, SOUTH = 2, WEST = 3;
@@ -31,6 +31,10 @@ public class Room {
 
     // ── Exploration state (used by minimap) ───────────────────────────────────
     public boolean explored = false;
+
+    // ── Room event (EVENT rooms only) ─────────────────────────────────────────
+    public RoomEvent event;               // what waits here, or null
+    public volatile boolean eventDone;    // answered, freed, drunk, won: the map icon dims
 
     // ── Connection state — one corridor per cardinal side ─────────────────────
     public final boolean[] sideUsed = new boolean[4]; // [N, E, S, W]
@@ -60,6 +64,7 @@ public class Room {
             case ENTRY:   return 0; // always safe
             case EXIT:    return 0; // always safe
             case BOSS:    return 0; // boss handled separately
+            case EVENT:   return 0; // room events are never fought over (the Trial calls its own waves)
             case HALLWAY: return 2;
             case SMALL:   return 3;
             case MEDIUM:  return 5;

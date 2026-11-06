@@ -556,11 +556,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return 1f + 0.6f * (partySize - 1);
     }
 
-    /** Layout for the current floor; co-op and daily runs seed it so everyone gets the same dungeon. */
+    /**
+     * Layout for the current floor; co-op and daily runs seed it so everyone gets the same dungeon.
+     * Event rooms are solo only: a co-op phone would answer them alone.
+     */
     private FloorLayout generateLayout() {
         long seed = runSeed() != 0 ? runSeed() * 31 + floorManager.getCurrentFloor() : System.nanoTime();
         return FloorLayout.generate(floorManager.getCurrentFloor(), floorManager.isBossFloor(),
-                floorManager.getKillsRequired(), seed);
+                floorManager.getKillsRequired(), seed, coop == null);
     }
 
     /** Shared seed of a co-op or daily run; 0 for a solo save. */
@@ -961,6 +964,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             });
         }
         if (currentLayout != null && !inShopRoom) {
+            // Flooded Catacombs: wading through water slows the walk; a dash still cuts through
+            if (!isDashing && Props.inWater(currentLayout.decor, player.x, player.y)) {
+                player.x = prevPlayerX + (player.x - prevPlayerX) * WADE;
+                player.y = prevPlayerY + (player.y - prevPlayerY) * WADE;
+                if ((player.x != prevPlayerX || player.y != prevPlayerY) && now - lastSplash > 260) {
+                    lastSplash = now;
+                    effects.burst(player.x, player.y + player.radius * 0.6f, Props.WATER_SHINE, 5, 3f);
+                }
+            }
             float[] resolved = currentLayout.resolveCollision(
                     prevPlayerX, prevPlayerY, player.x, player.y, player.radius);
             player.x = resolved[0];
@@ -1097,6 +1109,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 float prevEX = e.x, prevEY = e.y;
                 e.update(target[0], target[1], player.radius);
                 if (currentLayout != null && !inShopRoom) {
+                    // Water slows enemies too, except bats flying over it
+                    if (e.type != Enemy.Type.BAT && Props.inWater(currentLayout.decor, e.x, e.y)) {
+                        e.x = prevEX + (e.x - prevEX) * WADE;
+                        e.y = prevEY + (e.y - prevEY) * WADE;
+                    }
                     float[] resolved = currentLayout.resolveCollision(
                             prevEX, prevEY, e.x, e.y, e.radius);
                     // Thrown hard into a wall or a pillar, it slams; a charger running into one is dazed
@@ -1259,16 +1276,19 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     /**
      * Picks a random enemy type for the floor from SPAWN_TABLE: each type joins on its own floor and its
      * chance grows a little every floor down to a cap; grunts fill whatever is left (at least 15%).
+     * The floor's biome makes its native enemies half again as likely.
      * @param floor the current floor number
      * @return the selected enemy type
      */
     private Enemy.Type pickEnemyType(int floor) {
         float[] chance = new float[SPAWN_TABLE.length];
         float total = 0f;
+        Biome biome = Biome.forFloor(floor);
         for (int i = 0; i < SPAWN_TABLE.length; i++) {
             float[] row = SPAWN_TABLE[i];
             if (floor < row[0]) continue;
             chance[i] = Math.min(row[3], row[1] + row[2] * (floor - row[0]));
+            if (biome.favours(SPAWN_TYPES[i])) chance[i] *= 1.5f;
             total += chance[i];
         }
         // Deep floors would crowd grunts out entirely; scale the rest back so grunts keep 15%
@@ -1530,6 +1550,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         int cur = floorManager.getCurrentFloor();
         if (getRangeStart(cur) != rangeStart) return;        // not our floor's batch
         if (floorManager.getKillsThisFloor() > 0) return;   // combat already started
+        if (trialRoom != null) return;                       // a Trial's waves are fighting
         List<EnemyTemplate> pool = getEnemyPoolForFloor(cur);
         if (pool.isEmpty()) return;                          // batch had nothing useful
 
@@ -1730,6 +1751,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
         damage = Math.max(1, Math.round(damage * (1f - 0.005f * perks[Perk.IRON_SKIN.ordinal()])));
         if (relic == Relic.SKULL) damage = Math.round(damage * 1.1f);
+        if (tomeCurse) damage = Math.round(damage * TOME_CURSE);
         invulnerableUntil = now + HIT_INVULNERABILITY;
         lastRegen = now + 5000; // Bulwark pauses for 10s after a hit
         hitStop(60);
@@ -2161,8 +2183,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             for (Enemy e : enemies) {
                 if (e.isDead && !e.counted) {
                     e.counted = true;
-                    // Guests copy the host's count; mimics and thralls don't count at all
-                    if (!isGuest() && !e.mimic && !e.summoned) floorManager.onEnemyKilled(player.x, player.y);
+                    // Guests copy the host's count; mimics, thralls and the Trial's waves don't count at all
+                    if (!isGuest() && !e.mimic && !e.summoned && !trialFoes.contains(e))
+                        floorManager.onEnemyKilled(player.x, player.y);
                     statsManager.onEnemyKilled();
                     if (!e.summoned) quest(Quests.KILLS, 1);
                     bestiary(e, true);
@@ -2548,7 +2571,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      */
     private void triggerFloorTransition() {
         if (coop != null && coop.isHost()) coop.publishFloor(floorManager.getCurrentFloor() + 1);
-        txtFloorTitle.setText("Floor " + (floorManager.getCurrentFloor() + 1));
+        txtFloorTitle.setText(floorTitle(floorManager.getCurrentFloor() + 1));
         txtFloorTitle.setAlpha(0f);
 
         floorTransitionOverlay.setVisibility(View.VISIBLE);
@@ -2584,6 +2607,25 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     }, 300);
                 }).start();
         floorTransitionOverlay.setClickable(true);
+    }
+
+    /** "Floor 6", and on the first floor of a new biome its name and rule underneath, in its fire's colour. */
+    private CharSequence floorTitle(int floor) {
+        String head = "Floor " + floor;
+        if (!Biome.startsAt(floor)) return head;
+        Biome biome = Biome.forFloor(floor);
+        String name = biome.title.toUpperCase(), rule = biome.rule;
+        android.text.SpannableString title = new android.text.SpannableString(head + "\n" + name + "\n" + rule);
+        int nameAt = head.length() + 1, ruleAt = nameAt + name.length() + 1;
+        title.setSpan(new android.text.style.RelativeSizeSpan(0.42f), nameAt, title.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        title.setSpan(new android.text.style.ForegroundColorSpan(biome.flame), nameAt, ruleAt - 1,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        title.setSpan(new android.text.style.RelativeSizeSpan(0.7f), ruleAt, title.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        title.setSpan(new android.text.style.ForegroundColorSpan(Color.rgb(184, 172, 145)), ruleAt, title.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return title;
     }
 
     /**
@@ -3025,12 +3067,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /**
      * Instantly kills all active enemies without dropping coins.
-     * Called when the exit portal opens.
+     * Called when the exit portal opens. A Trial still being fought keeps its waves: they are its prize's price.
      */
     private void killAllActiveEnemies() {
         synchronized (enemies) {
             for (Enemy e : enemies) {
-                if (!e.isDead) {
+                if (!e.isDead && !trialFoes.contains(e)) {
                     e.noGoldDrop = true;
                     e.takeDamage(Integer.MAX_VALUE);
                 }
@@ -3352,7 +3394,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 treasureChests.add(chest);
             }
         }
-        placeRoomEvent();
+        setUpEventRooms();
     }
 
     /** A slain mimic coughs up a real chest with loot. */
@@ -3453,7 +3495,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
         }
         if (woke != null) awakenMimic(woke);
-        if (cursed != null) curseChest(cursed);
+        if (cursed != null) {
+            curseChest(cursed);
+            eventDone(cursed.x, cursed.y);
+        }
     }
 
     /** A key for vault gates; every phone gets its own. */
@@ -4818,45 +4863,59 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     private int deathColor = 0; // wardrobe death burst; 0 = the body colour
 
-    // The shrine or gambler whose offer is open, so walking up asks once per visit
+    // The room event whose offer is open, so walking up asks once per visit
     private volatile Props.Decor eventNear;
 
-    /** Solo only: about half the floors hide a blood shrine, a gambler or a cursed chest in a quiet room. */
-    private void placeRoomEvent() {
-        if (coop != null || currentLayout == null || Math.random() > 0.5) return;
-        List<Room> quiet = new ArrayList<>();
-        for (Room r : currentLayout.rooms) {
-            boolean plain = r.type == Room.Type.SMALL || r.type == Room.Type.MEDIUM || r.type == Room.Type.LARGE;
-            if (plain && r != currentLayout.treasureRoom && r != currentLayout.vaultRoom
-                    && r != currentLayout.bossRoom && r != currentLayout.exitRoom && r != currentLayout.entryRoom)
-                quiet.add(r);
-        }
-        if (quiet.isEmpty()) return;
-        Room room = quiet.get((int) (Math.random() * quiet.size()));
-        float x = room.centerX(), y = room.centerY() + room.height * 0.2f;
-        int kind = (int) (Math.random() * 3);
-        if (kind == 2) {
-            TreasureChest chest = new TreasureChest(x, y, x, y, 0L);
+    // Trial arena: the gong seals the door and calls up TRIAL_WAVES waves, one after another; clearing the
+    // last opens the door and leaves a vault-grade chest. Its foes never count toward the floor's kills.
+    private static final int TRIAL_WAVES = 3;
+    private volatile Room trialRoom;  // the arena while its trial runs, else null
+    private int trialWave = 0;        // waves called so far (logic thread)
+    private long trialNextAt = 0;     // when the next wave may rise (logic thread)
+    private final List<Enemy> trialFoes = new ArrayList<>(); // guarded by enemies
+
+    // Forgotten library: the tome was read, so enemies hit harder until the floor is left
+    private static final float TOME_CURSE = 1.2f;
+    private volatile boolean tomeCurse = false;
+
+    // Flooded Catacombs: share of a step kept while wading; splashes are spaced out
+    private static final float WADE = 0.6f;
+    private long lastSplash = 0;
+
+    /**
+     * Readies this floor's event rooms (FloorLayout grows them, Props dresses them): sets the cursed chest
+     * on its circle and clears what the last floor's events left behind. Runs with every new layout.
+     */
+    private void setUpEventRooms() {
+        eventNear = null;
+        trialRoom = null;
+        tomeCurse = false;
+        synchronized (enemies) { trialFoes.clear(); }
+        if (currentLayout == null) return;
+        for (Room room : currentLayout.eventRooms) {
+            if (room.event != RoomEvent.CURSED) continue;
+            TreasureChest chest = new TreasureChest(room.centerX(), room.centerY(), room.centerX(), room.centerY(), 0L);
             chest.landed = true;
             chest.cursed = true;
             pickChestReward(chest);
             synchronized (treasureChests) { treasureChests.add(chest); }
-            return;
         }
-        // A new list, so the render thread never sees the one it's drawing change
-        List<Props.Decor> decor = new ArrayList<>(currentLayout.decor);
-        decor.add(new Props.Decor(kind == 0 ? Props.SHRINE : Props.GAMBLER, x, y, 0, 0));
-        currentLayout.decor = decor;
     }
 
-    /** Walking up to a shrine or the gambler pauses and asks; walking away lets it ask again. */
+    /** Marks the event room at a point as over, so its map icon dims. */
+    private void eventDone(float x, float y) {
+        Room room = currentLayout != null ? currentLayout.getRoomAt(x, y) : null;
+        if (room != null && room.event != null) room.eventDone = true;
+    }
+
+    /** Walking up to an event room's centrepiece pauses and asks; walking away lets it ask again. */
     private void checkRoomEvents() {
         FloorLayout layout = currentLayout;
         if (coop != null || layout == null || inShopRoom || playerHealth <= 0) return;
         Props.Decor near = null;
         for (Props.Decor d : layout.decor) {
-            if ((d.kind == Props.SHRINE || d.kind == Props.GAMBLER) && !d.used
-                    && getDistance(player.x, player.y, d.x, d.y) < player.radius + 90f) near = d;
+            if (Props.answers(d) && !d.used
+                    && getDistance(player.x, player.y, d.x, d.y) < player.radius + Props.reach(d)) near = d;
         }
         if (near == eventNear) return;
         eventNear = near;
@@ -4864,8 +4923,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         Props.Decor event = near;
         isGamePaused = true;
         runOnUiThread(() -> {
-            if (event.kind == Props.SHRINE) offerShrine(event);
-            else offerGamble(event);
+            switch (event.kind) {
+                case Props.SHRINE:   offerShrine(event); break;
+                case Props.GAMBLER:  offerGamble(event); break;
+                case Props.GONG:     offerTrial(event); break;
+                case Props.PRISONER: offerPrisoner(event); break;
+                case Props.LECTERN:  offerTome(event); break;
+                default:             offerSpring(event); break;
+            }
         });
     }
 
@@ -4877,6 +4942,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 "Offer " + cost + " HP for a blessing?" + (can ? "" : "\nYou are too weak to pay."),
                 "Offer blood", can, () -> {
                     shrine.used = true;
+                    eventDone(shrine.x, shrine.y);
                     int old = playerHealth;
                     playerHealth = Math.max(1, playerHealth - cost);
                     animateHealthBar(old, playerHealth);
@@ -4899,6 +4965,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 "Pay " + price + " gold for a mystery item? It could be anything." + (can ? "" : "\nYou can't pay."),
                 "Gamble", can, () -> {
                     gambler.used = true;
+                    eventDone(gambler.x, gambler.y);
                     playerGold -= price;
                     statsManager.onCoinsSpent(price);
                     updateGoldHUD();
@@ -4908,6 +4975,182 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                             getRarityColor(prize.rarity));
                     soundManager.play(SoundManager.Sfx.PURCHASE);
                 });
+    }
+
+    /** The Trial arena's gong: strike it to seal the door and face the waves for a vault-grade chest. */
+    private void offerTrial(Props.Decor gong) {
+        confirmEvent(R.drawable.ic_crossed_swords, "Trial of Blood",
+                "Strike the gong? The door seals and " + TRIAL_WAVES + " waves rise, one after another. "
+                        + "Clear them all for a vault-grade prize.",
+                "Strike", true, () -> {
+                    Room room = currentLayout != null ? currentLayout.getRoomAt(gong.x, gong.y) : null;
+                    if (room == null) return;
+                    gong.used = true;
+                    trialWave = 0;
+                    trialNextAt = System.currentTimeMillis() + 900;
+                    currentLayout.trialSealed = true;
+                    trialRoom = room;
+                    int crimson = Color.rgb(224, 72, 72);
+                    effects.burst(gong.x, gong.y, Color.rgb(244, 215, 122), 26, 10f);
+                    effects.banner(gong.x, gong.y - 140f, "THE TRIAL BEGINS", crimson);
+                    if (camera != null) camera.startShake(300, 10f);
+                    soundManager.play(SoundManager.Sfx.GATE_LOCKED);
+                });
+    }
+
+    /** Runs a Trial in progress: the next wave rises a moment after the last falls; after the final one it's won. */
+    private void tickTrial(long now) {
+        Room room = trialRoom;
+        if (room == null || isGuest()) return;
+        int alive = 0;
+        synchronized (enemies) {
+            for (Enemy e : trialFoes) if (!e.isDead) alive++;
+        }
+        if (alive > 0) {
+            trialNextAt = now + 1500;
+            return;
+        }
+        if (now < trialNextAt) return;
+        if (trialWave < TRIAL_WAVES) spawnTrialWave(room, ++trialWave);
+        else winTrial(room);
+    }
+
+    /** One Trial wave in a ring round the gong, awake at once; the last wave is led by an elite. */
+    private void spawnTrialWave(Room room, int wave) {
+        int floor = floorManager.getCurrentFloor();
+        int count = Math.min(6, 2 + wave + floor / 6);
+        List<EnemyTemplate> pool = getEnemyPoolForFloor(floor);
+        int crimson = Color.rgb(224, 72, 72);
+        float[] spot = new float[2];
+        synchronized (enemies) {
+            for (int i = 0; i < count; i++) {
+                double a = Math.PI * 2 * i / count + Math.random() * 0.5;
+                float x = room.centerX() + (float) Math.cos(a) * room.width * 0.32f;
+                float y = room.centerY() + (float) Math.sin(a) * room.height * 0.32f;
+                Enemy foe = new Enemy(x, y, pickEnemyType(floor));
+                Props.pushOut(currentLayout.decor, x, y, foe.radius, spot);
+                foe.x = spot[0];
+                foe.y = spot[1];
+                foe.applyFloorScaling(floor);
+                if (!pool.isEmpty()) {
+                    foe.templateIndex = (int) (Math.random() * pool.size());
+                    foe.applyTemplate(pool.get(foe.templateIndex));
+                }
+                if (wave == TRIAL_WAVES && i == 0) foe.makeElite();
+                foe.ascend(ascension());
+                if (weeklyMod == WeeklyMod.HASTE) foe.speed *= 1.25f;
+                foe.isAwake = true;
+                foe.setBehaviorTracker(behaviorTracker);
+                foe.setLayout(currentLayout);
+                enemies.add(foe);
+                trialFoes.add(foe);
+                effects.burst(foe.x, foe.y, crimson, 24, 10f);
+            }
+        }
+        effects.banner(room.centerX(), room.centerY() - 160f, "WAVE " + wave + " / " + TRIAL_WAVES, crimson);
+        if (camera != null) camera.startShake(200, 8f);
+        soundManager.play(SoundManager.Sfx.SUMMON);
+    }
+
+    /** The last wave fell: the door opens and a vault-grade chest drops by the gong. */
+    private void winTrial(Room room) {
+        trialRoom = null;
+        if (currentLayout != null) currentLayout.trialSealed = false;
+        room.eventDone = true;
+        float x = room.centerX(), y = room.centerY() + 150f;
+        TreasureChest chest = new TreasureChest(x, y, room.centerX(), room.centerY(), System.currentTimeMillis());
+        chest.vault = true; // the rarest loot, gold and a chance at a relic
+        pickChestReward(chest);
+        synchronized (treasureChests) { treasureChests.add(chest); }
+        int gold = Color.rgb(244, 215, 122);
+        effects.banner(room.centerX(), room.centerY() - 160f, "TRIAL WON", gold);
+        effects.burst(room.centerX(), room.centerY(), gold, 30, 11f);
+        soundManager.play(SoundManager.Sfx.VAULT_UNLOCK);
+    }
+
+    /** The prisoner: spend a key on the shackles and they pay you with a relic (gold once you have them all). */
+    private void offerPrisoner(Props.Decor prisoner) {
+        boolean can = keys > 0;
+        confirmEvent(R.drawable.ic_key, "The Prisoner",
+                "\"Break these shackles and I'll share what I stole.\"\nIt takes one key."
+                        + (can ? "" : "\nYou have no key."),
+                "Use a key", can, () -> {
+                    prisoner.used = true;
+                    eventDone(prisoner.x, prisoner.y);
+                    keys--;
+                    updateKeysHUD();
+                    int gold = Color.rgb(244, 215, 122);
+                    effects.burst(prisoner.x, prisoner.y, Color.rgb(120, 122, 130), 20, 8f);
+                    soundManager.play(SoundManager.Sfx.VAULT_UNLOCK);
+                    if (relics.size() < Relic.values().length) {
+                        grantRelic(prisoner.x, prisoner.y);
+                    } else {
+                        spawnGoldCoins(prisoner.x, prisoner.y + 60f, withGreed(10 + 2 * floorManager.getCurrentFloor()));
+                        effects.banner(prisoner.x, prisoner.y - 120f, "FREED", gold);
+                    }
+                });
+    }
+
+    /** The forbidden tome: a level at once, but enemies hit harder until the floor is left. */
+    private void offerTome(Props.Decor lectern) {
+        int curse = Math.round((TOME_CURSE - 1f) * 100);
+        confirmEvent(R.drawable.ic_level, "Forbidden Tome",
+                "Read the tome to gain a level at once? Its curse follows you: enemies hit "
+                        + curse + "% harder until you leave this floor.",
+                "Read", true, () -> {
+                    lectern.used = true;
+                    eventDone(lectern.x, lectern.y);
+                    tomeCurse = true;
+                    gainXp(Math.max(1, xpForNextLevel() - playerXp));
+                    int arcane = Color.rgb(181, 140, 224);
+                    effects.burst(lectern.x, lectern.y, arcane, 26, 9f);
+                    effects.banner(player.x, player.y - player.radius - 110f, "CURSED KNOWLEDGE", arcane);
+                });
+    }
+
+    /** The healing spring: one drink restores two fifths of your health, then it runs dry. */
+    private void offerSpring(Props.Decor spring) {
+        int heal = Math.max(1, maxHealth * 2 / 5);
+        boolean can = playerHealth < maxHealth;
+        confirmEvent(R.drawable.ic_heart, "Healing Spring",
+                "Drink to restore " + heal + " HP? The spring runs dry after one drink."
+                        + (can ? "" : "\nYou are already whole."),
+                "Drink", can, () -> {
+                    spring.used = true;
+                    eventDone(spring.x, spring.y);
+                    int old = playerHealth;
+                    playerHealth = Math.min(maxHealth, playerHealth + heal);
+                    animateHealthBar(old, playerHealth);
+                    int water = Color.rgb(96, 170, 200);
+                    effects.burst(player.x, player.y, water, 24, 8f);
+                    effects.banner(player.x, player.y - player.radius - 50f, "+" + (playerHealth - old) + " HP", water);
+                    soundManager.play(SoundManager.Sfx.POTION);
+                });
+    }
+
+    /** Infernal Forge: when a vent erupts, whoever stands on it burns once; enemies take four times as much. */
+    private void tickVents(long now) {
+        FloorLayout layout = currentLayout;
+        if (layout == null || inShopRoom || layout.biome != Biome.FORGE) return;
+        int burn = 6 + floorManager.getCurrentFloor() / 2;
+        for (Props.Decor d : layout.decor) {
+            if (d.kind != Props.VENT || !Props.venting(d, now)) continue;
+            long cycle = Props.ventCycle(d, now);
+            if (d.burnedCycle == cycle) continue;
+            d.burnedCycle = cycle;
+            if (getDistance(player.x, player.y, d.x, d.y) < d.b + player.radius * 0.5f)
+                hitPlayer(burn, d.x, d.y, 0.6f, now);
+            if (isGuest()) continue; // the host burns the enemies
+            synchronized (enemies) {
+                for (Enemy e : enemies) {
+                    if (e.isDead || e.type == Enemy.Type.BAT
+                            || getDistance(e.x, e.y, d.x, d.y) >= d.b + e.radius * 0.5f) continue;
+                    e.takeDamage(burn * 4);
+                    if (showDamageNumbers)
+                        effects.number(e.x, e.y - e.radius, String.valueOf(burn * 4), Props.LAVA);
+                }
+            }
+        }
     }
 
     /** A room event's offer on the confirm card; the game stays paused until it's answered. */
@@ -5066,6 +5309,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             resolveStrike(b[0], b[1], 1f, 0f, 170f, 180f, (int) b[2], 0.5f, 40f, true, now);
         }
         checkRoomEvents();
+        tickTrial(now);
+        tickVents(now);
         tickTutorial();
     }
 

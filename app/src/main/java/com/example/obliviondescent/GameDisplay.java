@@ -69,10 +69,15 @@ public class GameDisplay extends View {
     private final Paint dangerPaint = new Paint();
     private volatile long heartbeatAt = 0;
 
-    // Dungeon darkness: everything dims, then lights cut soft holes back out of it
-    private static final int AMBIENT_DARK = Color.argb(150, 6, 5, 12);
+    // Dungeon darkness: everything dims, then lights cut soft holes back out of it; the Void is darker
+    private volatile int ambientDark = Color.argb(150, 6, 5, 12);
+    private volatile float playerLight = 430f;
     private final Paint lightHolePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final float[] lightSpot = new float[2];
+
+    // Event rooms: their own floor and map colours (by RoomEvent ordinal), and the Trial arena's gate
+    private final Paint[] eventFloorPaints = new Paint[RoomEvent.values().length];
+    private final Paint[] eventMapPaints = new Paint[RoomEvent.values().length];
 
     // Red edge arrows toward the floor's last enemies
     private final Paint enemyArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -129,6 +134,7 @@ public class GameDisplay extends View {
     private final Paint mapTitlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mapHintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF mapRect = new RectF(), iconRect = new RectF();
+    private final Path iconPath = new Path();
     private volatile boolean mapExpanded = false; // tap the minimap for the whole floor
 
     // Locked vault gate
@@ -329,6 +335,15 @@ public class GameDisplay extends View {
 
         treasureFloorPaint.setColor(Color.rgb(48, 40, 26));
         minimapTreasurePaint.setColor(Color.argb(200, 212, 175, 55));
+        for (RoomEvent e : RoomEvent.values()) {
+            Paint floor = new Paint();
+            floor.setColor(e.floorColor);
+            eventFloorPaints[e.ordinal()] = floor;
+            Paint map = new Paint();
+            map.setColor(e.mapColor);
+            map.setAlpha(150);
+            eventMapPaints[e.ordinal()] = map;
+        }
 
         lightHolePaint.setShader(new RadialGradient(0, 0, 1f,
                 new int[]{0xFF000000, 0xC0000000, 0x00000000}, new float[]{0f, 0.5f, 1f},
@@ -575,9 +590,9 @@ public class GameDisplay extends View {
         long now = System.currentTimeMillis();
         float offX = camera.getOffsetX(), offY = camera.getOffsetY();
         int layer = canvas.saveLayer(0, 0, getWidth(), getHeight(), null);
-        canvas.drawColor(AMBIENT_DARK);
+        canvas.drawColor(ambientDark);
 
-        lightHole(canvas, player.x - offX, player.y - offY, 430f, 1f);
+        lightHole(canvas, player.x - offX, player.y - offY, playerLight, 1f);
         if (coop != null && floorManager != null) {
             for (CoopSession.RemotePlayer r : coop.others.values()) {
                 if (r.dead || r.floor != floorManager.getCurrentFloor()) continue;
@@ -591,6 +606,17 @@ public class GameDisplay extends View {
                 lightHole(canvas, lightSpot[0] - offX, lightSpot[1] - offY, 360f * flick, 0.95f);
             } else if (d.kind == Props.CANDLES) {
                 lightHole(canvas, d.x - offX, d.y - offY, 160f, 0.7f);
+            } else if (d.kind == Props.BRAZIER) {
+                lightHole(canvas, d.x - offX, d.y - offY, 380f, 0.95f);
+            } else if (d.kind == Props.FOUNTAIN) {
+                lightHole(canvas, d.x - offX, d.y - offY, d.used ? 180f : 300f, 0.8f);
+            } else if ((d.kind == Props.SHRINE || d.kind == Props.LECTERN) && !d.used) {
+                lightHole(canvas, d.x - offX, d.y - offY, 220f, 0.75f);
+            } else if (d.kind == Props.RUNESTONE || d.kind == Props.RIFT) {
+                lightHole(canvas, d.x - offX, d.y - offY, 150f, 0.6f);
+            } else if (d.kind == Props.VENT) {
+                long t = Props.ventTime(d, now);
+                if (t >= Props.VENT_WARN) lightHole(canvas, d.x - offX, d.y - offY, t >= Props.VENT_BURST ? 300f : 200f, 0.85f);
             }
         }
         if (floorManager != null) {
@@ -609,6 +635,9 @@ public class GameDisplay extends View {
         float[] gate = floorLayout.vaultGate;
         if (gate != null && floorLayout.vaultLocked)
             lightHole(canvas, (gate[0] + gate[2]) / 2f - offX, (gate[1] + gate[3]) / 2f - offY, 220f, 0.8f);
+        gate = floorLayout.trialGate;
+        if (gate != null && floorLayout.trialSealed)
+            lightHole(canvas, (gate[0] + gate[2]) / 2f - offX, (gate[1] + gate[3]) / 2f - offY, 200f, 0.8f);
         canvas.restoreToCount(layer);
     }
 
@@ -692,7 +721,22 @@ public class GameDisplay extends View {
      * @param layout the current floor layout
      */
     public void setFloorLayout(FloorLayout layout) {
+        applyBiome(layout.biome);
         this.floorLayout = layout;
+    }
+
+    /** Paints the floors, walls, fire and darkness in the floor's biome. */
+    private void applyBiome(Biome biome) {
+        roomFloorPaint.setColor(biome.floor);
+        corridorFloorPaint.setColor(biome.corridor);
+        wallPaint.setColor(biome.wall);
+        wallFacePaint.setColor(biome.wallFace);
+        mortarPaint.setColor(biome.mortar);
+        minimapRoomPaint.setColor(biome.mapRoom);
+        minimapCorridorPaint.setColor(biome.mapCorridor);
+        ambientDark = Color.argb(biome.darkness, 6, 5, 12);
+        playerLight = biome == Biome.VOID ? 350f : 430f;
+        props.setBiome(biome);
     }
 
     private void drawFloorLayout(Canvas canvas) {
@@ -737,7 +781,39 @@ public class GameDisplay extends View {
             }
         }
         drawVaultGate(canvas, offX, offY);
+        drawTrialGate(canvas, offX, offY);
         drawDecor(canvas);
+    }
+
+    /** The Trial arena while its waves fight: an iron portcullis across the door, glowing crimson. */
+    private void drawTrialGate(Canvas canvas, float offX, float offY) {
+        float[] g = floorLayout.trialGate;
+        if (g == null || !floorLayout.trialSealed) return;
+        float x1 = g[0] - offX, y1 = g[1] - offY, x2 = g[2] - offX, y2 = g[3] - offY;
+        float cx = (x1 + x2) / 2f, cy = (y1 + y2) / 2f;
+        float pulse = 0.75f + 0.25f * (float) Math.sin(System.currentTimeMillis() / 250.0);
+        gatePaint.setStyle(Paint.Style.FILL);
+        gatePaint.setColor(Color.argb((int) (70 * pulse), 224, 72, 72));
+        canvas.drawCircle(cx, cy, 80f, gatePaint);
+        gatePaint.setStyle(Paint.Style.STROKE);
+        gatePaint.setStrokeCap(Paint.Cap.ROUND);
+        gatePaint.setStrokeWidth(22f);
+        gatePaint.setColor(Color.rgb(28, 24, 22));
+        canvas.drawLine(x1, y1, x2, y2, gatePaint);
+        // Bars across the beam, each tipped with a spike
+        boolean vertical = Math.abs(x2 - x1) < Math.abs(y2 - y1);
+        gatePaint.setStrokeWidth(6f);
+        for (int i = 1; i < 6; i++) {
+            float t = i / 6f, bx = x1 + (x2 - x1) * t, by = y1 + (y2 - y1) * t;
+            gatePaint.setColor(Color.rgb(60, 60, 66));
+            if (vertical) canvas.drawLine(bx - 16f, by, bx + 16f, by, gatePaint);
+            else canvas.drawLine(bx, by - 16f, bx, by + 16f, gatePaint);
+            gatePaint.setColor(Color.rgb(224, 72, 72));
+            canvas.drawPoint(bx, by, gatePaint);
+        }
+        gatePaint.setStrokeWidth(3f);
+        gatePaint.setColor(Color.rgb(139, 24, 24));
+        canvas.drawLine(x1, y1, x2, y2, gatePaint);
     }
 
     /** Locked vault: an iron beam with gold bar tops and a lock plate across the corridor mouth. */
@@ -842,6 +918,7 @@ public class GameDisplay extends View {
     }
 
     private Paint roomPaintFor(Room r) {
+        if (r.event != null) return eventFloorPaints[r.event.ordinal()];
         if (r == floorLayout.treasureRoom || r == floorLayout.vaultRoom) return treasureFloorPaint;
         switch (r.type) {
             case ENTRY:  return entryFloorPaint;
@@ -968,7 +1045,8 @@ public class GameDisplay extends View {
         float w = getWidth(), h = getHeight();
         float top = 64f * density, pad = 24f * density;
         if (floorManager != null)
-            canvas.drawText("FLOOR " + floorManager.getCurrentFloor(), w / 2f, 30f * density, mapTitlePaint);
+            canvas.drawText("FLOOR " + floorManager.getCurrentFloor() + "  ·  " + floorLayout.biome.title.toUpperCase(),
+                    w / 2f, 30f * density, mapTitlePaint);
         canvas.drawText("Tap anywhere to close", w / 2f, 48f * density, mapHintPaint);
         if (minX > maxX) return;
 
@@ -1028,7 +1106,9 @@ public class GameDisplay extends View {
     private void drawRoomIcon(Canvas canvas, Room r, float cx, float cy, float s, long now) {
         int ink = Color.rgb(20, 16, 12);
         mapIconPaint.setStyle(Paint.Style.FILL);
-        if (r == floorLayout.vaultRoom) {
+        if (r.event != null) {
+            drawEventIcon(canvas, r, cx, cy, s, ink);
+        } else if (r == floorLayout.vaultRoom) {
             float lift = floorLayout.vaultLocked ? 0f : s * 0.4f; // an open lock's shackle pops up
             mapIconPaint.setColor(Color.rgb(244, 215, 122));
             mapIconPaint.setStyle(Paint.Style.STROKE);
@@ -1061,6 +1141,62 @@ public class GameDisplay extends View {
             canvas.drawCircle(cx, cy, s * 0.8f * pulse, mapIconPaint);
             mapIconPaint.setStyle(Paint.Style.FILL);
             canvas.drawCircle(cx, cy, s * 0.25f, mapIconPaint);
+        }
+    }
+
+    /**
+     * Event-room glyphs in the event's colour, dimmed once it's over: a blood drop (shrine), a coin (gambler),
+     * a chest (cursed crypt), crossed blades (trial), a shackle (prison), a book (library), a basin (spring).
+     */
+    private void drawEventIcon(Canvas canvas, Room r, float cx, float cy, float s, int ink) {
+        mapIconPaint.setColor(r.event.mapColor);
+        mapIconPaint.setAlpha(r.eventDone ? 110 : 255);
+        switch (r.event) {
+            case SHRINE:
+                canvas.drawCircle(cx, cy + s * 0.3f, s * 0.55f, mapIconPaint);
+                iconPath.reset();
+                iconPath.moveTo(cx, cy - s);
+                iconPath.lineTo(cx + s * 0.5f, cy + s * 0.15f);
+                iconPath.lineTo(cx - s * 0.5f, cy + s * 0.15f);
+                iconPath.close();
+                canvas.drawPath(iconPath, mapIconPaint);
+                break;
+            case GAMBLER:
+                canvas.drawCircle(cx, cy, s * 0.8f, mapIconPaint);
+                mapIconPaint.setColor(ink);
+                canvas.drawRect(cx - s * 0.12f, cy - s * 0.45f, cx + s * 0.12f, cy + s * 0.45f, mapIconPaint);
+                break;
+            case CURSED:
+                canvas.drawRect(cx - s, cy - s * 0.35f, cx + s, cy + s * 0.7f, mapIconPaint);
+                canvas.drawRect(cx - s, cy - s * 0.8f, cx + s, cy - s * 0.25f, mapIconPaint);
+                mapIconPaint.setColor(ink);
+                canvas.drawRect(cx - s * 0.18f, cy - s * 0.4f, cx + s * 0.18f, cy + s * 0.1f, mapIconPaint);
+                break;
+            case TRIAL:
+                mapIconPaint.setStyle(Paint.Style.STROKE);
+                mapIconPaint.setStrokeWidth(s * 0.28f);
+                canvas.drawLine(cx - s * 0.8f, cy - s * 0.8f, cx + s * 0.8f, cy + s * 0.8f, mapIconPaint);
+                canvas.drawLine(cx + s * 0.8f, cy - s * 0.8f, cx - s * 0.8f, cy + s * 0.8f, mapIconPaint);
+                mapIconPaint.setStyle(Paint.Style.FILL);
+                break;
+            case PRISONER:
+                mapIconPaint.setStyle(Paint.Style.STROKE);
+                mapIconPaint.setStrokeWidth(s * 0.25f);
+                canvas.drawCircle(cx, cy - s * 0.15f, s * 0.55f, mapIconPaint);
+                mapIconPaint.setStyle(Paint.Style.FILL);
+                canvas.drawRect(cx - s * 0.2f, cy + s * 0.35f, cx + s * 0.2f, cy + s * 0.9f, mapIconPaint);
+                break;
+            case LIBRARY:
+                canvas.drawRect(cx - s * 0.9f, cy - s * 0.6f, cx - s * 0.06f, cy + s * 0.6f, mapIconPaint);
+                canvas.drawRect(cx + s * 0.06f, cy - s * 0.6f, cx + s * 0.9f, cy + s * 0.6f, mapIconPaint);
+                break;
+            case FOUNTAIN:
+                mapIconPaint.setStyle(Paint.Style.STROKE);
+                mapIconPaint.setStrokeWidth(s * 0.25f);
+                canvas.drawCircle(cx, cy, s * 0.8f, mapIconPaint);
+                mapIconPaint.setStyle(Paint.Style.FILL);
+                canvas.drawCircle(cx, cy, s * 0.3f, mapIconPaint);
+                break;
         }
     }
 
@@ -1140,6 +1276,7 @@ public class GameDisplay extends View {
     }
 
     private Paint minimapPaintFor(Room r) {
+        if (r.event != null) return eventMapPaints[r.event.ordinal()];
         if (r == floorLayout.treasureRoom || r == floorLayout.vaultRoom) return minimapTreasurePaint;
         switch (r.type) {
             case ENTRY: return minimapEntryPaint;
