@@ -1,23 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Small HUD plate (floor/gold/kills): dark stone in a worn iron edge -->
+<!-- Small HUD plate (floor / gold / kills): dark stone in a worn iron edge, a little see-through. Pixel frame made by art/tools/ui-frames.mjs: edit it there, not here. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <item>
-        <shape android:shape="rectangle">
-            <solid android:color="@color/border_gold_inner"/>
-            <corners android:radius="3dp"/>
-        </shape>
+    <item android:left="2dp" android:right="2dp" android:top="0dp" android:bottom="0dp">
+        <shape android:shape="rectangle"><solid android:color="@color/border_gold_inner"/></shape>
     </item>
-
-    <item android:left="1dp" android:top="1dp" android:right="1dp" android:bottom="1dp">
-        <shape android:shape="rectangle">
-            <gradient
-                android:type="linear"
-                android:angle="270"
-                android:startColor="#E6262320"
-                android:endColor="#E60C0B0A"/>
-            <corners android:radius="2dp"/>
-        </shape>
+    <item android:left="0dp" android:right="0dp" android:top="2dp" android:bottom="2dp">
+        <shape android:shape="rectangle"><solid android:color="@color/border_gold_inner"/></shape>
     </item>
-
+    <item android:left="4dp" android:right="4dp" android:top="2dp" android:bottom="2dp">
+        <shape android:shape="rectangle"><solid android:color="#E61A1816"/></shape>
+    </item>
+    <item android:left="2dp" android:right="2dp" android:top="4dp" android:bottom="4dp">
+        <shape android:shape="rectangle"><solid android:color="#E61A1816"/></shape>
+    </item>
+    <item android:left="4dp" android:right="4dp" android:top="2dp" android:height="2dp" android:gravity="top">
+        <shape android:shape="rectangle"><solid android:color="#E6262320"/></shape>
+    </item>
+    <item android:left="4dp" android:right="4dp" android:bottom="2dp" android:height="2dp" android:gravity="bottom">
+        <shape android:shape="rectangle"><solid android:color="#E60C0B0A"/></shape>
+    </item>
 </layer-list>

@@ -21,6 +21,7 @@
 //   until   library effects only: stop after this many seconds
 //   dye     the sprite uses the DYE greys, which the game tints with the body's colour
 //   tint    the colour tools/look.mjs previews the dye in
+//   icon    also write the first frame, trimmed, to this path under app/src/main/res (for Android views)
 
 const body = (name, fx, anims, opts = {}, extra = {}) =>
   anims.map((anim) => ({ name: `${name}.${anim}`, fx, opts: { anim, ...opts }, dye: true, ...extra }));
@@ -50,10 +51,14 @@ export const SPRITES = [
   // one-shot effects straight from the pixelfx library, played by GameEffects.play
   { name: "fx.hit", fx: "impacts/hit-spark", fps: 20 },
   { name: "fx.crit", fx: "impacts/crit-hit", fps: 20 },
-  { name: "fx.poof", fx: "spawn/poof", fps: 15 },
+  { name: "fx.poof", fx: "od/poof" },
+  // the exit portal in arcane violet and the shop portal in gold: pixelfx's standing portal
+  { name: "fx.portal.exit", fx: "arcane/portal", fps: 10 },
+  { name: "fx.portal.shop", fx: "arcane/portal", fps: 10, opts: { palette: ["#1e1206", "#4a2c08", "#86520c", "#c48412", "#f0b424", "#ffe066", "#fff6c4", "#ffffff"] } },
   { name: "fx.blast", fx: "explosions/small-explosion", fps: 12, until: 2.6, opts: { size: 0.8 } },
   { name: "fx.heal", fx: "holy/heal", fps: 15 },
-  { name: "item.coin", fx: "pickups/coin-spin", fps: 12 },
+  // the dropped coin, small and spinning; its first frame is also the coin icon beside every price
+  { name: "item.coin", fx: "od/coin", opts: { anim: "spin" }, icon: "drawable-nodpi/px_coin.png" },
 
   // fire props, one set per biome in its own flame colours (Biome.java's flame and flameCore): wall torches
   // for north walls and side walls (east walls mirror the side one), floor candles, and pixelfx's brazier
@@ -63,6 +68,9 @@ export const SPRITES = [
     { name: `prop.candle.${biome}`, fx: "od/candles", opts: { anim: "burn", palette } },
     { name: `prop.brazier.${biome}`, fx: "fire/brazier", fps: 8, opts: { palette, light: 0.7 } },
   ]),
+
+  // rugs at the sizes Props.java lays them (its half sizes in world units / 4)
+  ...[[130, 95], [110, 80], [170, 115], [150, 105]].map(([a, b]) => ({ name: `prop.rug.${a}x${b}`, fx: "od/rug", opts: { anim: "still", hw: Math.round(a / 4), hh: Math.round(b / 4) } })),
 
   // furniture drawn for the game (sizes in art pixels)
   ...[["barrel.l", "barrel", 7], ["barrel.s", "barrel", 6], ["crate.l", "crate", 8], ["crate.s", "crate", 6],

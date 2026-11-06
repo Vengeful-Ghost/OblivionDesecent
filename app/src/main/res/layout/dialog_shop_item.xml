@@ -51,9 +51,8 @@
                 android:gravity="center_vertical"
                 android:text="50"
                 android:textSize="@dimen/text_small"
-                android:drawableStart="@drawable/ic_coin"
-                android:drawablePadding="@dimen/space_xs"
-                android:drawableTint="@color/gold_bright"/>
+                android:drawableLeft="@drawable/ic_coin_px"
+                android:drawablePadding="@dimen/space_xs"/>
 
         </LinearLayout>
 

@@ -129,6 +129,7 @@ final class Wear {
 
         @Override
         protected void onBoundsChange(Rect b) {
+            pixels = null; // the pixel copy is redrawn at the new size
             gaps.rewind();
             cracks.rewind();
             edges.rewind();
@@ -270,17 +271,41 @@ final class Wear {
             return Math.max(lo, Math.min(hi, v));
         }
 
+        // Pixel art like the frames they wear on (art/tools/ui-frames.mjs): drawn small, one pixel per U dp,
+        // without smoothing, then scaled up pixel for pixel. Rebuilt when the view changes size.
+        private static final float U = 2f;
+        private android.graphics.Bitmap pixels;
+        private final Paint blit = new Paint();
+        private final android.graphics.RectF dst = new android.graphics.RectF();
+
         @Override
         public void draw(Canvas canvas) {
-            canvas.drawPath(moss, mossPaint);
-            canvas.drawPath(gaps, gapPaint);
-            canvas.drawPath(edges, edgePaint);
-            // Lit lip under each crack, then the crack itself
+            Rect b = getBounds();
+            if (b.isEmpty()) return;
+            float px = U * dp;
+            if (pixels == null) {
+                pixels = android.graphics.Bitmap.createBitmap(Math.max(1, (int) Math.ceil(b.width() / px)),
+                        Math.max(1, (int) Math.ceil(b.height() / px)), android.graphics.Bitmap.Config.ARGB_8888);
+                Canvas c = new Canvas(pixels);
+                c.setDrawFilter(new android.graphics.PaintFlagsDrawFilter(Paint.ANTI_ALIAS_FLAG, 0));
+                c.scale(1f / px, 1f / px);
+                c.translate(-b.left, -b.top);
+                c.drawPath(moss, mossPaint);
+                c.drawPath(gaps, gapPaint);
+                c.drawPath(edges, edgePaint);
+                // Lit lip one pixel under each crack, then the crack itself
+                c.save();
+                c.translate(px, px);
+                c.drawPath(cracks, edgePaint);
+                c.restore();
+                c.drawPath(cracks, crackPaint);
+            }
+            blit.setFilterBitmap(false);
+            dst.set(b.left, b.top, b.left + pixels.getWidth() * px, b.top + pixels.getHeight() * px);
             canvas.save();
-            canvas.translate(0.8f * dp, 0.8f * dp);
-            canvas.drawPath(cracks, edgePaint);
+            canvas.clipRect(b);
+            canvas.drawBitmap(pixels, null, dst, blit);
             canvas.restore();
-            canvas.drawPath(cracks, crackPaint);
         }
 
         // Views fade through their own alpha, so the wear needs none of its own

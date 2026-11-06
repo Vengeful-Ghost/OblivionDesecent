@@ -95,7 +95,7 @@ public class AimJoystickView extends View {
         labelPaint.setColor(Color.argb(220, 217, 201, 166));
         labelPaint.setTextSize(24f);
         labelPaint.setTextAlign(Paint.Align.CENTER);
-        labelPaint.setTypeface(getResources().getFont(R.font.cinzel));
+        labelPaint.setTypeface(getResources().getFont(R.font.pixel));
         labelPaint.setFakeBoldText(true);
         labelPaint.setShadowLayer(3f * dp, 0, dp, Color.BLACK);
 

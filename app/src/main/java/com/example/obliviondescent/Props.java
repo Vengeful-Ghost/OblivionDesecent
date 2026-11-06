@@ -222,6 +222,21 @@ public class Props {
 
     /** Rune circle with counter-turning arcs and a pulsing core; purple for the exit, gold for the shop. */
     void drawPortal(Canvas canvas, float x, float y, float r, long now, boolean gold, String label) {
+        // Pixel art: pixelfx's standing portal, violet to the next floor, gold to the shop, its foot on the spot
+        Sprites.Anim portal = Sprites.get(gold ? "fx.portal.shop" : "fx.portal.exit");
+        if (portal != null) {
+            canvas.save();
+            canvas.translate(x, y);
+            canvas.scale(0.9f + 0.1f * (float) Math.sin(now / 400.0), 0.9f + 0.1f * (float) Math.sin(now / 400.0));
+            canvas.drawCircle(0, 0, 130, gold ? goldGlowPaint : arcaneGlowPaint);
+            canvas.restore();
+            Sprites.draw(canvas, portal, portal.at(now), x, y + r * 0.5f, false, 0, 255);
+            if (label != null) {
+                labelPaint.setColor(gold ? GOLD_GLOW : ARCANE_GLOW);
+                canvas.drawText(label, x, y - r * 2f, labelPaint); // over the portal's top
+            }
+            return;
+        }
         int rune = gold ? GOLD_GLOW : ARCANE_GLOW;
         int arc = gold ? GOLD_BRIGHT : ARCANE_BRIGHT;
         float pulse = 0.85f + 0.15f * (float) Math.sin(now / 400.0);
@@ -1265,6 +1280,12 @@ public class Props {
                 return still(canvas, d, d.a >= 34 ? "prop.pillar.l" : "prop.pillar.m", false);
             case BONES:
                 return still(canvas, d, d.a < 180 ? "prop.bones.0" : "prop.bones.1", ((int) d.a & 1) == 1);
+            case RUG: {
+                // A woven rug baked at each size the rooms lay one (art/sprites.mjs prop.rug.*)
+                if ((a = Sprites.get("prop.rug." + (int) d.a + "x" + (int) d.b)) == null) return false;
+                Sprites.draw(canvas, a, 0, d.x, d.y, false, 0, 255);
+                return true;
+            }
             default:
                 return false;
         }
@@ -1344,6 +1365,7 @@ public class Props {
                 decorateEvent(r, list, rng);
                 continue;
             }
+            if (r.type == Room.Type.JUNCTION) continue; // a corridor's bare corner: nothing to stand in the way
             float l = r.x, t = r.y, rt = r.x + r.width, bt = r.y + r.height;
             boolean grand = r.type == Room.Type.LARGE || r.type == Room.Type.BOSS || r.type == Room.Type.EXIT;
             boolean roomy = r.width >= 800 && r.height >= 800; // hallways only get single props

@@ -362,8 +362,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         txtPotionCount = findViewById(R.id.txt_potion_count);
         txtLevel = findViewById(R.id.txt_level);
         gameDisplay.setEffects(effects);
-        effects.setFont(getResources().getFont(R.font.cinzel));
-        shopRoom.setFont(getResources().getFont(R.font.cinzel));
+        effects.setFont(getResources().getFont(R.font.pixel));
+        shopRoom.setFont(getResources().getFont(R.font.pixel));
 
         player = new Player();
         player.equipWeapon(weapons.get(0));
@@ -1227,6 +1227,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 for (int i = 0; i < r.assignedEnemyCount; i++) {
                     float spawnX = r.x + margin + (float)(Math.random() * Math.max(1f, r.width  - 2f * margin));
                     float spawnY = r.y + margin + (float)(Math.random() * Math.max(1f, r.height - 2f * margin));
+                    // A shaped room has walled-off blocks: try again until the spot is open floor, else its middle
+                    for (int tries = 0; tries < 12 && r.blockNear(spawnX, spawnY, margin) != null; tries++) {
+                        spawnX = r.x + margin + (float)(Math.random() * Math.max(1f, r.width  - 2f * margin));
+                        spawnY = r.y + margin + (float)(Math.random() * Math.max(1f, r.height - 2f * margin));
+                    }
+                    if (r.blockNear(spawnX, spawnY, margin) != null) { spawnX = r.centerX(); spawnY = r.centerY(); }
 
                     Enemy.Type type = pickEnemyType(floor);
                     Enemy enemy = new Enemy(spawnX, spawnY, type);
@@ -2090,14 +2096,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         popup.setText(slotName + " ARMOR BROKEN");
         popup.setTextColor(ContextCompat.getColor(this, R.color.crimson_glow));
         popup.setTextSize(14f);
-        popup.setTypeface(getResources().getFont(R.font.cinzel), android.graphics.Typeface.BOLD);
+        popup.setTypeface(getResources().getFont(R.font.pixel), android.graphics.Typeface.BOLD);
         popup.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_warning, 0, 0, 0);
         popup.setCompoundDrawableTintList(popup.getTextColors());
         popup.setCompoundDrawablePadding(16);
         popup.setPadding(28, 14, 28, 14);
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
         bg.setColor(Color.argb(210, 25, 0, 0));
-        bg.setCornerRadius(16f);
+        bg.setCornerRadius(0f); // square, like the pixel frames
         bg.setStroke(1, Color.rgb(200, 50, 50));
         popup.setBackground(bg);
         popup.setGravity(android.view.Gravity.CENTER);
@@ -3603,7 +3609,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     android.graphics.drawable.GradientDrawable bg =
                             new android.graphics.drawable.GradientDrawable();
                     bg.setColor(ContextCompat.getColor(this, R.color.bg_surface_alt));
-                    bg.setCornerRadius(6f);
+                    bg.setCornerRadius(0f); // square, like the pixel frames
                     t.setBackground(bg);
                 } else {
                     t.setBackground(null);
@@ -4348,15 +4354,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private static final int BETTER = 0xFF7AB85C, WORSE = 0xFFE04848;
 
     /**
-     * A weapon's stats against the one you hold, made to be read in a second: a line on top saying whether it
-     * is stronger or weaker overall (by damage per second), then six cells in a two-column grid, each edged and
-     * marked green where it beats yours and red where it loses, with the difference ("+6", "-120ms").
+     * A weapon's stats against the one you hold, made to be read in a second: six cells in a two-column grid,
+     * each edged and marked green where it beats yours and red where it loses, with the difference ("+6").
      * held is null for the weapon you are holding, which shows plain values.
      */
     private void addWeaponGrid(LinearLayout box, String name, int damage, float range, long cooldown,
                                float knockback, String style, Weapon held) {
         float perSecond = dps(damage, cooldown);
-        addCompareHeader(box, held, perSecond);
         int[] icons = {R.drawable.ic_crossed_swords, R.drawable.ic_dagger, R.drawable.ic_range,
                 R.drawable.ic_hourglass, R.drawable.ic_knockback, R.drawable.ic_target};
         String[] labels = {"Damage", "Per second", "Range", "Cooldown", "Knockback", "Style"};
@@ -4365,7 +4369,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         float[][] pairs = held == null ? null : new float[][]{
                 {damage, held.damage}, {perSecond, dps(held.damage, held.cooldown)}, {range, held.range},
                 {cooldown, held.cooldown}, {knockback, held.knockback}};
-        // the "ms" set small: Cinzel draws it as wide capitals, and the cell is only half a pane wide
+        // the "ms" set small: the pixel font draws it wide, and the cell is only half a pane wide
         android.text.SpannableString ms = new android.text.SpannableString(cooldown + "ms");
         ms.setSpan(new android.text.style.RelativeSizeSpan(0.75f), ms.length() - 2, ms.length(),
                 android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -4424,7 +4428,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{blend(Color.rgb(38, 34, 30), color, 0.14f), Color.rgb(20, 18, 16)});
-        g.setCornerRadius(3 * dp);
+        g.setCornerRadius(0f); // square, like the pixel frames
         g.setStroke(Math.round(1.5f * dp), (color & 0x00FFFFFF) | 0xC0000000);
         return g;
     }
@@ -4435,40 +4439,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 Math.round(Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t));
     }
 
-    /**
-     * The one-glance verdict over the grid: "Stronger than your Iron Sword" in green, "Weaker than..." in red,
-     * by damage per second; for the weapon you hold, just that it is the one equipped.
-     */
-    private void addCompareHeader(LinearLayout box, Weapon held, float perSecond) {
-        TextView header = new TextView(this);
-        header.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, getResources().getDimension(R.dimen.text_caption));
-        header.setTypeface(getResources().getFont(R.font.cinzel_bold));
-        header.setGravity(android.view.Gravity.CENTER);
-        header.setMaxLines(1);
-        header.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        header.setTextColor(ContextCompat.getColor(this, R.color.bone_dim));
-        if (held == null) {
-            header.setText("Your equipped weapon");
-        } else {
-            float theirs = dps(held.damage, held.cooldown), diff = perSecond - theirs;
-            String verdict = Math.abs(diff) < 0.05f ? "As strong as" : diff > 0 ? "Stronger than" : "Weaker than";
-            android.text.SpannableString s = new android.text.SpannableString(verdict + " your " + held.name);
-            if (Math.abs(diff) >= 0.05f)
-                s.setSpan(new android.text.style.ForegroundColorSpan(diff > 0 ? BETTER : WORSE), 0, verdict.length(),
-                        android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            header.setText(s);
-        }
-        int pad = Math.round(2 * getResources().getDisplayMetrics().density);
-        header.setPadding(pad, 0, pad, pad);
-        box.addView(header);
-    }
-
     /** A rarity badge in its rarity's colour: the word, its edge and a faint wash behind it. */
     private void tintRarityBadge(TextView badge, int color) {
         float dp = getResources().getDisplayMetrics().density;
         android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
         g.setColor(blend(Color.rgb(24, 21, 18), color, 0.22f));
-        g.setCornerRadius(3 * dp);
+        g.setCornerRadius(0f); // square, like the pixel frames
         g.setStroke(Math.round(1.5f * dp), color);
         badge.setBackground(g);
         badge.setTextColor(color);
@@ -4525,7 +4501,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         android.graphics.drawable.GradientDrawable border = new android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Color.rgb(42, 38, 33), Color.rgb(20, 18, 16)});
-        border.setCornerRadius(3 * dp);
+        border.setCornerRadius(0f); // square, like the pixel frames
         border.setStroke(Math.round(2 * dp), color);
         view.setBackground(border);
         Wear.wrap(view, false, false, name);
@@ -5734,7 +5710,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void checkGoldCollection() {
         synchronized (goldCoins) {
             for (GoldCoin coin : goldCoins) {
-                if (coin.collected) continue;
+                if (coin.collected || !coin.landed()) continue; // a coin still bouncing can't be caught
                 float dist = getDistance(player.x, player.y, coin.x, coin.y);
                 if (dist < player.radius + GoldCoin.COLLECT_RADIUS) {
                     statsManager.onCoinCollected();

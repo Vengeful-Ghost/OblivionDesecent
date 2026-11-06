@@ -101,7 +101,7 @@ public class FloorLayout {
 
             Room next = i > 0 && rng.nextFloat() < branchChance
                     ? tryGrowFromAny(layout, rng, sz[0], sz[1], t) : null;
-            if (next == null) next = tryGrow(layout, rng, current, preferred, sz[0], sz[1], t);
+            if (next == null) next = growWinding(layout, rng, current, preferred, sz[0], sz[1], t);
             if (next == null) next = tryGrowFromAny(layout, rng, sz[0], sz[1], t);
             if (next != null) {
                 current   = next;
@@ -113,7 +113,7 @@ public class FloorLayout {
         // The boss and the exit hang off the room farthest from the entry; side paths are detours
         List<Room> deepest = deepestFirst(layout);
         if (isBossFloor) {
-            float bs   = 16 * Room.TILE;
+            float bs   = 11 * Room.TILE; // room to dodge a boss, not a field to cross
             Room  boss = growAtEnd(layout, rng, deepest, bs, bs, Room.Type.BOSS);
             if (boss != null) {
                 layout.bossRoom = boss;
@@ -128,6 +128,9 @@ public class FloorLayout {
         // ── 5. Event rooms (solo) ─────────────────────────────────────────────
         if (withEvents) placeEventRooms(layout, rng, floor);
 
+        // ── 5b. Room shapes: not every hall is a plain box ────────────────────
+        shapeRooms(layout, rng);
+
         layout.buildNavigation();
 
         // Treasure room: an enemy-free room with one chest, likelier on boss floors
@@ -138,6 +141,7 @@ public class FloorLayout {
         // ── 6. Enemy distribution ─────────────────────────────────────────────
         distributeEnemies(layout, killCount, rng);
         layout.decor = Props.decorate(layout);
+        settleDecor(layout);
 
         Log.d(TAG, "Generated floor " + floor + ": " + layout.rooms.size()
                 + " rooms, " + layout.corridors.size() + " corridors, "
@@ -207,7 +211,7 @@ public class FloorLayout {
         List<Room> sources = new ArrayList<>();
         for (Room r : layout.rooms) {
             if (r.type != Room.Type.ENTRY && r.type != Room.Type.EXIT
-                    && r.type != Room.Type.BOSS && r.type != Room.Type.EVENT) sources.add(r);
+                    && r.type != Room.Type.BOSS && r.type != Room.Type.EVENT && r.type != Room.Type.JUNCTION) sources.add(r);
         }
         Collections.shuffle(sources, rng);
         for (Room src : sources) {
@@ -308,6 +312,50 @@ public class FloorLayout {
         return null;
     }
 
+    /** A landing where a corridor turns: just big enough for the two doors and a body to round the corner. */
+    private static final float BEND = 300f;
+
+    /**
+     * Grows the next room, sometimes down a passage that turns: one landing makes an L, two make a staircase
+     * that runs off on the diagonal (out, across, out again). Each landing is a small JUNCTION room, so walls,
+     * the map, enemies' paths and co-op seeding all work as for any room. Falls back to a straight corridor,
+     * undoing any landings, when the winding way doesn't fit.
+     */
+    private static Room growWinding(FloorLayout layout, Random rng, Room src, int preferred,
+                                    float w, float h, Room.Type type) {
+        float roll = rng.nextFloat();
+        int bends = roll < 0.22f ? 1 : roll < 0.36f ? 2 : 0;
+        if (bends > 0) {
+            int rooms = layout.rooms.size(), corridors = layout.corridors.size();
+            boolean[] sides = src.sideUsed.clone();
+            int out = preferred >= 0 ? preferred : rng.nextInt(4);
+            int across = rng.nextBoolean() ? (out + 1) % 4 : (out + 3) % 4;
+            Room at = src;
+            for (int i = 0; i < bends && at != null; i++)
+                at = growExact(layout, at, i == 0 ? out : across, BEND, BEND, Room.Type.JUNCTION);
+            Room room = at == null ? null : growExact(layout, at, bends == 1 ? across : out, w, h, type);
+            if (room != null) return room;
+            // undo the landings that led nowhere
+            while (layout.rooms.size() > rooms) layout.rooms.remove(layout.rooms.size() - 1);
+            while (layout.corridors.size() > corridors) layout.corridors.remove(layout.corridors.size() - 1);
+            System.arraycopy(sides, 0, src.sideUsed, 0, 4);
+        }
+        return tryGrow(layout, rng, src, preferred, w, h, type);
+    }
+
+    /** Grows a room off src in exactly direction dir, or null when that side is taken or it would overlap. */
+    private static Room growExact(FloorLayout layout, Room src, int dir, float w, float h, Room.Type type) {
+        if (src.sideUsed[dir]) return null;
+        Room candidate = new Room(layout.rooms.size(), 0, 0, w, h, type);
+        Corridor corr = computeConnection(src, dir, candidate);
+        if (corr == null || overlaps(layout, candidate, corr, src)) return null;
+        src.sideUsed[dir] = true;
+        candidate.sideUsed[opp(dir)] = true;
+        layout.rooms.add(candidate);
+        layout.corridors.add(corr);
+        return candidate;
+    }
+
     /**
      * Same as {@link #tryGrow} but picks the source room randomly from all
      * already-placed rooms instead of using a specific one. Used as a fallback
@@ -343,6 +391,88 @@ public class FloorLayout {
             }
         }
         return null;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ROOM SHAPES
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Gives ordinary rooms a shape of their own by walling off parts of their rectangle: a corner or two
+     * clipped, a whole wing missing (an L), all four corners cut (a cross), or square columns in a hall.
+     * Corner blocks stop short of a cross through the middle 1.25 tiles wide, so every door and the room's
+     * centre stay open; columns stand a tile in from the walls. A third of the rooms stay plain boxes.
+     * Seeded like the rest of the floor, so co-op phones build the same shapes.
+     */
+    private static void shapeRooms(FloorLayout layout, Random rng) {
+        final float T = Room.TILE;
+        for (Room r : layout.rooms) {
+            if (r.type != Room.Type.SMALL && r.type != Room.Type.MEDIUM && r.type != Room.Type.LARGE) continue;
+            int w = Math.round(r.width / T), h = Math.round(r.height / T);
+            int cw = (int) Math.floor((w - 1.25f) / 2f), ch = (int) Math.floor((h - 1.25f) / 2f);
+            if (cw < 1 || ch < 1) continue;
+            float roll = rng.nextFloat();
+            if (roll < 0.33f) continue;
+            if (roll < 0.55f) {
+                // one corner clipped, or two opposite ones
+                int first = rng.nextInt(4), n = 1 + rng.nextInt(2);
+                for (int i = 0; i < n; i++) corner(r, (first + i * 2) % 4, 1 + rng.nextInt(cw), 1 + rng.nextInt(ch));
+            } else if (roll < 0.75f) {
+                corner(r, rng.nextInt(4), cw, ch);                       // an L: a whole wing gone
+            } else if (roll < 0.88f || w < 7 || h < 7) {
+                for (int c = 0; c < 4; c++) corner(r, c, cw, ch);       // a cross
+            } else {
+                // a pillared hall: square columns a tile in from each wall, a second pair in wide halls
+                int[] cols = w >= 10 ? new int[]{1, 3, w - 4, w - 2} : new int[]{1, w - 2};
+                for (int i : cols)
+                    for (int j : new int[]{1, h - 2})
+                        r.blocks.add(new RectF(r.x + i * T, r.y + j * T, r.x + (i + 1) * T, r.y + (j + 1) * T));
+            }
+        }
+    }
+
+    /** Walls off a bw x bh tile corner of the room: 0 north-west, 1 north-east, 2 south-east, 3 south-west. */
+    private static void corner(Room r, int c, int bw, int bh) {
+        float w = bw * Room.TILE, h = bh * Room.TILE;
+        float x = c == 1 || c == 2 ? r.x + r.width - w : r.x, y = c >= 2 ? r.y + r.height - h : r.y;
+        r.blocks.add(new RectF(x, y, x + w, y + h));
+    }
+
+    /**
+     * Props that landed in or against a room's walled-off blocks: a torch on a north wall that is now
+     * solid moves down onto the block's own front face; anything else there is taken away.
+     */
+    private static void settleDecor(FloorLayout layout) {
+        List<Props.Decor> list = layout.decor;
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Props.Decor d = list.get(i);
+            Room r = null;
+            for (Room room : layout.rooms) if (room.inRect(d.x, d.y)) { r = room; break; }
+            if (r == null || r.blocks.isEmpty()) continue;
+            // things lying flat on the floor reach out by their size, so they mustn't spill onto a block
+            boolean flat = d.kind == Props.PUDDLE || d.kind == Props.BLOOD_POOL || d.kind == Props.MOSS_PATCH
+                    || d.kind == Props.HAY || d.kind == Props.RIFT || d.kind == Props.VENT || d.kind == Props.RUG;
+            // a side-wall torch climbs about a body's height above where it's placed, so it needs that much clear
+            boolean sideTorch = d.kind == Props.TORCH && d.b != Room.NORTH;
+            RectF b = r.blockNear(d.x, d.y, sideTorch ? 90f : d.kind == Props.TORCH ? 10f : flat ? 45f + d.a : 45f);
+            if (b == null) continue;
+            if (d.kind == Props.TORCH && d.b == Room.NORTH && b.bottom < r.y + r.height - Room.TILE
+                    && r.blockNear(d.x, b.bottom + 34f, 0f) == null) {
+                list.set(i, new Props.Decor(Props.TORCH, d.x, b.bottom + 34f, d.a, d.b));
+            } else {
+                list.remove(i);
+            }
+        }
+    }
+
+    /** True when the straight line between two points in a room runs through one of its blocks. */
+    private static boolean blocked(Room r, float x0, float y0, float x1, float y1) {
+        if (r.blocks.isEmpty()) return false;
+        for (int i = 1; i < 16; i++) {
+            float t = i / 16f;
+            if (r.blockNear(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 40f) != null) return true;
+        }
+        return false;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -562,6 +692,13 @@ public class FloorLayout {
         if (neighbours == null) return null;
         int from = nodeAt(fromX, fromY);
         int to   = nodeAt(toX, toY);
+        if (from >= 0 && from == to && from < rooms.size()) {
+            // Same room, but a block in the way (an L's corner, a column): go round by the open middle
+            Room r = rooms.get(from);
+            float cx = r.centerX(), cy = r.centerY();
+            if (blocked(r, fromX, fromY, toX, toY) && Math.hypot(fromX - cx, fromY - cy) > 60f) return new float[]{cx, cy};
+            return null;
+        }
         if (from < 0 || to < 0 || from == to) return null;
         int next = firstStep(from, to);
         if (next < 0) return null;
@@ -671,19 +808,21 @@ public class FloorLayout {
 
     private static float[] sizeForType(Room.Type type, Random rng) {
         final float T = Room.TILE;
+        // Sized so a room has space to fight in but crossing it never feels like a journey: about a phone
+        // screen for a small room, under two for the largest (a screen shows roughly 12 x 5 tiles)
         switch (type) {
             case HALLWAY: {
                 float narrow = 2 * T;
-                float length = (6 + rng.nextInt(5)) * T; // 6-10 tiles long
+                float length = (4 + rng.nextInt(3)) * T; // 4-6 tiles long
                 return rng.nextBoolean() ? new float[]{narrow, length}
                                          : new float[]{length, narrow};
             }
-            case SMALL:  return new float[]{(4 + rng.nextInt(3)) * T,
+            case SMALL:  return new float[]{(3 + rng.nextInt(2)) * T,
+                                            (3 + rng.nextInt(2)) * T}; // 3-4 tiles
+            case MEDIUM: return new float[]{(4 + rng.nextInt(3)) * T,
                                             (4 + rng.nextInt(3)) * T}; // 4-6 tiles
-            case MEDIUM: return new float[]{(5 + rng.nextInt(4)) * T,
-                                            (5 + rng.nextInt(4)) * T}; // 5-8 tiles
-            case LARGE:  return new float[]{(8 + rng.nextInt(5)) * T,
-                                            (7 + rng.nextInt(5)) * T}; // 8-12 tiles
+            case LARGE:  return new float[]{(6 + rng.nextInt(3)) * T,
+                                            (5 + rng.nextInt(3)) * T}; // 6-8 x 5-7 tiles
             default:     return new float[]{4 * T, 4 * T};
         }
     }

@@ -1,44 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Danger button: rust-and-blood iron frame on dark stone (respawn, delete, etc.) -->
-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="#66E04848">
-
+<!-- Danger button (sell, delete, respawn): a blood-red iron frame on dark stone. Pixel frame made by art/tools/ui-frames.mjs: edit it there, not here. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#66E04848">
     <item android:id="@android:id/mask">
-        <shape android:shape="rectangle">
-            <solid android:color="@color/crimson_bright"/>
-            <corners android:radius="3dp"/>
-        </shape>
+        <shape android:shape="rectangle"><solid android:color="#FFFFFFFF"/></shape>
     </item>
-
     <item>
         <layer-list>
-            <item>
-                <shape android:shape="rectangle">
-                    <solid android:color="@color/stone_crack"/>
-                    <corners android:radius="3dp"/>
-                </shape>
+            <item android:left="2dp" android:right="2dp" android:top="0dp" android:bottom="0dp">
+                <shape android:shape="rectangle"><solid android:color="@color/stone_crack"/></shape>
             </item>
-            <item
-                android:left="1dp" android:top="1dp"
-                android:right="1dp" android:bottom="1dp">
-                <shape android:shape="rectangle">
-                    <solid android:color="@color/crimson_base"/>
-                    <corners android:radius="2dp"/>
-                </shape>
+            <item android:left="0dp" android:right="0dp" android:top="2dp" android:bottom="2dp">
+                <shape android:shape="rectangle"><solid android:color="@color/stone_crack"/></shape>
             </item>
-            <item
-                android:left="2dp" android:top="2dp"
-                android:right="2dp" android:bottom="2dp">
-                <shape android:shape="rectangle">
-                    <gradient
-                        android:type="linear"
-                        android:angle="270"
-                        android:startColor="#2E1410"
-                        android:endColor="#140807"/>
-                    <corners android:radius="2dp"/>
-                </shape>
+            <item android:left="4dp" android:right="4dp" android:top="2dp" android:bottom="2dp">
+                <shape android:shape="rectangle"><solid android:color="@color/crimson_base"/></shape>
+            </item>
+            <item android:left="2dp" android:right="2dp" android:top="4dp" android:bottom="4dp">
+                <shape android:shape="rectangle"><solid android:color="@color/crimson_base"/></shape>
+            </item>
+            <item android:left="6dp" android:right="6dp" android:top="4dp" android:bottom="4dp">
+                <shape android:shape="rectangle"><solid android:color="#28100C"/></shape>
+            </item>
+            <item android:left="4dp" android:right="4dp" android:top="6dp" android:bottom="6dp">
+                <shape android:shape="rectangle"><solid android:color="#28100C"/></shape>
+            </item>
+            <item android:left="6dp" android:right="6dp" android:top="4dp" android:height="2dp" android:gravity="top">
+                <shape android:shape="rectangle"><solid android:color="#3A1813"/></shape>
+            </item>
+            <item android:left="6dp" android:right="6dp" android:bottom="4dp" android:height="2dp" android:gravity="bottom">
+                <shape android:shape="rectangle"><solid android:color="#140807"/></shape>
             </item>
         </layer-list>
     </item>
-
 </ripple>

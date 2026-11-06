@@ -150,6 +150,12 @@ public class GameDisplay extends View {
     // Flagstones and bricks repeated across the world, tinted to each room's and biome's colours
     private final Paint floorTexPaint = Sprites.crisp(), brickTexPaint = Sprites.crisp();
     private final android.graphics.Matrix texMatrix = new android.graphics.Matrix();
+    // A shaped room's walled-off blocks: the same dark as the rock past every wall, on the map too
+    private final Paint rockPaint = new Paint(), mapRockPaint = new Paint();
+    {
+        rockPaint.setColor(Color.BLACK);
+        mapRockPaint.setColor(Color.argb(235, 10, 8, 7));
+    }
     private final java.util.Map<Integer, android.graphics.ColorFilter> tints = new java.util.HashMap<>();
 
     public GameDisplay(Context context, AttributeSet attrs) {
@@ -165,7 +171,7 @@ public class GameDisplay extends View {
         floorPaint.setColor(Color.DKGRAY);
         floorPaint.setStrokeWidth(2f);
         floorPaint.setAlpha(50); // Faint grid lines
-        props.setFont(getResources().getFont(R.font.cinzel));
+        props.setFont(getResources().getFont(R.font.pixel));
 
         arrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         arrowPaint.setColor(Color.rgb(160, 100, 255));
@@ -289,7 +295,7 @@ public class GameDisplay extends View {
         minimapNorthPaint.setColor(Color.rgb(212, 175, 55));
         minimapNorthPaint.setTextSize(9f * density);
         minimapNorthPaint.setTextAlign(Paint.Align.CENTER);
-        minimapNorthPaint.setTypeface(getResources().getFont(R.font.cinzel_bold));
+        minimapNorthPaint.setTypeface(getResources().getFont(R.font.pixel_bold));
         minimapNorthPaint.setShadowLayer(2f * density, 0f, 0f, Color.BLACK);
 
         mapStrokePaint.setStyle(Paint.Style.STROKE);
@@ -311,18 +317,18 @@ public class GameDisplay extends View {
         mapLetterPaint.setColor(Color.rgb(184, 172, 145));
         mapLetterPaint.setTextSize(7f * density);
         mapLetterPaint.setTextAlign(Paint.Align.CENTER);
-        mapLetterPaint.setTypeface(getResources().getFont(R.font.cinzel_bold));
+        mapLetterPaint.setTypeface(getResources().getFont(R.font.pixel_bold));
         mapLetterPaint.setShadowLayer(2f * density, 0f, 0f, Color.BLACK);
         mapTitlePaint.setColor(Color.rgb(212, 175, 55));
         mapTitlePaint.setTextSize(20f * density);
         mapTitlePaint.setTextAlign(Paint.Align.CENTER);
         mapTitlePaint.setLetterSpacing(0.12f);
-        mapTitlePaint.setTypeface(getResources().getFont(R.font.cinzel_bold));
+        mapTitlePaint.setTypeface(getResources().getFont(R.font.pixel_bold));
         mapTitlePaint.setShadowLayer(8f * density, 0f, 0f, Color.rgb(92, 69, 23));
         mapHintPaint.setColor(Color.rgb(122, 112, 96));
         mapHintPaint.setTextSize(11f * density);
         mapHintPaint.setTextAlign(Paint.Align.CENTER);
-        mapHintPaint.setTypeface(getResources().getFont(R.font.cinzel));
+        mapHintPaint.setTypeface(getResources().getFont(R.font.pixel));
 
         // Player arrow pointing along +x; rotated to the facing angle when drawn
         minimapArrow.moveTo(6f * density, 0f);
@@ -341,10 +347,13 @@ public class GameDisplay extends View {
         coopStatusPaint.setTextSize(22f);
         coopStatusPaint.setTextAlign(Paint.Align.RIGHT);
         coopStatusPaint.setShadowLayer(3f, 0f, 1f, Color.BLACK);
+        // Teammates' names and the link status in the pixel font too
+        allyNamePaint.setTypeface(getResources().getFont(R.font.pixel));
+        coopStatusPaint.setTypeface(getResources().getFont(R.font.pixel));
         spectatePaint.setColor(Color.rgb(212, 175, 55));
         spectatePaint.setTextSize(16f * density);
         spectatePaint.setTextAlign(Paint.Align.CENTER);
-        spectatePaint.setTypeface(getResources().getFont(R.font.cinzel));
+        spectatePaint.setTypeface(getResources().getFont(R.font.pixel));
         spectatePaint.setShadowLayer(4f, 0f, 1f, Color.BLACK);
 
         treasureFloorPaint.setColor(Color.rgb(48, 40, 26));
@@ -809,9 +818,36 @@ public class GameDisplay extends View {
                 wall(canvas, right, top, right, bottom);
             }
         }
+        drawRoomBlocks(canvas, offX, offY);
         drawVaultGate(canvas, offX, offY);
         drawTrialGate(canvas, offX, offY);
         drawDecor(canvas);
+    }
+
+    /**
+     * Shaped rooms' walled-off blocks (cut corners, a missing wing, columns): solid rock like the dark past the
+     * walls, walled where they face the room, with a brick face on any side that faces south into it, as the
+     * room's own north wall has.
+     */
+    private void drawRoomBlocks(Canvas canvas, float offX, float offY) {
+        for (Room r : floorLayout.rooms) {
+            for (int i = 0; i < r.blocks.size(); i++) {
+                RectF b = r.blocks.get(i);
+                float l = b.left - offX, t = b.top - offY, rt = b.right - offX, bt = b.bottom - offY;
+                if (rt < -100 || bt < -WALL_FACE - 100 || l > getWidth() + 100 || t > getHeight() + 100) continue;
+                // where the block meets the room's outer wall, reach over it so no stray wall shows in the rock
+                boolean west = b.left <= r.x + 1, east = b.right >= r.x + r.width - 1;
+                boolean north = b.top <= r.y + 1, south = b.bottom >= r.y + r.height - 1;
+                canvas.drawRect(l - (west ? 16 : 0), t - (north ? 16 : 0), rt + (east ? 16 : 0), bt + (south ? 16 : 0), rockPaint);
+                if (!south) {
+                    wallFace(canvas, l, rt, bt);
+                    wall(canvas, l, bt, rt, bt);
+                }
+                if (!north) wall(canvas, l, t, rt, t);
+                if (!west) wall(canvas, l, t, l, bt);
+                if (!east) wall(canvas, rt, t, rt, bt);
+            }
+        }
     }
 
     /** The Trial arena while its waves fight: an iron portcullis across the door, glowing crimson. */
@@ -1148,6 +1184,9 @@ public class GameDisplay extends View {
             } else {
                 canvas.drawRoundRect(mapRect, corner, corner, mapUnknownPaint);
             }
+            // a shaped room shows its shape: its walled-off blocks are cut back out of it
+            for (RectF b : r.blocks)
+                canvas.drawRect(ox + b.left * scale, oy + b.top * scale, ox + b.right * scale, oy + b.bottom * scale, mapRockPaint);
             drawRoomIcon(canvas, r, mapRect.centerX(), mapRect.centerY(), icon, now);
         }
     }

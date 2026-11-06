@@ -10,7 +10,8 @@ import java.util.Random;
  */
 public class Room {
 
-    public enum Type { ENTRY, EXIT, SMALL, MEDIUM, LARGE, HALLWAY, BOSS, EVENT }
+    // JUNCTION: a small landing where a corridor turns a corner (FloorLayout.growWinding)
+    public enum Type { ENTRY, EXIT, SMALL, MEDIUM, LARGE, HALLWAY, BOSS, EVENT, JUNCTION }
 
     // Direction indices shared across the layout system
     public static final int NORTH = 0, EAST = 1, SOUTH = 2, WEST = 3;
@@ -39,6 +40,13 @@ public class Room {
     // ── Connection state — one corridor per cardinal side ─────────────────────
     public final boolean[] sideUsed = new boolean[4]; // [N, E, S, W]
 
+    // ── Shape ─────────────────────────────────────────────────────────────────
+    /**
+     * Solid wall inside the room's rectangle, in world space: cut corners, a missing wing (an L), all four
+     * corners (a cross), or square columns. FloorLayout.shapeRooms keeps every door and the middle open.
+     */
+    public final java.util.List<RectF> blocks = new java.util.ArrayList<>();
+
     // ─────────────────────────────────────────────────────────────────────────
     /**
      * Creates a new room with the given geometry and type.
@@ -65,6 +73,7 @@ public class Room {
             case EXIT:    return 0; // always safe
             case BOSS:    return 0; // boss handled separately
             case EVENT:   return 0; // room events are never fought over (the Trial calls its own waves)
+            case JUNCTION: return 0; // a corridor's turn, not a room to fight in
             case HALLWAY: return 2;
             case SMALL:   return 3;
             case MEDIUM:  return 5;
@@ -82,8 +91,23 @@ public class Room {
 
     public RectF getBounds() { return new RectF(x, y, x + width, y + height); }
 
+    /** True on the room's walkable floor: inside its rectangle and outside its blocks. */
     public boolean contains(float px, float py) {
+        if (!inRect(px, py)) return false;
+        for (int i = 0; i < blocks.size(); i++) if (blocks.get(i).contains(px, py)) return false;
+        return true;
+    }
+
+    /** True anywhere in the rectangle the room was laid out in, blocks included. */
+    public boolean inRect(float px, float py) {
         return px >= x && px <= x + width && py >= y && py <= y + height;
+    }
+
+    /** The block within pad of (px, py), or null. */
+    public RectF blockNear(float px, float py, float pad) {
+        for (RectF b : blocks)
+            if (px > b.left - pad && px < b.right + pad && py > b.top - pad && py < b.bottom + pad) return b;
+        return null;
     }
 
     /**

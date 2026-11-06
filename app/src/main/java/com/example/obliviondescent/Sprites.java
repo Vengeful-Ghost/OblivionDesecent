@@ -94,10 +94,18 @@ final class Sprites {
 
     private Sprites() {}
 
+    /** The game's pixel font (Pixelify Sans), for paints that draw text in the world; null before load(). */
+    static android.graphics.Typeface font;
+
     /** Loads every sheet and animation once; later calls return at once. A missing pack leaves the old shapes. */
     static synchronized void load(Context context) {
         if (loaded) return;
         loaded = true;
+        try {
+            font = context.getResources().getFont(R.font.pixel);
+        } catch (Exception e) {
+            Log.w("Sprites", "Pixel font missing", e);
+        }
         try {
             JSONObject json = new JSONObject(readAsset(context, "px/sprites.json"));
             JSONArray files = json.getJSONArray("pages");

@@ -146,8 +146,9 @@
             android:layout_marginTop="@dimen/space_md"
             android:text="Sell"
             android:textSize="@dimen/text_small"
-            app:icon="@drawable/ic_coin"
-            app:iconTint="@color/gold_bright"
+            app:icon="@drawable/ic_coin_px"
+            app:iconTint="@android:color/white"
+            app:iconTintMode="multiply"
             tools:ignore="HardcodedText"/>
 
         <!-- Co-op only: hand this item to a teammate -->

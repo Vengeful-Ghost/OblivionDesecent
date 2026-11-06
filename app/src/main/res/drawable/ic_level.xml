@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- "upgrade" by delapouite, game-icons.net (CC BY 3.0) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="20dp"
-    android:height="20dp"
-    android:viewportWidth="512"
-    android:viewportHeight="512"
-    android:tint="@color/arcane_glow">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M256 29.816l-231 154v106.368l231 -154 231 154V183.816zm0 128.043L105 259.783v90.283l151 -101.925 151 101.925v-90.283zm0 112l-87 58.725v67.6l87 -58 87 58v-67.6zm0 89.957l-87 58v64.368l87 -58 87 58v-64.368z"/>
-</vector>
+<!-- Pixel icon made from vec_ic_level.xml by art/tools/pixel-icons.mjs: edit the vector, then regenerate. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:width="20dp" android:height="20dp">
+        <bitmap
+            android:src="@drawable/px_ic_level"
+            android:filter="false"
+            android:antialias="false"
+            android:dither="false"
+            android:tint="@color/arcane_glow"/>
+    </item>
+</layer-list>

@@ -28,11 +28,17 @@ import { encodePNG } from "./lib/png.mjs";
 import { bake, splitDye, trim, pack } from "./lib/bake.mjs";
 import { SPRITES } from "../sprites.mjs";
 
-const OUT = join(ROOT, "..", "app", "src", "main", "assets", "px"), PAGE = 1024;
+const OUT = join(ROOT, "..", "app", "src", "main", "assets", "px"), RES = join(ROOT, "..", "app", "src", "main", "res"), PAGE = 1024;
 
 const anims = {}, rects = [];
 for (const entry of SPRITES) {
   const r = await bake(entry);
+  if (entry.icon) {
+    // the first frame on its own, for an Android view (a res/drawable <bitmap> scales it up without smoothing)
+    const t = trim(r.frames[0], r.w, r.h);
+    mkdirSync(join(RES, entry.icon, ".."), { recursive: true });
+    writeFileSync(join(RES, entry.icon), encodePNG(t.w, t.h, t.data));
+  }
   const layers = entry.dye ? r.frames.map(splitDye) : r.frames.map((f) => [f]);
   const anim = (anims[entry.name] = { fps: r.fps, loop: r.loop ? 1 : 0, f: [], ...(entry.dye ? { d: [] } : {}) });
   for (const frame of layers)

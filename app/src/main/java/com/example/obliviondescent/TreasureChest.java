@@ -57,6 +57,7 @@ public class TreasureChest {
      * @param launchAt time in milliseconds when it leaves the boss
      */
     public TreasureChest(float spawnX, float spawnY, float fromX, float fromY, long launchAt) {
+        if (Sprites.font != null) labelPaint.setTypeface(Sprites.font); // the reward's name in the pixel font
         this.x = spawnX;
         this.y = spawnY;
         this.fromX = fromX;

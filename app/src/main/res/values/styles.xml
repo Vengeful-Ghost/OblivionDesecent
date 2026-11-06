@@ -5,7 +5,7 @@
 
     <!-- Body: Crimson Pro on bone -->
     <style name="OD.Text" parent="">
-        <item name="android:fontFamily">@font/crimson_pro</item>
+        <item name="android:fontFamily">@font/pixel</item>
         <item name="android:textSize">@dimen/text_body</item>
         <item name="android:textColor">@color/bone_white</item>
     </style>
@@ -16,9 +16,9 @@
         <item name="android:textColor">@color/bone_dim</item>
     </style>
 
-    <!-- Screen / dialog title: Cinzel with gold glow -->
+    <!-- Screen / dialog title: the pixel font with gold glow -->
     <style name="OD.Text.Title" parent="OD.Text">
-        <item name="android:fontFamily">@font/cinzel</item>
+        <item name="android:fontFamily">@font/pixel</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textSize">@dimen/text_title</item>
         <item name="android:textColor">@color/gold_bright</item>
@@ -29,7 +29,7 @@
 
     <!-- Section heading -->
     <style name="OD.Text.Heading" parent="OD.Text">
-        <item name="android:fontFamily">@font/cinzel</item>
+        <item name="android:fontFamily">@font/pixel</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textSize">@dimen/text_heading</item>
         <item name="android:textColor">@color/gold_bright</item>
@@ -38,7 +38,7 @@
 
     <!-- Small caps label: badges, field labels, captions over values -->
     <style name="OD.Text.Label" parent="OD.Text">
-        <item name="android:fontFamily">@font/cinzel</item>
+        <item name="android:fontFamily">@font/pixel</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textSize">@dimen/text_caption</item>
         <item name="android:textColor">@color/bone_dim</item>
@@ -57,7 +57,7 @@
 
     <!-- Numbers and stat values -->
     <style name="OD.Text.Value" parent="OD.Text">
-        <item name="android:fontFamily">@font/cinzel</item>
+        <item name="android:fontFamily">@font/pixel</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textColor">@color/gold_bright</item>
         <item name="android:shadowColor">@color/ink_shadow</item>
@@ -76,7 +76,7 @@
         <item name="android:background">@drawable/btn_login</item>
         <item name="android:paddingStart">@dimen/space_lg</item>
         <item name="android:paddingEnd">@dimen/space_lg</item>
-        <item name="android:fontFamily">@font/cinzel</item>
+        <item name="android:fontFamily">@font/pixel</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textSize">@dimen/text_button</item>
         <item name="android:letterSpacing">0.08</item>
@@ -138,7 +138,7 @@
         <item name="android:minHeight">@dimen/touch_min</item>
         <item name="android:paddingStart">@dimen/space_lg</item>
         <item name="android:paddingEnd">@dimen/space_lg</item>
-        <item name="android:fontFamily">@font/crimson_pro</item>
+        <item name="android:fontFamily">@font/pixel</item>
         <item name="android:textSize">@dimen/text_body</item>
         <item name="android:textColor">@color/bone_white</item>
         <item name="android:textColorHint">@color/bone_muted</item>

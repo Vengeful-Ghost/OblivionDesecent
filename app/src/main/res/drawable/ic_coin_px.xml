@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The game's pixel coin (art/src/fx/od/coin.js, first frame, written by art/tools/export.mjs) beside
+     prices and gold counts, scaled up without smoothing so its pixels stay square. Never tint it. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:width="18dp" android:height="18dp">
+        <bitmap
+            android:src="@drawable/px_coin"
+            android:filter="false"
+            android:antialias="false"
+            android:dither="false"/>
+    </item>
+</layer-list>

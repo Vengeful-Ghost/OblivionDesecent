@@ -15,7 +15,7 @@
         <item name="android:textColorPrimary">@color/bone_white</item>
         <item name="android:textColorSecondary">@color/bone_dim</item>
         <item name="android:textColorHint">@color/bone_muted</item>
-        <item name="android:fontFamily">@font/crimson_pro</item>
+        <item name="android:fontFamily">@font/pixel</item>
     </style>
 
     <style name="Theme.OblivionDescent" parent="Base.Theme.OblivionDescent" />

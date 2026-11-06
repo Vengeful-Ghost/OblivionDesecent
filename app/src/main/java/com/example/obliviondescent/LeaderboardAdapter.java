@@ -101,7 +101,7 @@ public class LeaderboardAdapter
                 android.graphics.drawable.GradientDrawable bg =
                         new android.graphics.drawable.GradientDrawable();
                 bg.setColor(ctx.getColor(R.color.bg_surface));
-                bg.setCornerRadius(10f);
+                bg.setCornerRadius(0f); // square, like the pixel frames
                 bg.setStroke(2, medal);
                 itemView.setBackground(bg);
             } else {

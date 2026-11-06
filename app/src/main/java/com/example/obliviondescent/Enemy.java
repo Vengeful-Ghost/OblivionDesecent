@@ -344,6 +344,11 @@ public class Enemy {
         labelPaint.setTextSize(22f);
         labelPaint.setTextAlign(Paint.Align.CENTER);
         labelPaint.setFakeBoldText(true);
+        // Names and the "!" over a wind-up in the game's pixel font, like every other word on screen
+        if (Sprites.font != null) {
+            labelPaint.setTypeface(Sprites.font);
+            ALERT_PAINT.setTypeface(Sprites.font);
+        }
     }
 
     /**
@@ -1251,6 +1256,9 @@ public class Enemy {
     }
     // The sprite's feet sit on the contact shadow, this many radii below the centre
     private static final float FEET = 0.78f;
+    // An elite's outline: its silhouette in gold, shifted one art pixel each way (sides and corners)
+    private static final float[] OUTLINE = {1, 0, -1, 0, 0, 1, 0, -1, 1, 1, -1, 1, 1, -1, -1, -1};
+    private static final int ELITE_GOLD = Color.rgb(244, 205, 90);
     private boolean faceLeft = false; // render thread only
 
     /** This body's walk or idle sprite, or null to fall back to the old shapes. */
@@ -1308,8 +1316,8 @@ public class Enemy {
 
         drawTelegraph(canvas, drawX, drawY, now);
 
-        if (elite) {
-            // A gold aura marks an elite
+        if (elite && sprite(moving()) == null) {
+            // A gold aura marks an elite (the pixel art traces a gold outline round the body instead)
             float pulse = 0.85f + 0.15f * (float) Math.sin(now / 220.0);
             ELITE_GLOW.setAlpha((int) (70 * pulse));
             canvas.drawCircle(drawX, drawY, radius * 1.6f * pulse, ELITE_GLOW);
@@ -1351,6 +1359,14 @@ public class Enemy {
             if (squash) {
                 canvas.save();
                 canvas.scale(1.14f, 0.86f, drawX, feet);
+            }
+            if (elite) {
+                // An elite wears a gold outline one art pixel wide, traced round its own silhouette
+                int glow = (int) (215 + 40 * Math.sin(now / 220.0));
+                for (int i = 0; i < 8; i++) {
+                    float ox = OUTLINE[i * 2] * Sprites.PX * scale, oy = OUTLINE[i * 2 + 1] * Sprites.PX * scale;
+                    Sprites.flash(canvas, body, frame, drawX + ox, feet + oy, faceLeft, scale, ELITE_GOLD, glow);
+                }
             }
             Sprites.draw(canvas, body, frame, drawX, feet, faceLeft, scale, bodyPaint.getColor(), 255);
             if (frenzied) Sprites.flash(canvas, body, frame, drawX, feet, faceLeft, scale, Color.rgb(255, 60, 30), 70);
