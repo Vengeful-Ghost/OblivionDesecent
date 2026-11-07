@@ -137,10 +137,16 @@ public class Enemy {
 
     // Boss move set (new moves go at the end: the order is synced to co-op guests)
     private enum BossMove { SLAM, CHARGE, BURST, SUMMON, FAN, BLINK, SPIRAL, WHIRL, LEAP, VOLLEY, QUAKE, STORM, ULTIMATE }
-    // The last stand: at a tenth of its health, once, a boss winds up its ultimate (GameActivity announces it)
+    // The last stand: at a tenth of its health, once, a boss roars (the tell) and then RAGES for ULT_TIME: it
+    // can't be hurt, it burns crimson, and it fills its arena with sweeping spirals of bolts, rings with one gap to
+    // slip through and burning meteors that fall where you stand. Then, with no pause, it fights on at its
+    // fastest, its final moves in play: the end of a boss fight is the hardest part of it.
     private boolean ultimateUsed;
     public boolean justUltimate;
-    private static final long ULTIMATE_TELL = 1400;
+    private static final long ULTIMATE_TELL = 1800, ULT_TIME = 7000;
+    private long ultRing, ultMeteor, ultVolley;
+    // meteors GameActivity marks on the floor and drops: {x, y, radius, damage, delay ms}
+    public final List<float[]> pendingBlasts = new ArrayList<>();
     /** Boss archetype, chosen by the AI for each range; each one moves, attacks and looks different. */
     public enum BossKind { BRUTE, SUMMONER, SORCERER, HUNTER }
     private BossKind bossKind = BossKind.BRUTE;
@@ -953,6 +959,10 @@ public class Enemy {
             }
 
             case CAST: {
+                if (bossMove == BossMove.ULTIMATE) {
+                    rage(now, dx, dy, dist);
+                    break;
+                }
                 if (bossMove == BossMove.SPIRAL || bossMove == BossMove.STORM) {
                     // Arms of bolts sweeping round: two, or four in the storm
                     int arms = bossMove == BossMove.STORM ? 4 : 2;
@@ -1081,33 +1091,95 @@ public class Enemy {
                 ring(14, shot);
                 break;
             case ULTIMATE:
-                switch (bossKind) {
-                    case BRUTE:     // Cataclysm: the whole floor round it caves in, and the rubble flies
-                        strike(damage * 2, BOSS_SLAM_RADIUS * 1.8f, 180f);
-                        ring(20, shot);
-                        break;
-                    case SUMMONER:  // Legion: six of the dead at once, and a ring of bolts
-                        pendingSummons = 6;
-                        ring(18, shot);
-                        break;
-                    case SORCERER:  // Starfall: a ring now, then a long storm of bolts
-                        ring(16, shot);
-                        bossMove = BossMove.STORM;
-                        lastCastBeat = 0;
-                        enterState(BehaviorState.CAST, 2600);
-                        return;
-                    default:        // The Pack: four hounds and a wide volley
-                        pendingSummons = 4;
-                        volley(9, shot);
-                        break;
-                }
-                break;
+                // the roar's blast: the brute's floor caves in round it, the summoner calls its legion, the
+                // hunter its pack; then every one of them rages
+                if (bossKind == BossKind.BRUTE) strike(damage * 2, BOSS_SLAM_RADIUS * 1.5f, 180f);
+                else if (bossKind == BossKind.SUMMONER) pendingSummons = 4;
+                else if (bossKind == BossKind.HUNTER) pendingSummons = 2;
+                ring(24, shot);
+                lastCastBeat = 0;
+                ultRing = ultMeteor = ultVolley = System.currentTimeMillis();
+                enterState(BehaviorState.CAST, ULT_TIME);
+                return;
             default: // SPIRAL, STORM and WHIRL channel for a while
                 lastCastBeat = 0;
                 enterState(BehaviorState.CAST, bossMove == BossMove.WHIRL ? 1500 : 1800);
                 return;
         }
         enterState(BehaviorState.APPROACH, 0);
+    }
+
+    /**
+     * The rage of a last stand, every tick for ULT_TIME: spiral arms of slow bolts sweeping round (turning back
+     * every 2.3 s), a ring every so often with one gap near you to slip through, and meteors falling on where you
+     * stand. The brute's meteors come twice as often, the summoner's rings faster, the sorcerer has four arms and
+     * the hunter looses volleys too. The last 0.7 s it holds its breath, then a nova, and it goes straight back
+     * to the fight, frenzied (every boss, the summoner too).
+     */
+    private void rage(long now, float dx, float dy, float dist) {
+        long e = now - stateStartTime;
+        int damage = getDamage(), shot = Math.max(1, (int) (damage * 0.5f));
+        boolean firing = e < ULT_TIME - 700;
+        double toYou = Math.atan2(dy, dx);
+        if (firing && now - lastCastBeat >= 200) {
+            lastCastBeat = now;
+            castAngle += 0.22f * ((e / 2300) % 2 == 0 ? 1 : -1);
+            int arms = bossKind == BossKind.SORCERER ? 4 : 3, bolt = Math.max(1, (int) (damage * 0.4f));
+            for (int arm = 0; arm < arms; arm++) {
+                double a = castAngle + arm * Math.PI * 2 / arms;
+                pendingShots.add(new Shot((float) Math.cos(a), (float) Math.sin(a), 6f, 1300f, 14f, bolt));
+            }
+        }
+        if (firing && e > 600 && now - ultRing >= (bossKind == BossKind.SUMMONER ? 1050 : 1400)) {
+            ultRing = now;
+            gapRing(36, 5, toYou + (Math.random() - 0.5) * 1.8, shot);
+        }
+        if (firing && e > 300 && now - ultMeteor >= (bossKind == BossKind.BRUTE ? 330 : 560)) {
+            ultMeteor = now;
+            double a = Math.random() * Math.PI * 2;
+            float off = (float) (Math.random() * 90);
+            pendingBlasts.add(new float[]{x + dx + (float) Math.cos(a) * off, y + dy + (float) Math.sin(a) * off,
+                    115f, damage, 900f});
+        }
+        if (bossKind == BossKind.HUNTER && firing && now - ultVolley >= 1000 && dist > 0.01f) {
+            ultVolley = now;
+            aimX = dx / dist;
+            aimY = dy / dist;
+            volley(5, shot);
+        }
+        if (e >= ULT_TIME) {
+            // the last breath: a nova all round, and it fights on, frenzied, with barely a pause
+            if (dist > 0.01f) { aimX = dx / dist; aimY = dy / dist; }
+            ring(40, shot);
+            if (!frenzied) {
+                frenzied = true;
+                justFrenzied = true;
+            }
+            lastAttackTime = now - 1400; // its next move comes almost at once
+            enterState(BehaviorState.APPROACH, 0);
+        }
+    }
+
+    /** A ring of bolts with `gap` of them left out, centred on angle `at`: the one way through. */
+    private void gapRing(int count, int gap, double at, int damage) {
+        for (int i = 0; i < count; i++) {
+            double angle = at + i * Math.PI * 2 / count;
+            if (i < (gap + 1) / 2 || i > count - 1 - gap / 2) continue;
+            pendingShots.add(new Shot((float) Math.cos(angle), (float) Math.sin(angle), 5f, 1300f, 15f, damage));
+        }
+    }
+
+    /** True while a boss's last stand is on (its roar and its rage): nothing hurts it. */
+    public boolean isRaging() {
+        return !isDead && type == Type.BOSS && bossMove == BossMove.ULTIMATE
+                && (behaviorState == BehaviorState.WINDUP || behaviorState == BehaviorState.CAST);
+    }
+
+    /** How far into the last stand it is, 0..1: the roar builds it up, the rage keeps it at 1. */
+    private float rageLevel(long now) {
+        if (!isRaging()) return 0f;
+        if (behaviorState == BehaviorState.CAST) return 1f;
+        return Math.min(1f, (now - stateStartTime) / (float) ULTIMATE_TELL);
     }
 
     /** Bolts in every direction, starting from the aim. */
@@ -1392,6 +1464,11 @@ public class Enemy {
     }
 
     /** A template that makes a body much bigger or smaller than its sprite was drawn for scales the sprite. */
+    /** The hellfire ring is drawn for a boss about 50 px wide; bigger bosses get a bigger ring. */
+    private float rageFireScale() {
+        return Math.max(1f, Math.min(1.6f, radius / 60f));
+    }
+
     private float spriteScale() {
         float k = radius / (mimic ? 36f : DRAWN_FOR[type.ordinal()]);
         return Math.abs(k - 1f) < 0.15f ? 1f : k;
@@ -1447,21 +1524,6 @@ public class Enemy {
             float t = Math.min(1f, (float) (now - stateStartTime) / stateDuration);
             drawY -= (float) Math.sin(Math.PI * t) * 90f;
         }
-        if (behaviorState == BehaviorState.WINDUP && bossMove == BossMove.ULTIMATE) {
-            // The ultimate's tell: a crimson field swelling out to what it will hit, throbbing faster as it fills
-            float k = Math.min(1f, (now - stateStartTime) / (float) ULTIMATE_TELL);
-            float reach = bossKind == BossKind.BRUTE ? BOSS_SLAM_RADIUS * 1.8f : radius * 3f;
-            GLOW_PAINT.setColor(Color.rgb(224, 40, 40));
-            GLOW_PAINT.setAlpha((int) (40 + 90 * k * (0.6f + 0.4f * (float) Math.sin(now / (90.0 - 50.0 * k)))));
-            canvas.drawCircle(drawX, drawY, reach * (0.35f + 0.65f * k), GLOW_PAINT);
-        }
-        if (frenzied) {
-            // Final phase: a burning aura
-            float pulse = 0.7f + 0.3f * (float) Math.sin(now / 90.0);
-            GLOW_PAINT.setColor(Color.rgb(255, 70, 30));
-            GLOW_PAINT.setAlpha((int) (80 * pulse));
-            canvas.drawCircle(drawX, drawY, radius * 1.9f * pulse, GLOW_PAINT);
-        }
         float weaponAngle = weaponAngle(now);
         boolean behind = Math.sin(Math.toRadians(weaponAngle)) < -0.3;
         if (behind) drawWeapon(canvas, drawX, drawY, weaponAngle);
@@ -1479,6 +1541,17 @@ public class Enemy {
         if (body != null) {
             // Pixel art: each body a little out of step with the rest
             float feet = drawY + radius * FEET, scale = spriteScale();
+            float rage = rageLevel(now);
+            if (rage > 0f) {
+                // its last stand: it stands in a ring of hellfire, swells and shudders with fury
+                Sprites.Anim fire = Sprites.get("fx.rage.back");
+                if (fire != null) Sprites.draw(canvas, fire, fire.at(now), drawX, feet, false, rageFireScale(), 0, (int) (255 * rage));
+                scale *= 1f + 0.12f * rage;
+                float shudder = (behaviorState == BehaviorState.WINDUP ? 2f : 1f) * Sprites.PX;
+                drawX += ((now / 40) % 3 - 1) * shudder;
+                drawY += ((now / 55) % 3 - 1) * shudder * 0.5f;
+                feet = drawY + radius * FEET;
+            }
             headTop = Math.min(headTop, feet + body.top * scale);
             int frame = body.at(now + id * 137L);
             if (squash) {
@@ -1493,11 +1566,37 @@ public class Enemy {
                     Sprites.flash(canvas, body, frame, drawX + ox, feet + oy, faceLeft, scale, ELITE_GOLD, glow);
                 }
             }
+            if (rage <= 0f && frenzied) {
+                // its final phase: a red outline traced round its own silhouette, flickering like a flame
+                int glow = (int) (150 + 70 * Math.sin(now / 90.0));
+                for (int i = 0; i < 8; i++) {
+                    float ox = OUTLINE[i * 2] * Sprites.PX * scale, oy = OUTLINE[i * 2 + 1] * Sprites.PX * scale;
+                    Sprites.flash(canvas, body, frame, drawX + ox, feet + oy, faceLeft, scale, Color.rgb(255, 70, 30), glow);
+                }
+            }
+            if (rage > 0f) {
+                // a crimson outline one art pixel wide, throbbing like a heartbeat
+                int glow = (int) (rage * (170 + 85 * Math.sin(now / 70.0)));
+                for (int i = 0; i < 8; i++) {
+                    float ox = OUTLINE[i * 2] * Sprites.PX * scale, oy = OUTLINE[i * 2 + 1] * Sprites.PX * scale;
+                    Sprites.flash(canvas, body, frame, drawX + ox, feet + oy, faceLeft, scale, Color.rgb(255, 40, 24), glow);
+                }
+            }
             Sprites.draw(canvas, body, frame, drawX, feet, faceLeft, scale, bodyPaint.getColor(), 255);
-            if (frenzied) Sprites.flash(canvas, body, frame, drawX, feet, faceLeft, scale, Color.rgb(255, 60, 30), 70);
+            if (rage > 0f) {
+                // its colours burn: the same body redrawn in molten crimson, and a white throb on every beat
+                Sprites.rage(canvas, body, frame, drawX, feet, faceLeft, scale, (int) (255 * rage));
+                float beat = (float) Math.exp(-(now % 600) / 90.0);
+                Sprites.flash(canvas, body, frame, drawX, feet, faceLeft, scale, Color.rgb(255, 236, 200), (int) (110 * beat * rage));
+            }
+            if (frenzied && rage <= 0f) Sprites.flash(canvas, body, frame, drawX, feet, faceLeft, scale, Color.rgb(255, 60, 30), 70);
             if (now < hitFlashUntil || blink)
                 Sprites.flash(canvas, body, frame, drawX, feet, faceLeft, scale, FLASH_PAINT.getColor(), FLASH_PAINT.getAlpha());
             if (squash) canvas.restore();
+            if (rage > 0f) {
+                Sprites.Anim fire = Sprites.get("fx.rage.front");
+                if (fire != null) Sprites.draw(canvas, fire, fire.at(now + 300), drawX, feet, false, rageFireScale(), 0, (int) (255 * rage));
+            }
         } else {
             if (squash) {
                 canvas.save();
@@ -2013,6 +2112,7 @@ public class Enemy {
      * @param dmg amount of damage to apply
      */
     public void takeDamage(int dmg) {
+        if (dmg != Integer.MAX_VALUE && isRaging()) return;
         if (thief && !isDead && dmg < health) spills++;
         health -= dmg;
         hitFlashUntil = System.currentTimeMillis() + 90;

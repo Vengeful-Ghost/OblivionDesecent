@@ -23,6 +23,7 @@ public class TreasureChest {
     public boolean landed = false; // set by GameActivity once the landing burst has played
     public boolean mimic = false;  // treasure room only: wakes up as an enemy instead of opening
     public boolean vault = false;  // vault chest: the rarest loot plus gold
+    public boolean secret = false; // a vault chest in a secret room
     public boolean cursed = false; // room event: the rarest loot, but elites rise when it opens
     public boolean boss = false;   // thrown out by a slain boss
 

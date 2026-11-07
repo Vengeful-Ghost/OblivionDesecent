@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
     android:background="@color/bg_overlay"
     android:padding="@dimen/space_md">
+
+<!-- The bag: equipped slots on the left, the items on the right -->
+<LinearLayout
+    android:id="@+id/inventory_main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal">
 
     <!-- LEFT: Equipped Panel -->
     <LinearLayout
@@ -334,18 +340,6 @@
                 tools:ignore="HardcodedText"/>
 
             <TextView
-                android:id="@+id/filter_perks"
-                style="@style/OD.Text.Tab"
-                android:layout_width="@dimen/touch_min"
-                android:layout_height="@dimen/touch_min"
-                android:paddingTop="14dp"
-                android:drawableTop="@drawable/ic_level"
-                android:contentDescription="Perks"
-                android:clickable="true"
-                android:focusable="true"
-                tools:ignore="HardcodedText"/>
-
-            <TextView
                 android:id="@+id/filter_relics"
                 style="@style/OD.Text.Tab"
                 android:layout_width="@dimen/touch_min"
@@ -361,6 +355,25 @@
                 android:layout_width="0dp"
                 android:layout_height="1dp"
                 android:layout_weight="1"/>
+
+            <!-- Stats: opens the full-screen stat sheet; the count shows unspent points -->
+            <TextView
+                android:id="@+id/filter_stats"
+                style="@style/OD.Text.Tab"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/touch_min"
+                android:paddingStart="@dimen/space_sm"
+                android:paddingEnd="@dimen/space_sm"
+                android:drawableStart="@drawable/ic_level"
+                android:drawablePadding="@dimen/space_xs"
+                android:gravity="center_vertical"
+                android:text="STATS"
+                android:textSize="@dimen/text_caption"
+                android:textColor="@color/gold_bright"
+                android:maxLines="1"
+                android:clickable="true"
+                android:focusable="true"
+                tools:ignore="HardcodedText"/>
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_sort_inventory"
@@ -432,3 +445,128 @@
     </LinearLayout>
 
 </LinearLayout>
+
+<!-- The stat sheet: takes the whole screen, nine stats in a 3 x 3 grid, points left at the top right -->
+<LinearLayout
+    android:id="@+id/stats_panel"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/rounded_dialog_bg"
+    android:tag="stone"
+    android:padding="@dimen/space_md"
+    android:clickable="true"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="@dimen/space_xs">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_stats_back"
+            style="@style/OD.Button.Secondary"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/touch_min"
+            android:text="Bag"
+            android:textSize="@dimen/text_caption"
+            app:icon="@drawable/ic_back"
+            app:iconTint="@color/bone_dim"
+            tools:ignore="HardcodedText"/>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <TextView
+                android:id="@+id/txt_stats_title"
+                style="@style/OD.Text.Title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Stats"
+                android:textAllCaps="true"
+                android:textSize="@dimen/text_heading"
+                android:shadowColor="@color/gold_glow"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="10"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/txt_stats_hint"
+                style="@style/OD.Text.Caption"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tap a stat to put a point into it. Every level gives 3."
+                android:textSize="@dimen/text_caption"
+                android:textColor="@color/bone_muted"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+        <!-- Points left -->
+        <LinearLayout
+            android:id="@+id/stats_points_chip"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/touch_min"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/hud_panel"
+            android:tag="stone"
+            android:paddingStart="@dimen/space_sm"
+            android:paddingEnd="@dimen/space_md">
+
+            <ImageView
+                android:id="@+id/img_stat_points"
+                android:layout_width="@dimen/icon_md"
+                android:layout_height="@dimen/icon_md"
+                android:layout_marginEnd="@dimen/space_xs"
+                android:src="@drawable/ic_level"
+                android:importantForAccessibility="no"/>
+
+            <TextView
+                android:id="@+id/txt_stat_points"
+                style="@style/OD.Text.Value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0"
+                android:textSize="@dimen/text_heading"
+                android:textColor="@color/gold_bright"
+                tools:ignore="HardcodedText"/>
+
+            <TextView
+                android:id="@+id/txt_stat_points_label"
+                style="@style/OD.Text.Caption"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_xs"
+                android:text="points"
+                android:textSize="@dimen/text_caption"
+                tools:ignore="HardcodedText"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@drawable/divider_gold"
+        android:layout_marginBottom="@dimen/space_xs"/>
+
+    <!-- Three rows of three, each a ninth of the sheet (filled in Java) -->
+    <LinearLayout
+        android:id="@+id/stats_grid"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"/>
+
+</LinearLayout>
+
+</FrameLayout>

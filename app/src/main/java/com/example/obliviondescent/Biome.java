@@ -71,6 +71,16 @@ enum Biome {
         return floor > 1 && (floor - 1) % 5 == 0;
     }
 
+    /** The biome's own music (art/tools/music.mjs writes all but the Crypt's); a boss always has its own. */
+    int music() {
+        switch (this) {
+            case CATACOMBS: return R.raw.music_catacombs;
+            case FORGE:     return R.raw.music_forge;
+            case VOID:      return R.raw.music_void;
+            default:        return R.raw.game_music;
+        }
+    }
+
     /** Enemies native to this biome turn up half again as often. */
     boolean favours(Enemy.Type type) {
         for (Enemy.Type t : favoured) if (t == type) return true;

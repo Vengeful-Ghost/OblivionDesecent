@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One stat on the stat sheet: its icon on a plate of its colour, its own name, what it is, what a point gives
+     and what it adds up to, and the points in it. The frame is drawn in Java in the stat's colour. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="@dimen/space_sm"
+        android:paddingEnd="@dimen/space_sm">
+
+        <FrameLayout
+            android:id="@+id/stat_plate"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="@dimen/space_sm">
+
+            <ImageView
+                android:id="@+id/stat_icon"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"/>
+
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/stat_name"
+                style="@style/OD.Text.Value"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/text_body"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="Brute Force"/>
+
+            <TextView
+                android:id="@+id/stat_kind"
+                style="@style/OD.Text.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.08"
+                android:textColor="@color/bone_muted"
+                android:maxLines="1"
+                tools:text="Strength"/>
+
+            <TextView
+                android:id="@+id/stat_gives"
+                style="@style/OD.Text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/text_caption"
+                android:textColor="@color/bone_white"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="+3% damage a point"/>
+
+            <TextView
+                android:id="@+id/stat_total"
+                style="@style/OD.Text.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="@color/bone_dim"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="Now +12% damage"/>
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/stat_points"
+            style="@style/OD.Text.Title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="36dp"
+            android:gravity="center"
+            android:textSize="@dimen/text_title"
+            tools:text="4"/>
+
+    </LinearLayout>
+
+</FrameLayout>

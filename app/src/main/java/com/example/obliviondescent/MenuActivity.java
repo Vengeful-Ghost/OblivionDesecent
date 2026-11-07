@@ -100,7 +100,7 @@ public class MenuActivity extends AppCompatActivity {
             startActivity(new Intent(this, LobbyActivity.class));
         });
 
-        findViewById(R.id.btn_tutorial).setOnClickListener(v -> { click(); showTutorial(); });
+        findViewById(R.id.btn_tutorial).setOnClickListener(v -> { click(); offerTutorial(); });
         findViewById(R.id.btn_altar).setOnClickListener(v -> { click(); showAltar(); });
         findViewById(R.id.btn_daily).setOnClickListener(v -> { click(); showDaily(false); });
         findViewById(R.id.btn_quests).setOnClickListener(v -> { click(); showQuests(); });
@@ -109,11 +109,11 @@ public class MenuActivity extends AppCompatActivity {
         findViewById(R.id.btn_weekly).setOnClickListener(v -> { click(); showDaily(true); });
         Ads.gatherConsent(this);
 
-        // First visit to the menu on this phone: open How to Play by itself, once
+        // First visit to the menu on this phone: offer the tutorial by itself, once
         SharedPreferences guide = getSharedPreferences("guide_" + (userId != null ? userId : "guest"), MODE_PRIVATE);
         if (savedInstanceState == null && !guide.getBoolean("seen", false)) {
             guide.edit().putBoolean("seen", true).apply();
-            findViewById(R.id.btn_tutorial).post(this::showTutorial);
+            findViewById(R.id.btn_tutorial).post(this::offerTutorial);
         }
     }
 
@@ -135,7 +135,11 @@ public class MenuActivity extends AppCompatActivity {
         if (dialog.getWindow() != null)
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         dialog.findViewById(R.id.btn_close_altar).setOnClickListener(v -> { click(); dialog.dismiss(); });
-        dialog.findViewById(R.id.btn_wardrobe).setOnClickListener(v -> { click(); showWardrobe(); });
+        dialog.findViewById(R.id.btn_wardrobe).setOnClickListener(v -> {
+            click();
+            // the altar's Souls count catches up with what the wardrobe spent
+            showWardrobe(() -> dbManager.loadPlayerStats(userId, data -> renderAltar(dialog, data)));
+        });
         dbManager.loadPlayerStats(userId, data -> renderAltar(dialog, data));
         dialog.show();
         hideSystemUIOnWindow(dialog);
@@ -432,29 +436,55 @@ public class MenuActivity extends AppCompatActivity {
         hideSystemUIOnWindow(dialog);
     }
 
-    /** Wardrobe: looks bought with Souls for the body, the swing trail and the death burst. */
-    private void showWardrobe() {
+    /**
+     * Wardrobe: looks bought with Souls for the body, the swing trail and the death burst. The card opens once
+     * and stays open: buying or wearing a look redraws its rows in place, and closing it hands control back to
+     * {@code onClose} (the altar refreshes its own Souls count there).
+     */
+    private void showWardrobe(Runnable onClose) {
         if (userId == null) return;
+        Dialog dialog = listDialog("WARDROBE", "...");
+        styleSoulCount(dialog.findViewById(R.id.txt_list_note));
+        if (onClose != null) dialog.setOnDismissListener(d -> onClose.run());
+        dialog.show();
+        hideSystemUIOnWindow(dialog);
+        loadWardrobe(dialog, null);
+    }
+
+    /** Reads Souls and owned looks, then redraws the open wardrobe; {@code bought} flashes if set. */
+    private void loadWardrobe(Dialog dialog, GameActivity.Cosmetic bought) {
         dbManager.loadPlayerStats(userId, data -> {
+            if (!dialog.isShowing()) return;
             Object soulsValue = data != null ? data.get("souls") : null;
             long souls = soulsValue instanceof Number ? ((Number) soulsValue).longValue() : 0;
             java.util.Set<String> owned = new java.util.HashSet<>();
             Object ownedValue = data != null ? data.get("cosmetics") : null;
             if (ownedValue instanceof java.util.List)
                 for (Object o : (java.util.List<?>) ownedValue) owned.add(String.valueOf(o));
-            renderWardrobe(souls, owned);
+            renderWardrobe(dialog, souls, owned, bought);
         });
     }
 
+    /** The Souls count as the altar shows it: arcane purple with the soul mark before it. */
+    private void styleSoulCount(TextView text) {
+        int purple = getColor(R.color.arcane_glow);
+        text.setTextColor(purple);
+        text.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_level, 0, 0, 0);
+        text.setCompoundDrawablePadding(getResources().getDimensionPixelSize(R.dimen.space_xs));
+        text.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(purple));
+    }
+
     /** One row per slot; tap an owned look to wear it, or an affordable one to buy and wear it. */
-    private void renderWardrobe(long souls, java.util.Set<String> owned) {
-        Dialog dialog = listDialog("WARDROBE", souls + " Souls");
+    private void renderWardrobe(Dialog dialog, long souls, java.util.Set<String> owned, GameActivity.Cosmetic bought) {
+        ((TextView) dialog.findViewById(R.id.txt_list_note)).setText(String.valueOf(souls));
         LinearLayout rows = dialog.findViewById(R.id.list_rows);
+        rows.removeAllViews();
         SharedPreferences look = getSharedPreferences("cosmetics_" + userId, MODE_PRIVATE);
         float dp = getResources().getDisplayMetrics().density;
         int gap = Math.round(3 * dp);
         String[] slots = {"Body", "Swing trail", "Death burst"};
         int[] icons = {R.drawable.ic_helmet, R.drawable.ic_sword, R.drawable.ic_skull};
+        boolean[] busy = {false};
         for (int slot = 0; slot < slots.length; slot++) {
             TextView label = new TextView(this, null, 0, R.style.OD_Text_Caption);
             label.setText(slots[slot]);
@@ -470,26 +500,35 @@ public class MenuActivity extends AppCompatActivity {
                 icon.setImageResource(icons[slot]);
                 if (c.color != 0) icon.setImageTintList(android.content.res.ColorStateList.valueOf(c.color));
                 ((TextView) cell.findViewById(R.id.stat_value)).setText(c.title);
-                ((TextView) cell.findViewById(R.id.stat_label)).setText(
-                        c == worn ? "Worn" : have ? "Owned" : c.price + " Souls");
+                TextView state = cell.findViewById(R.id.stat_label);
+                state.setText(c == worn ? "Worn" : have ? "Owned" : c.price + " Souls");
+                if (c == worn) state.setTextColor(getColor(R.color.gold_bright));
+                else if (!have) state.setTextColor(getColor(R.color.arcane_glow));
                 cell.setAlpha(have || souls >= c.price ? 1f : 0.45f);
                 cell.setOnClickListener(v -> {
+                    if (busy[0]) return;
                     click();
                     if (have) {
                         look.edit().putString("slot" + c.slot, c.name()).apply();
-                        dialog.dismiss();
-                        showWardrobe();
+                        renderWardrobe(dialog, souls, owned, c);
                     } else if (souls >= c.price) {
+                        // one purchase at a time, so a double tap can't buy twice
+                        busy[0] = true;
                         dbManager.buyCosmetic(userId, c.name(), c.price, ok -> {
                             sounds.play(ok ? SoundManager.Sfx.PURCHASE : SoundManager.Sfx.GATE_LOCKED);
                             if (ok) look.edit().putString("slot" + c.slot, c.name()).apply();
-                            dialog.dismiss();
-                            showWardrobe();
+                            loadWardrobe(dialog, ok ? c : null);
                         });
                     } else {
                         sounds.play(SoundManager.Sfx.GATE_LOCKED);
                     }
                 });
+                if (c == bought) {
+                    // the look just bought or put on pulses gold
+                    cell.setScaleX(1.1f);
+                    cell.setScaleY(1.1f);
+                    cell.animate().scaleX(1f).scaleY(1f).setDuration(260).start();
+                }
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
                 lp.setMargins(gap, gap, gap, gap);
                 row.addView(cell, lp);
@@ -497,8 +536,7 @@ public class MenuActivity extends AppCompatActivity {
             while (row.getChildCount() < 5)
                 row.addView(new View(this), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
         }
-        dialog.show();
-        hideSystemUIOnWindow(dialog);
+        Wear.apply(rows);
     }
 
     private void hideSystemUIOnWindow(Dialog dialog) {
@@ -508,100 +546,35 @@ public class MenuActivity extends AppCompatActivity {
         Wear.apply(dialog.getWindow().getDecorView());
     }
 
-    // Icon of each tutorial page, one per page of TUTORIAL (showTutorial falls back to the last for any extra)
-    private static final int[] TUTORIAL_ICONS = {
-            R.drawable.ic_boots, R.drawable.ic_sword, R.drawable.ic_warning,
-            R.drawable.ic_stairs, R.drawable.ic_key, R.drawable.ic_map, R.drawable.ic_level
-    };
-
-    // Title and text of each tutorial page
-    private static final String[][] TUTORIAL = {
-            {"Move & Dash",
-                    "Drag the left stick to move. You face the way you walk.\n\n"
-                    + "Tap D to dash. Nothing can hit you mid-dash. Dash just as a hit lands for a PERFECT dodge: "
-                    + "time slows, the dash recharges and your next hits are sure crits."},
-            {"Attack",
-                    "Hold ATK to keep attacking. It aims at the nearest enemy; drag it to aim yourself.\n\n"
-                    + "Every weapon swings its own way: daggers are quick, axes sweep wide, spears reach far and "
-                    + "hammers end their combo with a slam. Gold numbers are critical hits.\n\n"
-                    + "Hold the anvil to charge a HEAVY blow, let go to strike. SPIN hits everything around you."},
-            {"Read the Enemy",
-                    "A red ! means an enemy is about to strike. The red cone or circle shows where it lands, so step out or dash.\n\n"
-                    + "A bright arc means it is guarding: hit it from behind, or break the guard with a heavy blow.\n\n"
-                    + "A finisher or critical hit during a wind-up staggers the enemy. Glowing elites always drop a key."},
-            {"Floors & Shop",
-                    "Defeat the enemies on a floor to open the purple EXIT portal. Edge arrows point the way.\n\n"
-                    + "The gold SHOP portal sells gear for the coins you collect. Every 5th floor has a boss.\n\n"
-                    + "Tap the minimap to see the whole floor."},
-            {"Treasure & Keys",
-                    "Gold-marked rooms hold a treasure chest, but some chests are mimics that bite back.\n\n"
-                    + "A gold gate seals a vault. Walk up to it with a key to open it: vaults hold the best loot. "
-                    + "Keys drop from elites, mimics and now and then other enemies."},
-            {"Event Rooms & Depths",
-                    "Side rooms off the path hold events: a blood shrine, a gambler, a cursed crypt, a trial arena, "
-                    + "a prisoner, a forgotten library or a healing spring. Walk up to what waits inside.\n\n"
-                    + "Every 5 floors, past each boss, the dungeon changes: flooded catacombs slow your steps, "
-                    + "the forge's vents erupt, and in the void the light reaches less far."},
-            {"Grow Stronger",
-                    "Kills give XP. Each level gives a point: tap the glowing badge and put it into any stat, "
-                    + "all in on Strength for a glass cannon, Vigor and Defense for a tank. "
-                    + "Two stats at 3 points each awaken a synergy.\n\n"
-                    + "Every run earns Souls, even the ones you lose: spend them at the Soul Altar on lasting upgrades.\n\n"
-                    + "Your run saves at the start of every floor. Try the Daily Run to race everyone on the same dungeon."}
-    };
-
-    /** New-player guide: one card, Back / Next flip its page in place. */
-    private void showTutorial() {
-        Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
-        dialog.setContentView(R.layout.dialog_tutorial);
-        if (dialog.getWindow() != null)
-            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        dialog.findViewById(R.id.btn_close_tutorial).setOnClickListener(v -> { click(); dialog.dismiss(); });
-
-        // One dot per page, the current one lit
-        LinearLayout dots = dialog.findViewById(R.id.tutorial_dots);
-        int size = getResources().getDimensionPixelSize(R.dimen.space_sm);
-        for (int i = 0; i < TUTORIAL.length; i++) {
-            View dot = new View(this);
-            android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
-            shape.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-            dot.setBackground(shape);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
-            lp.setMargins(size / 2, 0, size / 2, 0);
-            dots.addView(dot, lp);
-        }
-
-        int[] page = {0};
-        Runnable render = () -> {
-            int p = page[0];
-            ((android.widget.ImageView) dialog.findViewById(R.id.tutorial_icon))
-                    .setImageResource(TUTORIAL_ICONS[Math.min(p, TUTORIAL_ICONS.length - 1)]);
-            ((TextView) dialog.findViewById(R.id.tutorial_title)).setText(TUTORIAL[p][0]);
-            ((TextView) dialog.findViewById(R.id.tutorial_page)).setText((p + 1) + " / " + TUTORIAL.length);
-            ((TextView) dialog.findViewById(R.id.tutorial_body)).setText(TUTORIAL[p][1]);
-            dialog.findViewById(R.id.btn_tutorial_back).setVisibility(p > 0 ? View.VISIBLE : View.INVISIBLE);
-            ((MaterialButton) dialog.findViewById(R.id.btn_tutorial_next)).setText(p + 1 < TUTORIAL.length ? "Next" : "Done");
-            for (int i = 0; i < dots.getChildCount(); i++)
-                ((android.graphics.drawable.GradientDrawable) dots.getChildAt(i).getBackground())
-                        .setColor(getColor(i == p ? R.color.gold_bright : R.color.bone_faint));
-        };
-        dialog.findViewById(R.id.btn_tutorial_back).setOnClickListener(v -> {
-            sounds.play(SoundManager.Sfx.CARD_FLIP);
-            page[0]--;
-            render.run();
+    /**
+     * The ? button: asks, then walks the player through the guided tutorial floor (GameActivity's coach),
+     * which covers fighting, levelling, events, treasure, the shop, and what lies past it, Settings included.
+     */
+    private void offerTutorial() {
+        Dialog confirm = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        confirm.setContentView(R.layout.dialog_confirm);
+        if (confirm.getWindow() != null)
+            confirm.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        ((android.widget.ImageView) confirm.findViewById(R.id.confirm_icon)).setImageResource(R.drawable.ic_flag);
+        ((TextView) confirm.findViewById(R.id.confirm_title)).setText("Walk through the tutorial?");
+        ((TextView) confirm.findViewById(R.id.confirm_message)).setText(
+                "A guided floor shows you everything: moving and fighting, levelling up, events, treasure, the shop "
+                        + "and what lies deeper. About five minutes, and nothing there counts against you.");
+        MaterialButton no = confirm.findViewById(R.id.btn_confirm_no);
+        MaterialButton yes = confirm.findViewById(R.id.btn_confirm_yes);
+        no.setText("Not now");
+        yes.setText("Start");
+        no.setOnClickListener(v -> { click(); confirm.dismiss(); });
+        yes.setOnClickListener(v -> {
+            click();
+            confirm.dismiss();
+            SoundManager.stopMenuMusic();
+            Intent intent = new Intent(this, GameActivity.class);
+            intent.putExtra(GameActivity.EXTRA_TUTORIAL, true);
+            startActivity(intent);
         });
-        dialog.findViewById(R.id.btn_tutorial_next).setOnClickListener(v -> {
-            sounds.play(SoundManager.Sfx.CARD_FLIP);
-            if (page[0] + 1 >= TUTORIAL.length) {
-                dialog.dismiss();
-                return;
-            }
-            page[0]++;
-            render.run();
-        });
-        render.run();
-        dialog.show();
-        hideSystemUIOnWindow(dialog);
+        confirm.show();
+        hideSystemUIOnWindow(confirm);
     }
 
     /**

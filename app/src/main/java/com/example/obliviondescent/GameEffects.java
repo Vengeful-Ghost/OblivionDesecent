@@ -24,6 +24,7 @@ public class GameEffects {
         float x, y, vx, vy, size;
         int color;
         long born, life;
+        boolean pixel; // a square on the art-pixel grid instead of a soft dot (the dash's sparks)
     }
 
     private static class FloatingText {
@@ -154,6 +155,128 @@ public class GameEffects {
         p.color = color;
         p.born = System.currentTimeMillis();
         p.life = 250;
+        particles.add(p);
+    }
+
+    // -- The dash, drawn live between its baked kick and skid (fx.dash.*) --------------------------------
+
+    // An afterimage: the player's own frame as a silhouette in the dash colour, white for its first moment
+    private static class Ghost {
+        Sprites.Anim anim;
+        int frame, color;
+        float x, y;
+        boolean flip;
+        long born, life;
+    }
+
+    // A pixel speed line: its head follows the dasher, its tail runs up to it once the dash ends
+    private static class Streak {
+        float x0, y0, x1, y1, off, lag;
+        int color, width;
+        long endAt; // 0 while the dash lasts
+    }
+
+    private final List<Ghost> ghosts = new ArrayList<>();
+    private final List<Streak> streaks = new ArrayList<>();
+    private final Paint pixelPaint = new Paint();
+    private static final long STREAK_FADE = 240;
+    // The dash's speed lines: offset across the way (world units), how far up the dash the tail starts, colour,
+    // thickness in art pixels. The white core rides in the middle, the cooler ones out to the sides.
+    private static final float[] LINE_OFF = {0f, -14f, 14f, -26f, 26f, -6f, 8f};
+    private static final float[] LINE_LAG = {0f, 0.15f, 0.25f, 0.45f, 0.35f, 0.6f, 0.55f};
+    private static final int[] LINE_COLOR = {0xFFFFFFFF, 0xFFB4DCFF, 0xFFB4DCFF, 0xFF7A8CFF, 0xFF7A8CFF, 0xFF7AB8FF, 0xFF7AB8FF};
+    private static final int[] LINE_WIDTH = {2, 1, 1, 1, 1, 1, 1};
+
+    /** Leaves an afterimage of a body's frame where it stands (feet at x, y), fading over life ms. */
+    public synchronized void ghost(Sprites.Anim anim, int frame, float x, float y, boolean flip, int color, long life) {
+        if (anim == null) return;
+        if (ghosts.size() >= 24) ghosts.remove(0);
+        Ghost g = new Ghost();
+        g.anim = anim;
+        g.frame = frame;
+        g.x = x;
+        g.y = y;
+        g.flip = flip;
+        g.color = color;
+        g.born = System.currentTimeMillis();
+        g.life = life;
+        ghosts.add(g);
+    }
+
+    /** A dash starts at (x, y): its speed lines are drawn from there to wherever dashMove takes them. */
+    public synchronized void dashStart(float x, float y) {
+        dashEnd(x, y); // lines still following an earlier dash let go of it
+        for (int i = 0; i < LINE_OFF.length; i++) {
+            Streak s = new Streak();
+            s.x0 = s.x1 = x;
+            s.y0 = s.y1 = y;
+            s.off = LINE_OFF[i];
+            s.lag = LINE_LAG[i];
+            s.color = LINE_COLOR[i];
+            s.width = LINE_WIDTH[i];
+            streaks.add(s);
+        }
+    }
+
+    /** The dasher moved: the heads of the lines still following come with it. */
+    public synchronized void dashMove(float x, float y) {
+        for (Streak s : streaks) if (s.endAt == 0) { s.x1 = x; s.y1 = y; }
+    }
+
+    /** The dash is over: its lines stop at (x, y) and their tails run up to them. */
+    public synchronized void dashEnd(float x, float y) {
+        long now = System.currentTimeMillis();
+        for (Streak s : streaks) if (s.endAt == 0) { s.x1 = x; s.y1 = y; s.endAt = now; }
+    }
+
+    /** Afterimages and speed lines, drawn under the player so it runs out in front of them. */
+    public synchronized void drawDash(Canvas canvas, GameCamera camera) {
+        long now = System.currentTimeMillis();
+        float offX = camera.getOffsetX(), offY = camera.getOffsetY();
+        ghosts.removeIf(g -> now - g.born >= g.life);
+        streaks.removeIf(s -> s.endAt > 0 && now - s.endAt >= STREAK_FADE);
+        for (Ghost g : ghosts) {
+            float k = (float) (now - g.born) / g.life;
+            int alpha = (int) (200 * (1f - k) * (1f - k));
+            // a white flash as it's left behind, cooling to the dash colour
+            Sprites.flash(canvas, g.anim, g.frame, g.x - offX, g.y - offY, g.flip, 1f, k < 0.18f ? Color.WHITE : g.color, alpha);
+        }
+        float px = Sprites.PX;
+        for (Streak s : streaks) {
+            float dx = s.x1 - s.x0, dy = s.y1 - s.y0, len = (float) Math.hypot(dx, dy);
+            if (len < px * 3) continue;
+            float ux = dx / len, uy = dy / len;
+            // while dashing the tail trails the start by its lag; after, it eases up to the head
+            float u = s.endAt == 0 ? 0f : Math.min(1f, (float) (now - s.endAt) / STREAK_FADE);
+            float tail = s.lag + (1f - s.lag) * (1f - (1f - u) * (1f - u));
+            int steps = (int) (len / px);
+            float fade = 1f - u * 0.6f;
+            pixelPaint.setColor(s.color);
+            for (int i = (int) (steps * tail); i <= steps; i++) {
+                // the line breaks up toward its tail: every pixel near the head, every other one further back
+                float along = (float) i / steps;
+                if (along < 0.45f && (i & 1) == 1) continue;
+                float wx = s.x0 + ux * len * along - uy * s.off, wy = s.y0 + uy * len * along + ux * s.off;
+                float sx = Sprites.snap(wx - offX), sy = Sprites.snap(wy - offY);
+                pixelPaint.setAlpha((int) (255 * fade * (0.25f + 0.75f * along)));
+                canvas.drawRect(sx, sy, sx + px * s.width, sy + px * s.width, pixelPaint);
+            }
+        }
+    }
+
+    /** A spark shed by a dash: a square on the pixel grid that drifts back the way it came and winks out. */
+    public synchronized void dashSpark(float x, float y, float vx, float vy, int color) {
+        if (particles.size() >= MAX_PARTICLES) return;
+        Particle p = new Particle();
+        p.x = x + (rng.nextFloat() - 0.5f) * 36f;
+        p.y = y + (rng.nextFloat() - 0.5f) * 36f;
+        p.vx = vx + (rng.nextFloat() - 0.5f) * 3f;
+        p.vy = vy + (rng.nextFloat() - 0.5f) * 3f - 0.8f;
+        p.size = rng.nextFloat() < 0.3f ? 2 : 1;
+        p.color = color;
+        p.pixel = true;
+        p.born = System.currentTimeMillis();
+        p.life = 260 + rng.nextInt(260);
         particles.add(p);
     }
 
@@ -289,6 +412,84 @@ public class GameEffects {
     private final List<SpriteFx> sprites = new ArrayList<>();
     private static final int MAX_SPRITES = 40;
 
+    /**
+     * A boss's meteor (its last stand): a warning mark that fills on the floor while a burning rock falls out of
+     * the dark onto it; GameActivity takes it off with due() when it lands and hurts whoever stands inside.
+     */
+    public static final class Blast {
+        public float x, y, r;
+        public int damage;
+        public long born, at;
+        public String by;
+    }
+    private final List<Blast> blasts = new ArrayList<>();
+    private static final long METEOR_FALL = 380;
+    private final Paint markPaint = new Paint();
+
+    /** Marks a meteor to land at (x, y) in delay ms. */
+    public synchronized void mark(float x, float y, float r, int damage, long delay, String by) {
+        Blast b = new Blast();
+        b.x = x;
+        b.y = y;
+        b.r = r;
+        b.damage = damage;
+        b.born = System.currentTimeMillis();
+        b.at = b.born + delay;
+        b.by = by;
+        blasts.add(b);
+    }
+
+    /** The meteors landing now, taken off the floor. */
+    public synchronized List<Blast> due(long now) {
+        List<Blast> out = null;
+        for (int i = blasts.size() - 1; i >= 0; i--) {
+            if (blasts.get(i).at > now) continue;
+            if (out == null) out = new ArrayList<>();
+            out.add(blasts.remove(i));
+        }
+        return out != null ? out : java.util.Collections.<Blast>emptyList();
+    }
+
+    /** The warning marks: a crimson disc filling to its edge, a ring that throbs faster as the rock comes down. */
+    private void drawMarks(Canvas canvas, float offX, float offY, long now) {
+        for (Blast b : blasts) {
+            float k = Math.min(1f, (now - b.born) / (float) Math.max(1, b.at - b.born));
+            float sx = Sprites.snap(b.x - offX), sy = Sprites.snap(b.y - offY);
+            float ry = b.r * 0.55f; // laid on the floor, like the rest
+            markPaint.setStyle(Paint.Style.FILL);
+            markPaint.setColor(Color.argb((int) (40 + 70 * k), 224, 40, 30));
+            float inner = b.r * (0.25f + 0.75f * k);
+            canvas.drawOval(sx - inner, sy - inner * 0.55f, sx + inner, sy + inner * 0.55f, markPaint);
+            float throb = 0.5f + 0.5f * (float) Math.sin(now / (110.0 - 80.0 * k));
+            markPaint.setStyle(Paint.Style.STROKE);
+            markPaint.setStrokeWidth(Sprites.PX * (k > 0.7f ? 2 : 1));
+            markPaint.setColor(Color.argb((int) (150 + 105 * throb), 255, 70 + (int) (120 * k * throb), 40));
+            canvas.drawOval(sx - b.r, sy - ry, sx + b.r, sy + ry, markPaint);
+            // a cross hair at its heart
+            float c = Sprites.PX * 3;
+            canvas.drawLine(sx - c, sy, sx + c, sy, markPaint);
+            canvas.drawLine(sx, sy - c * 0.55f, sx, sy + c * 0.55f, markPaint);
+        }
+    }
+
+    /** The rocks coming down onto their marks, out of the top right, in their last METEOR_FALL ms. */
+    private void drawMeteors(Canvas canvas, float offX, float offY, long now) {
+        Sprites.Anim rock = Sprites.get("fx.meteor");
+        for (Blast b : blasts) {
+            long left = b.at - now;
+            if (left > METEOR_FALL) continue;
+            float f = 1f - left / (float) METEOR_FALL, d = 760f * (1f - f);
+            float mx = b.x + 0.42f * d - offX, my = b.y - 0.91f * d - offY;
+            if (rock != null) {
+                Sprites.draw(canvas, rock, rock.at(now), mx, my, false, 1.3f, 0, 255);
+            } else {
+                markPaint.setStyle(Paint.Style.FILL);
+                markPaint.setColor(Color.rgb(255, 120, 40));
+                canvas.drawCircle(mx, my, 18f, markPaint);
+            }
+        }
+    }
+
     /** Plays a baked effect once with its pivot (its ground point) at x, y; mirrored when flip. */
     public synchronized void play(String name, float x, float y, boolean flip) {
         play(name, x, y, flip, 0);
@@ -331,6 +532,7 @@ public class GameEffects {
             canvas.drawOval(sx - s.rx, sy - s.ry, sx + s.rx, sy + s.ry, stainPaint);
             canvas.restore();
         }
+        if (!blasts.isEmpty()) drawMarks(canvas, offX, offY, now);
     }
 
     /**
@@ -342,6 +544,7 @@ public class GameEffects {
         long now = System.currentTimeMillis();
         float offX = camera.getOffsetX();
         float offY = camera.getOffsetY();
+        if (!blasts.isEmpty()) drawMeteors(canvas, offX, offY, now);
 
         // Slashes widen slightly and thin out as they fade
         for (Slash s : slashes) {
@@ -361,6 +564,15 @@ public class GameEffects {
 
         for (Particle p : particles) {
             float progress = Math.min(1f, (float) (now - p.born) / p.life);
+            if (p.pixel) {
+                // winks white now and then, and flickers before it goes
+                if (progress > 0.7f && ((now / 40) & 1) == 0) continue;
+                float px = Sprites.PX * p.size, sx = Sprites.snap(p.x - offX), sy = Sprites.snap(p.y - offY);
+                pixelPaint.setColor((now / 70 + p.born) % 5 == 0 ? Color.WHITE : p.color);
+                pixelPaint.setAlpha((int) (255 * (1f - progress * 0.5f)));
+                canvas.drawRect(sx, sy, sx + px, sy + px, pixelPaint);
+                continue;
+            }
             particlePaint.setColor(p.color);
             particlePaint.setAlpha((int) (255 * (1f - progress)));
             canvas.drawCircle(p.x - offX, p.y - offY, p.size * (1f - progress * 0.5f), particlePaint);
@@ -383,10 +595,13 @@ public class GameEffects {
 
     /** Removes every effect, e.g. when a new floor starts. */
     public synchronized void clear() {
+        blasts.clear();
         particles.clear();
         texts.clear();
         slashes.clear();
         stains.clear();
         sprites.clear();
+        ghosts.clear();
+        streaks.clear();
     }
 }

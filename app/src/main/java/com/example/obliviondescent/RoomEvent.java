@@ -16,7 +16,7 @@ import java.util.Set;
  * (checkRoomEvents) and GameDisplay gives them their own floor and map colour.
  */
 enum RoomEvent {
-    // A small blood-soaked chapel: a quarter of your max HP for a blessing (one more perk pick)
+    // A small blood-soaked chapel: a quarter of your max HP for a blessing (a level's worth of stat points)
     SHRINE("Blood Shrine", 4, 4, 1, 4, Color.rgb(58, 18, 18), Color.rgb(176, 36, 36)),
     // A smoky den of card tables: gold for a mystery item of any rarity
     GAMBLER("Gambler's Den", 5, 4, 1, 4, Color.rgb(46, 34, 26), Color.rgb(212, 175, 55)),

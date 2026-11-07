@@ -237,6 +237,9 @@ public class Player {
                 canvas.scale(1.12f, 0.88f, drawX, feet);
             }
             Sprites.draw(canvas, body, frame, drawX, feet, faceLeft, paint.getColor(), alpha);
+            shownBody = body;
+            shownFrame = frame;
+            shownFlip = faceLeft;
             if (squash) {
                 Sprites.flash(canvas, body, frame, drawX, feet, faceLeft, 1f, flashPaint.getColor(), 170);
                 canvas.restore();
@@ -389,6 +392,16 @@ public class Player {
     }
 
     public void setInvulnerable(boolean invulnerable) { this.invulnerable = invulnerable; }
+
+    // The frame last drawn, so a dash can leave afterimages of exactly what was on screen
+    private volatile Sprites.Anim shownBody;
+    private volatile int shownFrame;
+    private volatile boolean shownFlip;
+
+    /** Leaves an afterimage of the body as last drawn, where it stands now (GameEffects.ghost). */
+    public void leaveGhost(GameEffects effects, int color, long life) {
+        effects.ghost(shownBody, shownFrame, x, y + radius * FEET, shownFlip, color, life);
+    }
     public volatile int trailColor = Color.WHITE; // wardrobe swing trail
     public void setColor(int color) { paint.setColor(color); }
     public int getColor() { return paint.getColor(); }

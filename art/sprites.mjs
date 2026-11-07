@@ -97,8 +97,8 @@ export const SPRITES = [
   { name: "fx.key", fx: "pickups/key-glint", fps: 9 },
   // a healing draught bobbing where a barrel broke open (GameActivity.dropBarrelPotion), red like the heal
   { name: "fx.potion", fx: "pickups/potion", fps: 9, opts: { palette: ["#1a0508", "#4a0c14", "#8a1622", "#c8283a", "#f04a5a", "#ff8a94", "#ffd0d4", "#ffffff"] } },
-  { name: "fx.beam.vault", fx: "pickups/loot-beam", fps: 9, opts: { palette: ["#1e1206", "#4a2c08", "#86520c", "#c48412", "#f0b424", "#ffe066", "#fff6c4", "#ffffff"] } },
-  { name: "fx.beam.boss", fx: "pickups/loot-beam", fps: 9 },
+  { name: "fx.beam.vault", fx: "pickups/loot-beam", fps: 9, opts: { height: 92, palette: ["#1e1206", "#4a2c08", "#86520c", "#c48412", "#f0b424", "#ffe066", "#fff6c4", "#ffffff"] } },
+  { name: "fx.beam.boss", fx: "pickups/loot-beam", fps: 9, opts: { height: 92 } },
   // arrivals: the rune circle and burst where the dead rise (cut before pixelfx's own brute climbs out),
   // a rift for a boss or a Trial wave, the light that writes the player back in at a checkpoint
   { name: "fx.summon", fx: "spawn/summon-rise", fps: 12, until: 1.3 },
@@ -115,6 +115,16 @@ export const SPRITES = [
   // heavy blows on the floor: a boss's slam, and smaller landings (the Hunter's leap, a Tank's hammer)
   { name: "fx.slam", fx: "impacts/ground-slam", fps: 9, until: 1.7, opts: { reach: 58 } },
   { name: "fx.land", fx: "impacts/heavy-landing", fps: 15 },
+  // the dash's two ends (od/dash): the kick where you push off and the skid where you stop, baked five ways
+  // like the bodies (fx.dash.kick, fx.dash.kick.se ...), the other three mirrored (GameActivity.dash)
+  ...[["e", [1, 0]], ["se", [1, 1]], ["s", [0, 1]], ["ne", [1, -1]], ["n", [0, -1]]].flatMap(([view, dir]) =>
+    ["kick", "skid"].map((anim) => ({ name: `fx.dash.${anim}${view === "e" ? "" : "." + view}`, fx: "od/dash", opts: { anim, dir } }))),
+  // a boss's LAST STAND (od/rage, od/roar, od/meteor): its hellfire ring, behind and in front of the body, the
+  // roar that starts it, and the burning rocks it brings down on you
+  { name: "fx.rage.back", fx: "od/rage", fps: 12, opts: { anim: "back" } },
+  { name: "fx.rage.front", fx: "od/rage", fps: 12, opts: { anim: "front" } },
+  { name: "fx.roar", fx: "od/roar", fps: 20 },
+  { name: "fx.meteor", fx: "od/meteor", fps: 15 },
   // water: drops falling from the dark into the Flooded Catacombs' pools, the Healing Spring's fountain
   { name: "prop.drip", fx: "water/drip", fps: 12, opts: { source: false } },
   { name: "prop.fountain", fx: "water/fountain", fps: 9 },

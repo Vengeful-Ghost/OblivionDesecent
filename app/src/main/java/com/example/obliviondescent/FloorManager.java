@@ -124,6 +124,11 @@ public class FloorManager {
         hasExitRoom     = true;
     }
 
+    /** Opens the exit room's portals now, whatever the kill count (the guided tutorial's last room). */
+    public void openPortalNow() {
+        if (!portalOpen) openPortal(exitRoomCenterX, exitRoomCenterY);
+    }
+
     private void openPortal(float playerX, float playerY) {
         portalOpen = true;
 

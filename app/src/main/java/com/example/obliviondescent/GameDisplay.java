@@ -67,6 +67,10 @@ public class GameDisplay extends View {
     private final Paint wallFacePaint = new Paint(), mortarPaint = new Paint(), wallFootPaint = new Paint();
     // Low health in a fight: red edges that throb with each heartbeat (0 = off)
     private final Paint dangerPaint = new Paint();
+    private final Paint crackPaint = new Paint(); // the secret room's cracked wall
+    private final Paint ragePaint = new Paint(), roarPaint = new Paint();
+    private volatile boolean raging;  // a boss's last stand is on: the edges burn and throb crimson
+    private volatile long roarAt;     // when its roar went off: the screen flashes white-red
     private volatile long heartbeatAt = 0;
 
     // Dungeon darkness: everything dims, then lights cut soft holes back out of it; the Void is darker
@@ -421,6 +425,16 @@ public class GameDisplay extends View {
         zoomUntil = zoomStart + ms;
     }
 
+    /** A boss's last stand: while on, the screen's edges burn crimson and throb with its heartbeat. */
+    public void setRaging(boolean on) {
+        raging = on;
+    }
+
+    /** The boss roars: a white-red flash over the whole screen. */
+    public void roar() {
+        roarAt = System.currentTimeMillis();
+    }
+
     /** Time of the latest heartbeat while low on health in a fight, or 0 to clear the red edges. */
     public void setHeartbeat(long at) {
         heartbeatAt = at;
@@ -481,6 +495,8 @@ public class GameDisplay extends View {
                 android.graphics.Shader.TileMode.CLAMP));
         dangerPaint.setShader(new RadialGradient(w / 2f, h / 2f, radius,
                 new int[]{0x00000000, 0x00000000, 0xD0B00010}, new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
+        ragePaint.setShader(new RadialGradient(w / 2f, h / 2f, radius,
+                new int[]{0x00000000, 0x30500000, 0xE0D01808}, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
         layoutMinimap(w);
         if (w > 0 && h > 0) pixels = new PixelCanvas(w, h);
     }
@@ -506,6 +522,18 @@ public class GameDisplay extends View {
             float throb = (float) Math.exp(-(nowMs - beat) / 220.0);
             dangerPaint.setAlpha((int) (255 * (0.45f + 0.55f * throb)));
             canvas.drawRect(0, 0, getWidth(), getHeight(), dangerPaint);
+        }
+        if (raging && ragePaint.getShader() != null) {
+            // the boss's fury: burning edges, throbbing on its 600 ms heartbeat
+            float throb = (float) Math.exp(-(nowMs % 600) / 140.0);
+            ragePaint.setAlpha((int) (255 * (0.55f + 0.45f * throb)));
+            canvas.drawRect(0, 0, getWidth(), getHeight(), ragePaint);
+        }
+        long roared = nowMs - roarAt;
+        if (roared < 450) {
+            float k = 1f - roared / 450f;
+            roarPaint.setColor(Color.argb((int) (200 * k * k), 255, roared < 70 ? 240 : 90, roared < 70 ? 220 : 60));
+            canvas.drawRect(0, 0, getWidth(), getHeight(), roarPaint);
         }
 
         // 4. Minimap HUD overlay (always on top, hidden in shop), or the whole floor when tapped
@@ -564,6 +592,7 @@ public class GameDisplay extends View {
         if (goldCoins != null) {
             synchronized (goldCoins) {
                 for (GoldCoin coin : goldCoins) {
+                    if (floorLayout != null && floorLayout.hiddenAt(coin.x, coin.y)) continue;
                     coin.draw(canvas, camera);
                 }
             }
@@ -572,6 +601,7 @@ public class GameDisplay extends View {
         if (treasureChests != null) {
             synchronized (treasureChests) {
                 for (TreasureChest chest : treasureChests) {
+                    if (floorLayout != null && floorLayout.hiddenAt(chest.x, chest.y)) continue;
                     chest.draw(canvas, camera);
                 }
             }
@@ -601,6 +631,7 @@ public class GameDisplay extends View {
         }
         // 3. Draw Player
         drawRemotePlayers(canvas);
+        if (effects != null) effects.drawDash(canvas, camera);
         player.draw(canvas, camera);
 
         drawDarkness(canvas);
@@ -633,6 +664,7 @@ public class GameDisplay extends View {
             }
         }
         for (Props.Decor d : floorLayout.decor) {
+            if (floorLayout.hiddenAt(d.x, d.y)) continue;
             if (d.kind == Props.TORCH) {
                 Props.torchLight(d, lightSpot);
                 float flick = 0.92f + 0.08f * (float) Math.sin(now / 90.0 + d.a * 1.7);
@@ -661,7 +693,7 @@ public class GameDisplay extends View {
         if (treasureChests != null) {
             synchronized (treasureChests) {
                 for (TreasureChest chest : treasureChests) {
-                    if (!chest.opened) lightHole(canvas, chest.x - offX, chest.y - offY, 200f, 0.7f);
+                    if (!chest.opened && !floorLayout.hiddenAt(chest.x, chest.y)) lightHole(canvas, chest.x - offX, chest.y - offY, 200f, 0.7f);
                 }
             }
         }
@@ -671,6 +703,13 @@ public class GameDisplay extends View {
         gate = floorLayout.trialGate;
         if (gate != null && floorLayout.trialSealed)
             lightHole(canvas, (gate[0] + gate[2]) / 2f - offX, (gate[1] + gate[3]) / 2f - offY, 200f, 0.8f);
+        if (floorLayout.bossSealed)
+            for (float[] g : floorLayout.bossGates)
+                lightHole(canvas, (g[0] + g[2]) / 2f - offX, (g[1] + g[3]) / 2f - offY, 200f, 0.8f);
+        for (int i = Math.max(0, floorLayout.stagesOpen); i < floorLayout.stageGates.size(); i++) {
+            float[] g = floorLayout.stageGates.get(i);
+            lightHole(canvas, (g[0] + g[2]) / 2f - offX, (g[1] + g[3]) / 2f - offY, 200f, 0.8f);
+        }
         canvas.restoreToCount(layer);
     }
 
@@ -785,6 +824,7 @@ public class GameDisplay extends View {
 
         // Corridors drawn first so room floors paint over any seam
         for (Corridor c : floorLayout.corridors) {
+            if (floorLayout.hidden(c)) continue;
             float left = c.x - offX;
             float top  = c.y - offY;
             floor(canvas, left, top, left + c.width, top + c.height, corridorFloorPaint);
@@ -796,6 +836,7 @@ public class GameDisplay extends View {
             float right  = left + r.width;
             float bottom = top + r.height;
             if (right < 0 || bottom < 0 || left > getWidth() || top > getHeight()) continue;
+            if (floorLayout.hidden(r)) continue;
             floor(canvas, left, top, right, bottom, roomPaintFor(r));
             // Darker band along the walls gives the room some depth
             canvas.drawRect(left + 12f, top + 12f, right - 12f, bottom - 12f, wallShadowPaint);
@@ -803,6 +844,7 @@ public class GameDisplay extends View {
         }
 
         for (Corridor c : floorLayout.corridors) {
+            if (floorLayout.hidden(c)) continue;
             float left   = c.x - offX;
             float top    = c.y - offY;
             float right  = c.x + c.width  - offX;
@@ -819,8 +861,12 @@ public class GameDisplay extends View {
             }
         }
         drawRoomBlocks(canvas, offX, offY);
+        drawCrackedWall(canvas, offX, offY);
         drawVaultGate(canvas, offX, offY);
-        drawTrialGate(canvas, offX, offY);
+        if (floorLayout.trialSealed) drawPortcullis(canvas, floorLayout.trialGate, offX, offY);
+        if (floorLayout.bossSealed) for (float[] g : floorLayout.bossGates) drawPortcullis(canvas, g, offX, offY);
+        for (int i = Math.max(0, floorLayout.stagesOpen); i < floorLayout.stageGates.size(); i++)
+            drawPortcullis(canvas, floorLayout.stageGates.get(i), offX, offY);
         drawDecor(canvas);
     }
 
@@ -831,6 +877,7 @@ public class GameDisplay extends View {
      */
     private void drawRoomBlocks(Canvas canvas, float offX, float offY) {
         for (Room r : floorLayout.rooms) {
+            if (floorLayout.hidden(r)) continue;
             for (int i = 0; i < r.blocks.size(); i++) {
                 RectF b = r.blocks.get(i);
                 float l = b.left - offX, t = b.top - offY, rt = b.right - offX, bt = b.bottom - offY;
@@ -850,10 +897,9 @@ public class GameDisplay extends View {
         }
     }
 
-    /** The Trial arena while its waves fight: an iron portcullis across the door, glowing crimson. */
-    private void drawTrialGate(Canvas canvas, float offX, float offY) {
-        float[] g = floorLayout.trialGate;
-        if (g == null || !floorLayout.trialSealed) return;
+    /** A sealed fight (a Trial's waves, a boss): an iron portcullis across the door, glowing crimson. */
+    private void drawPortcullis(Canvas canvas, float[] g, float offX, float offY) {
+        if (g == null) return;
         float x1 = g[0] - offX, y1 = g[1] - offY, x2 = g[2] - offX, y2 = g[3] - offY;
         float cx = (x1 + x2) / 2f, cy = (y1 + y2) / 2f;
         float pulse = 0.75f + 0.25f * (float) Math.sin(System.currentTimeMillis() / 250.0);
@@ -879,6 +925,94 @@ public class GameDisplay extends View {
         gatePaint.setStrokeWidth(3f);
         gatePaint.setColor(Color.rgb(139, 24, 24));
         canvas.drawLine(x1, y1, x2, y2, gatePaint);
+    }
+
+    /**
+     * The secret room's sealed doorway: the wall is drawn whole, split by one dark crack from its top to its
+     * bottom (on a north wall, down the brick face) with a chip of stone fallen at its foot. Easy to walk past,
+     * there to be found by a player who looks.
+     */
+    private void drawCrackedWall(Canvas canvas, float offX, float offY) {
+        float[] g = floorLayout.secretWall;
+        if (g == null || !floorLayout.secretSealed) return;
+        float x1 = g[0] - offX, y1 = g[1] - offY, x2 = g[2] - offX, y2 = g[3] - offY;
+        if (Math.max(x1, x2) < -200 || Math.min(x1, x2) > getWidth() + 200
+                || Math.max(y1, y2) < -200 || Math.min(y1, y2) > getHeight() + 200) return;
+        float px = Sprites.PX;
+        int side = floorLayout.secretSide;
+        boolean horizontal = side == Room.NORTH || side == Room.SOUTH;
+        boolean north = side == Room.NORTH;
+        long seed = (long) (g[0] * 31 + g[1] * 17);
+        crackPaint.setStyle(Paint.Style.FILL);
+        // one crack splitting the wall from top to bottom: on a north wall down its whole brick face, on the
+        // others right across the wall's thickness. A dark zigzag, two pixels wide in places, a lit edge beside it
+        // and a short branch off its middle.
+        float edge = 10f; // half the wall line's thickness (wallEdgePaint)
+        float at = horizontal ? x1 + (x2 - x1) * 0.42f : y1 + (y2 - y1) * 0.42f;
+        float from = horizontal ? y1 - edge : x1 - edge;
+        float to = horizontal ? (north ? y1 + WALL_FACE : y1 + edge) : x1 + edge;
+        int steps = Math.max(3, Math.round((to - from) / px));
+        float along = at;
+        if (!north) {
+            // a wall seen from above is only a thin band: the crack runs along it for about a tile instead,
+            // zigzagging from one edge to the other, with a branch
+            float centre = horizontal ? y1 : x1, start = at - 6 * px;
+            int length = 14;
+            float across = centre;
+            for (int st = 0; st < length; st++) {
+                long h = (seed + st * 337) * 2654435761L;
+                float step = ((h >>> 13) % 3 - 1) * px;
+                across = Math.max(centre - edge + px, Math.min(centre + edge - 2 * px, across + step));
+                float a2 = start + st * px;
+                crackDot(canvas, horizontal, across, a2, px, Color.argb(225, 12, 9, 8), true);
+                if ((h >>> 19) % 3 == 0) crackDot(canvas, horizontal, across + px, a2, px, Color.argb(200, 12, 9, 8), true);
+                crackDot(canvas, horizontal, across - px, a2, px, Color.argb(70, 170, 158, 144), true);
+                if (st == length / 2)
+                    for (int k = 1; k <= 3; k++)
+                        crackDot(canvas, horizontal, across + k * px, a2 + k * px, px, Color.argb(190, 12, 9, 8), true);
+            }
+            steps = 0;
+        }
+        for (int st = 0; st < steps; st++) {
+            long h = (seed + st * 337) * 2654435761L;
+            if (st > 0) along += ((h >>> 13) % 3 - 1) * px;
+            float across = from + st * px;
+            boolean wide = (h >>> 19) % 3 == 0;
+            crackDot(canvas, horizontal, along, across, px, Color.argb(225, 12, 9, 8));
+            if (wide) crackDot(canvas, horizontal, along - px, across, px, Color.argb(200, 12, 9, 8));
+            crackDot(canvas, horizontal, along + px, across, px, Color.argb(70, 170, 158, 144)); // the lit lip
+            if (st == steps / 2) {
+                // a short branch off to the side
+                float b = along;
+                for (int k = 1; k <= 3; k++) {
+                    b += px;
+                    crackDot(canvas, horizontal, b, across + k * px * 0.5f, px, Color.argb(190, 12, 9, 8));
+                }
+            }
+        }
+        // one chip off the wall, lying at its foot
+        long h = seed * 2654435761L;
+        float u = 0.45f + ((h >>> 11) % 20) / 100f;
+        float sx, sy;
+        if (north) { sx = x1 + (x2 - x1) * u; sy = y1 + WALL_FACE + px; }
+        else if (side == Room.SOUTH) { sx = x1 + (x2 - x1) * u; sy = y1 - 3 * px; }
+        else if (side == Room.EAST) { sx = x1 - 3 * px; sy = y1 + (y2 - y1) * u; }
+        else { sx = x1 + 2 * px; sy = y1 + (y2 - y1) * u; }
+        crackPaint.setColor(Color.argb(150, 96, 88, 80));
+        canvas.drawRect(Sprites.snap(sx), Sprites.snap(sy), Sprites.snap(sx) + px, Sprites.snap(sy) + px, crackPaint);
+    }
+
+    /** One art pixel of the secret wall's crack: `along` runs with the wall, `across` through it. */
+    private void crackDot(Canvas canvas, boolean horizontal, float along, float across, float px, int color) {
+        crackDot(canvas, horizontal, along, across, px, color, false);
+    }
+
+    /** As crackDot; swapped, the first coordinate goes through the wall and the second runs with it. */
+    private void crackDot(Canvas canvas, boolean horizontal, float a, float b, float px, int color, boolean swapped) {
+        float along = swapped ? b : a, across = swapped ? a : b;
+        crackPaint.setColor(color);
+        float x = Sprites.snap(horizontal ? along : across), y = Sprites.snap(horizontal ? across : along);
+        canvas.drawRect(x, y, x + px, y + px, crackPaint);
     }
 
     /** Locked vault: an iron beam with gold bar tops and a lock plate across the corridor mouth. */
@@ -921,9 +1055,11 @@ public class GameDisplay extends View {
         canvas.save();
         canvas.translate(-offX, -offY);
         for (Props.Decor d : list)
-            if (d.x > left && d.x < right && d.y > top && d.y < bottom) props.drawDecorLight(canvas, d, now);
+            if (d.x > left && d.x < right && d.y > top && d.y < bottom && !floorLayout.hiddenAt(d.x, d.y))
+                props.drawDecorLight(canvas, d, now);
         for (Props.Decor d : list)
-            if (d.x > left && d.x < right && d.y > top && d.y < bottom) props.drawDecor(canvas, d, now);
+            if (d.x > left && d.x < right && d.y > top && d.y < bottom && !floorLayout.hiddenAt(d.x, d.y))
+                props.drawDecor(canvas, d, now);
         canvas.restore();
     }
 
@@ -1030,9 +1166,15 @@ public class GameDisplay extends View {
         float right  = r.x + r.width  - offX;
         float bottom = r.y + r.height - offY;
         float hw     = FloorLayout.CORRIDOR_WIDTH * 0.5f; // 75 px — half door width
+        // a sealed secret door is still wall (cracked, drawn by drawCrackedWall)
+        boolean[] used = r.sideUsed;
+        if (floorLayout.secretSealed && r == floorLayout.secretHost) {
+            used = used.clone();
+            used[floorLayout.secretSide] = false;
+        }
 
         // NORTH wall (top edge)
-        if (r.sideUsed[Room.NORTH]) {
+        if (used[Room.NORTH]) {
             float door = left + r.width * 0.5f;
             wallFace(canvas, left, door - hw, top);
             wallFace(canvas, door + hw, right, top);
@@ -1044,7 +1186,7 @@ public class GameDisplay extends View {
         }
 
         // SOUTH wall (bottom edge)
-        if (r.sideUsed[Room.SOUTH]) {
+        if (used[Room.SOUTH]) {
             float door = left + r.width * 0.5f;
             wall(canvas, left, bottom, door - hw, bottom);
             wall(canvas, door + hw, bottom, right, bottom);
@@ -1053,7 +1195,7 @@ public class GameDisplay extends View {
         }
 
         // EAST wall (right edge)
-        if (r.sideUsed[Room.EAST]) {
+        if (used[Room.EAST]) {
             float door = top + r.height * 0.5f;
             wall(canvas, right, top, right, door - hw);
             wall(canvas, right, door + hw, right, bottom);
@@ -1062,7 +1204,7 @@ public class GameDisplay extends View {
         }
 
         // WEST wall (left edge)
-        if (r.sideUsed[Room.WEST]) {
+        if (used[Room.WEST]) {
             float door = top + r.height * 0.5f;
             wall(canvas, left, top, left, door - hw);
             wall(canvas, left, door + hw, left, bottom);
@@ -1132,6 +1274,7 @@ public class GameDisplay extends View {
         canvas.drawColor(Color.argb(225, 8, 6, 5));
         float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
         for (Room r : floorLayout.rooms) {
+            if (floorLayout.hidden(r)) continue;
             if (!r.explored && !nextToExplored(r)) continue;
             minX = Math.min(minX, r.x);
             minY = Math.min(minY, r.y);
@@ -1169,6 +1312,7 @@ public class GameDisplay extends View {
         Room here = floorLayout.getRoomAt(player.x, player.y);
         long now = System.currentTimeMillis();
         for (Corridor c : floorLayout.corridors) {
+            if (floorLayout.hidden(c)) continue;
             Room a = minimapRoom(c.roomIdA), b = minimapRoom(c.roomIdB);
             if ((a == null || !a.explored) && (b == null || !b.explored)) continue;
             canvas.drawRect(ox + c.x * scale, oy + c.y * scale,
@@ -1176,6 +1320,7 @@ public class GameDisplay extends View {
         }
         float corner = 2f * density;
         for (Room r : floorLayout.rooms) {
+            if (floorLayout.hidden(r)) continue;
             if (!r.explored && !nextToExplored(r)) continue;
             mapRect.set(ox + r.x * scale, oy + r.y * scale, ox + (r.x + r.width) * scale, oy + (r.y + r.height) * scale);
             if (r.explored) {

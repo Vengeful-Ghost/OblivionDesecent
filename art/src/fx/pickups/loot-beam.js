@@ -20,7 +20,9 @@ export const meta = {
   },
 };
 
-const H = 150, RINGS = [0.08, 0.58];
+// the column's height in art px; opts.height shortens it (Oblivion Descent's chests keep it low)
+let H = 150;
+const RINGS = [0.08, 0.58];
 const STEEL = ["#151726", "#2c3149", "#4f5775", "#8a93b3", "#d6dcef", "#ffffff"].map(hex);
 const GOLD = ["#3a2008", "#7a4a10", "#b8801c", "#e8b432", "#ffe27a", "#fff6cc"].map(hex);
 const LEATHER = ["#1e0f0e", "#3e2016", "#633620"].map(hex);
@@ -75,6 +77,7 @@ function sword(p, C, ph) {
 }
 
 export function drawBack(p, t, o) {
+  H = o.height || 150;
   const C = fit(o.palette, 8), T = meta.duration, ph = t / T;
   // the floor: a pool of rarity light, a bright spot right under the item
   pool(p, 0.5, 0, 34, 5, C[4], 0.14);
@@ -97,6 +100,7 @@ export function drawBack(p, t, o) {
 }
 
 export function draw(p, t, o) {
+  H = o.height || 150;
   const C = fit(o.palette, 8), T = meta.duration, ph = t / T;
   // a soft shadow where it lies, dark in the middle of the lit floor
   blobShadow(p, OX - 0.5, 12.5, 0.95);

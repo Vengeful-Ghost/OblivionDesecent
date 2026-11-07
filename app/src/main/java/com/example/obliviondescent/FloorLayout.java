@@ -54,6 +54,22 @@ public class FloorLayout {
     public Corridor trialCorridor; // the Trial arena's corridor, sealed while its waves fight
     public float[] trialGate;      // gate line across that corridor's arena end: {x1, y1, x2, y2}
     public volatile boolean trialSealed;
+    public final List<Corridor> bossCorridors = new ArrayList<>(); // the boss room's doorways
+    public final List<float[]> bossGates = new ArrayList<>();       // a gate line across each, at the room's end
+    public volatile boolean bossSealed; // per phone: shut while this phone's player fights the boss inside
+    // The guided tutorial's doors (FloorLayout.tutorial): door i stays shut until stagesOpen passes it
+    public final List<Corridor> stageCorridors = new ArrayList<>();
+    public final List<float[]> stageGates = new ArrayList<>();
+    public volatile int stagesOpen = Integer.MAX_VALUE;
+    public Room[] stageRooms; // the tutorial's rooms in the order they're walked through
+    // A secret room (solo, some floors): a small treasure room behind a cracked stretch of an ordinary room's
+    // wall. Until a fully charged heavy blow blows the wall open it stays sealed, unseen and off the map.
+    public Room secretRoom;
+    public Corridor secretCorridor;
+    public Room secretHost;        // the room whose wall hides it
+    public int secretSide;         // which of the host's walls (Room.NORTH ...)
+    public float[] secretWall;     // the cracked stretch: {x1, y1, x2, y2} across the doorway, on the host's wall
+    public volatile boolean secretSealed;
     public Biome biome = Biome.CRYPT;
     public List<Props.Decor> decor = new ArrayList<>(); // drawn by GameDisplay; barrels, crates and pillars are solid
 
@@ -125,11 +141,23 @@ public class FloorLayout {
         float xs   = 4 * Room.TILE;
         layout.exitRoom = growAtEnd(layout, rng, deepest, xs, xs, Room.Type.EXIT);
 
+        // Every doorway of the boss room can shut, so the fight can't be walked away from or run past
+        if (layout.bossRoom != null) {
+            for (Corridor c : layout.corridors) {
+                if (c.roomIdA != layout.bossRoom.id && c.roomIdB != layout.bossRoom.id) continue;
+                layout.bossCorridors.add(c);
+                layout.bossGates.add(gateLine(c, layout.bossRoom));
+            }
+        }
+
         // ── 5. Event rooms (solo) ─────────────────────────────────────────────
         if (withEvents) placeEventRooms(layout, rng, floor);
 
         // ── 5b. Room shapes: not every hall is a plain box ────────────────────
         shapeRooms(layout, rng);
+
+        // ── 5c. A secret room behind a cracked wall (solo), after the shaping so it stays a plain box ──
+        if (withEvents && rng.nextFloat() < 0.4f) placeSecretRoom(layout, rng);
 
         layout.buildNavigation();
 
@@ -148,6 +176,79 @@ public class FloorLayout {
                 + killCount + " enemies distributed.");
 
         return layout;
+    }
+
+    /**
+     * The guided tutorial's floor (GameActivity's coach): always the same six rooms in a winding line, each
+     * sealed from the next until its lesson is done, plus a side room with a Blood Shrine and a vault.
+     *
+     *   [A entry] -> [B training] -> [C arena]
+     *                                   |
+     *   [F exit] <- [E treasure] <- [D supplies] -> (shrine)
+     *                   |
+     *                (vault)
+     *
+     * No enemies are placed: the coach raises each room's foes as you walk in. stageRooms holds A..F.
+     */
+    public static FloorLayout tutorial() {
+        FloorLayout layout = new FloorLayout();
+        layout.biome = Biome.CRYPT;
+        float t = Room.TILE;
+        Room a = new Room(0, -2.5f * t, -2.5f * t, 5 * t, 5 * t, Room.Type.ENTRY);
+        layout.rooms.add(a);
+        layout.entryRoom = a;
+        Room b = growFixed(layout, a, Room.EAST, 7 * t, 6 * t, Room.Type.MEDIUM);
+        Room c = growFixed(layout, b, Room.EAST, 8 * t, 7 * t, Room.Type.LARGE);
+        Room d = growFixed(layout, c, Room.SOUTH, 6 * t, 5 * t, Room.Type.MEDIUM);
+        Room shrine = growFixed(layout, d, Room.EAST, RoomEvent.SHRINE.tilesW * t, RoomEvent.SHRINE.tilesH * t, Room.Type.EVENT);
+        shrine.event = RoomEvent.SHRINE;
+        layout.eventRooms.add(shrine);
+        Room e = growFixed(layout, d, Room.WEST, 6 * t, 6 * t, Room.Type.MEDIUM);
+        Room vault = growFixed(layout, e, Room.SOUTH, 4 * t, 4 * t, Room.Type.SMALL);
+        Room f = growFixed(layout, e, Room.WEST, 5 * t, 4 * t, Room.Type.EXIT);
+        layout.exitRoom = f;
+        layout.stageRooms = new Room[]{a, b, c, d, e, f};
+        // the five doors along the path, each shut at the end in the room you're leaving
+        Room[] path = layout.stageRooms;
+        for (int i = 0; i + 1 < path.length; i++) {
+            Corridor door = between(layout, path[i], path[i + 1]);
+            layout.stageCorridors.add(door);
+            layout.stageGates.add(gateLine(door, path[i]));
+        }
+        layout.stagesOpen = 0;
+        // the vault, sealed by a gold gate a key opens
+        Corridor vaultDoor = between(layout, e, vault);
+        layout.vaultRoom = vault;
+        layout.vaultCorridor = vaultDoor;
+        layout.vaultGate = gateLine(vaultDoor, e);
+        layout.vaultLocked = true;
+        layout.buildNavigation();
+        layout.decor = Props.decorate(layout);
+        settleDecor(layout);
+        // the supply room's stores: a row of barrels and crates to smash
+        float cx = d.centerX(), cy = d.centerY();
+        float[][] stores = {{-300, -80, 1}, {-170, 60, 0}, {-40, -90, 1}, {90, 70, 1}, {220, -70, 0}, {330, 80, 1}};
+        for (float[] s : stores)
+            layout.decor.add(new Props.Decor(s[2] > 0 ? Props.BARREL : Props.CRATE, cx + s[0], cy + s[1], s[2] > 0 ? 30 : 34, 0));
+        return layout;
+    }
+
+    /** Grows dst off src's given side, exactly there (the tutorial's fixed floor is laid out to fit). */
+    private static Room growFixed(FloorLayout layout, Room src, int dir, float w, float h, Room.Type type) {
+        Room room = new Room(layout.rooms.size(), 0, 0, w, h, type);
+        Corridor corridor = computeConnection(src, dir, room);
+        src.sideUsed[dir] = true;
+        room.sideUsed[opp(dir)] = true;
+        layout.rooms.add(room);
+        layout.corridors.add(corridor);
+        return room;
+    }
+
+    /** The corridor joining two rooms, or null. */
+    private static Corridor between(FloorLayout layout, Room a, Room b) {
+        for (Corridor c : layout.corridors)
+            if ((c.roomIdA == a.id && c.roomIdB == b.id) || (c.roomIdA == b.id && c.roomIdB == a.id)) return c;
+        return null;
     }
 
     /** Rooms ordered by how many doors away from the entry they are, farthest first. */
@@ -221,20 +322,74 @@ public class FloorLayout {
         return null;
     }
 
-    /** The Trial arena's gate: across its corridor's arena end, so a sealed door keeps the fight inside. */
+    /**
+     * A small treasure room off a free side of an ordinary room, sealed behind that side's wall. It keeps no
+     * enemies; GameActivity puts a vault chest and coins in it.
+     */
+    private static void placeSecretRoom(FloorLayout layout, Random rng) {
+        List<Room> hosts = new ArrayList<>();
+        for (Room r : layout.rooms) {
+            if (r.type == Room.Type.SMALL || r.type == Room.Type.MEDIUM || r.type == Room.Type.LARGE) hosts.add(r);
+        }
+        Collections.shuffle(hosts, rng);
+        float size = 4 * Room.TILE;
+        for (Room host : hosts) {
+            if (host == layout.treasureRoom || host == layout.vaultRoom) continue;
+            for (int d : shuffledDirs(rng, -1)) {
+                Room secret = growExact(layout, host, d, size, size, Room.Type.SMALL);
+                if (secret == null) continue;
+                sealSecret(layout, host, secret, d);
+                return;
+            }
+        }
+    }
+
+    /** Seals a grown room as the floor's secret room behind host's wall on side d. */
+    private static void sealSecret(FloorLayout layout, Room host, Room secret, int d) {
+        secret.possibleEnemyCount = 0;
+        Corridor door = between(layout, host, secret);
+        layout.secretRoom = secret;
+        layout.secretCorridor = door;
+        layout.secretHost = host;
+        layout.secretSide = d;
+        layout.secretWall = gateLine(door, host);
+        layout.secretSealed = true;
+    }
+
+    /** True for what can't be seen yet: a sealed secret room, its corridor, and anything at a point inside them. */
+    public boolean hidden(Room r) {
+        return secretSealed && r == secretRoom;
+    }
+
+    public boolean hidden(Corridor c) {
+        return secretSealed && c == secretCorridor;
+    }
+
+    public boolean hiddenAt(float x, float y) {
+        if (!secretSealed || secretRoom == null) return false;
+        Room r = secretRoom;
+        if (x > r.x - 20 && x < r.x + r.width + 20 && y > r.y - 20 && y < r.y + r.height + 20) return true;
+        return secretCorridor != null && secretCorridor.contains(x, y);
+    }
+
+    /** The trial arena's gate: across its corridor's arena end, so a sealed door keeps the fight inside. */
     private static void sealableDoor(FloorLayout layout, Room arena) {
         for (Corridor c : layout.corridors) {
             if (c.roomIdA != arena.id && c.roomIdB != arena.id) continue;
-            if (c.width >= c.height) {
-                float x = arena.x > c.x ? c.x + c.width : c.x;
-                layout.trialGate = new float[]{x, c.y, x, c.y + c.height};
-            } else {
-                float y = arena.y > c.y ? c.y + c.height : c.y;
-                layout.trialGate = new float[]{c.x, y, c.x + c.width, y};
-            }
+            layout.trialGate = gateLine(c, arena);
             layout.trialCorridor = c;
             return;
         }
+    }
+
+    /** A gate line across a corridor at the end where it meets {@code room}: {x1, y1, x2, y2}. */
+    private static float[] gateLine(Corridor c, Room room) {
+        if (c.width >= c.height) {
+            float x = room.x > c.x ? c.x + c.width : c.x;
+            return new float[]{x, c.y, x, c.y + c.height};
+        }
+        float y = room.y > c.y ? c.y + c.height : c.y;
+        return new float[]{c.x, y, c.x + c.width, y};
     }
 
     /** Turns an ordinary room, preferably a dead end, into the treasure room; keeps rooms for enemies. */
@@ -613,9 +768,15 @@ public class FloorLayout {
         return false;
     }
 
-    /** A corridor behind a shut gate: a locked vault, or the Trial arena while its waves fight. */
+    /**
+     * A corridor behind a shut gate: a locked vault, the Trial arena while its waves fight, a boss fight, or a
+     * tutorial door not yet earned.
+     */
     private boolean gated(Corridor c) {
-        return (vaultLocked && c == vaultCorridor) || (trialSealed && c == trialCorridor);
+        if ((vaultLocked && c == vaultCorridor) || (trialSealed && c == trialCorridor)
+                || (bossSealed && bossCorridors.contains(c)) || (secretSealed && c == secretCorridor)) return true;
+        int stage = stageCorridors.indexOf(c);
+        return stage >= 0 && stage >= stagesOpen;
     }
 
     /**

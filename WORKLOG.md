@@ -219,3 +219,74 @@ section with what changed). In code:
 - Biome gear: `biomeGear` (`ShopItem.biomeTilted`), `withAdjective` / `withNoun`.
 
 Last checked: release APK builds. Not played on a phone.
+
+### Round 7 (2026-11-07): the second ideas list
+
+- Wardrobe (`MenuActivity.showWardrobe(onClose)` / `loadWardrobe` / `renderWardrobe`): opens once and redraws
+  its rows in place after a purchase; its Souls count is the altar's purple one (`styleSoulCount`); closing it
+  reloads the altar's count.
+- Boss rooms seal: `FloorLayout.bossCorridors` / `bossGates` / `bossSealed`, `GameActivity.tickBossSeal`
+  (per phone: shuts once you're all the way inside with the boss alive, lifts when it falls), drawn with the
+  Trial's portcullis (`GameDisplay.drawPortcullis`).
+- Biome music: `art/tools/music.mjs` composes and renders `res/raw/music_catacombs.wav`, `music_forge.wav`,
+  `music_void.wav` (22050 Hz mono, about 55 s loops, RMS -16 dBFS, original, synthesised). `Biome.music()`;
+  the Crypt keeps `game_music.mp3`, bosses `boss_music.mp3`. Not listened to: only checked as spectrograms.
+- Dash: `art/src/fx/od/dash.js` (kick and skid, five ways, `fx.dash.kick[.se/.s/.ne/.n]`, `fx.dash.skid...`),
+  `GameEffects.ghost` (afterimages of the player's own frame), `dashStart` / `dashMove` / `dashEnd` (pixel speed
+  lines), `dashSpark` (pixel squares); `GameActivity.dash` / `dashTrail` / `endDash`; gold after a perfect dodge.
+  Renders: `art/records/scenes/DASH_E.png`, `DASH_SE.png`, `DASH_N.png`.
+- Guided tutorial: the menu's ? asks, then starts `GameActivity` with `EXTRA_TUTORIAL`. `FloorLayout.tutorial()`
+  is a fixed six-room floor (doors `stageCorridors` / `stageGates` / `stagesOpen`, a shrine side room, a vault);
+  the coach (`coachEnter` / `tickCoach`, 25 steps in `COACH`) teaches moving, dash, attack, heavy, spin,
+  telegraphs and perfect dodges, levelling and stats, smashing barrels, potions, event rooms, elites and keys,
+  the vault, chests, the bag, mimics, portals and the shop; `coachFinale` covers bosses, biomes, Souls, the
+  Altar, daily modes, the Bestiary, co-op and every Settings section. Offline content, nothing saved, kills
+  don't count, no quests, you can't fall. Map check: `art/records/scenes/TUTORIAL_FLOOR.png`.
+
+Last checked: release APK builds (26.2 MB). Not played on a phone, and the emulator here can't start (no
+hypervisor driver), so the tutorial has only been traced by hand.
+
+### Round 8 (2026-11-07): stats in the bag, the boss's last stand, secret rooms
+
+- Stats: no level-up badge or dialog (`dialog_level_up.xml` deleted). `gainXp` adds `STAT_POINTS_PER_LEVEL` (3)
+  points a level to `pendingPerks`; `updateBagPip` shows them on the bag (`txt_bag_points`). The bag's
+  `filter_stats` tab opens `stats_panel` over the whole dialog (`showStatSheet` / `buildStatSheet` /
+  `refreshStatSheet` / `tapStat`, tiles `item_stat_tile.xml`); with no points (or a stat at its `cap`) a tap
+  plays `GATE_LOCKED`, buzzes and shakes. `Perk` gained `name` (its own name), `cap` and `amount()`; steps
+  were cut for three points a level; synergies need `SYNERGY_POINTS` (6). The Perks filter is gone.
+- Boss last stand (`Enemy`): `ULTIMATE_TELL` 1800 ms, then CAST for `ULT_TIME` 7 s driven by `rage()` (spiral
+  arms, `gapRing`, meteors into `pendingBlasts`, the hunter's volleys), then STUNNED for `EXHAUST_TIME`.
+  `isRaging()` blocks `takeDamage` (and `damageEnemy` shows IMMUNE); `isExhausted()` takes 1.5x. Drawn with
+  `fx.rage.back` / `fx.rage.front` (`art/src/fx/od/rage.js`), `Sprites.rage` (a crimson colour matrix), a
+  throbbing outline, a shudder and a swell. `GameActivity` plays `fx.roar` (`od/roar.js`), `GameDisplay.roar()`
+  and `setRaging` (burning edges), `tickRage` shakes on its heartbeat. Meteors: `GameEffects.mark` / `due`
+  (marks on the floor, `fx.meteor` from `od/meteor.js` falling), `tickBlasts`; co-op guests get them as "m"
+  events. Renders: `art/records/scenes/BOSS_RAGE.png`, `BOSS_LAST_STAND.png`.
+- Secret rooms (`FloorLayout.placeSecretRoom` / `sealSecret`, solo, 40% of floors, after `shapeRooms`): a 4 x 4
+  room off a free side of an ordinary room, its corridor gated while `secretSealed`; `hidden()` / `hiddenAt()`
+  keep it, its chest, coins and props off the screen and the map. `GameDisplay.drawCrackedWall` draws the
+  host's wall as loose bricks with lit cracks, and `drawDarkness` lets a glimmer through.
+  `GameActivity.breakSecretWall` (from `heavyAttack`) opens it on a full charge. `spawnRoomChest` puts a vault
+  chest (`TreasureChest.secret`) and coins inside. 203 of 480 generated solo floors had one, none overlapping.
+  Renders: `SECRET_SEALED.png`, `SECRET_OPEN.png`, `SECRET_NORTH_WALL.png`.
+- Chest beam: `pickups/loot-beam` takes `opts.height` (92 for `fx.beam.vault` / `fx.beam.boss`, was 150).
+- Tutorial: `C_SECRET` (a secret room south of the store room in `FloorLayout.tutorial`), an event-rooms card
+  at `C_EVENT`, the Level Up cards and `C_SPEND` hint for the STATS tab, the last stand in `coachFinale`; 26 steps.
+- Stat sheet render: `art/records/scenes/STATS_SHEET.png`.
+
+Last checked: release APK builds (26.2 MB). Not played on a phone or the emulator.
+
+Round 8 follow-up (same day, from Steven's review):
+- No exhausted phase: after `rage()` the boss goes straight back to APPROACH, frenzied (`justFrenzied` for the
+  summoner too), its next move almost at once. `isExhausted`, `justRageOver` and the 1.5x damage are gone.
+- No red circles on bosses: the frenzied aura and the ultimate's tell field are gone; a frenzied boss gets a red
+  outline traced round its sprite (like the elite's gold one). Render: `art/records/scenes/BOSS_FRENZIED.png`.
+- The secret wall is secret: `drawCrackedWall` draws only two faint hairline cracks and one chip; no light
+  through the darkness; a weak heavy blow only drops grit. Renders: `SECRET_SUBTLE_N/E/S/W.png`.
+- Tutorial: no secret room or step (back to 25 steps), the event card no longer lists the events, the stats
+  card no longer lists the stats, the finale only warns that a boss isn't done when it's nearly dead.
+
+Last checked: release APK builds (26.2 MB). Not played on a phone.
+- Secret wall, a notch bolder: one dark crack (`crackDot`), two pixels wide in places with a lit lip and a
+  branch, from the top of a north wall's brick face to its foot, or zigzagging along a side or south wall for
+  about a tile. Renders: `art/records/scenes/SECRET_CRACK_N/E/S/W.png`.

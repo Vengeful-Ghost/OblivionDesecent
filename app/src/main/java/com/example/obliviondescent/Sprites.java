@@ -177,6 +177,11 @@ final class Sprites {
         return (int) Math.floorMod(Math.round(deg / 45.0), 8);
     }
 
+    /** The name of base's view for way ("fx.dash.kick" facing south-west is "fx.dash.kick.se", mirrored). */
+    static String viewName(String base, int way) {
+        return base + VIEW_OF[way & 7];
+    }
+
     /** True when facing way (from {@link #facing}) is drawn as its mirror image. */
     static boolean mirrored(int way) {
         return MIRROR[way & 7];
@@ -265,6 +270,28 @@ final class Sprites {
         p.setAlpha(alpha);
         blit(canvas, a.base[i], x, y, flip, scale, p);
         if (a.dye != null) blit(canvas, a.dye[i], x, y, flip, scale, p);
+    }
+
+    private static Paint ragePaint;
+
+    /**
+     * Frame i redrawn in molten crimson (a boss's last stand): its own shading kept, its darks gone to black-red
+     * and its lights to hot orange. Drawn over the normal frame at alpha, so it can burn in.
+     */
+    static void rage(Canvas canvas, Anim a, int i, float x, float y, boolean flip, float scale, int alpha) {
+        if (a == null || i < 0 || i >= a.base.length || alpha <= 0) return;
+        if (ragePaint == null) {
+            Paint p = crisp();
+            p.setColorFilter(new android.graphics.ColorMatrixColorFilter(new float[]{
+                    0.75f, 0.45f, 0.20f, 0, 22,
+                    0.12f, 0.18f, 0.05f, 0, 0,
+                    0.05f, 0.05f, 0.06f, 0, 0,
+                    0, 0, 0, 1, 0}));
+            ragePaint = p;
+        }
+        ragePaint.setAlpha(alpha);
+        blit(canvas, a.base[i], x, y, flip, scale, ragePaint);
+        if (a.dye != null) blit(canvas, a.dye[i], x, y, flip, scale, ragePaint);
     }
 
     private static void blit(Canvas canvas, Frame f, float x, float y, boolean flip, float scale, Paint paint) {

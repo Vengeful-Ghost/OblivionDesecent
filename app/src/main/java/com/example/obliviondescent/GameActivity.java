@@ -91,9 +91,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     // Level-up perks: stacks per Perk, and level-ups still waiting for a pick
     private final int[] perks = new int[Perk.values().length];
     private int pendingPerks = 0;
-    private boolean perkDialogOpen = false;
-    private MaterialButton btnLevelUp;
-    private ObjectAnimator levelBadgePulse;
+    private TextView txtBagPoints; // the gold pip on the bag: stat points waiting to be spent
     private int playerArmor = 100;
     private int oldHealth = 0;
     private int oldArmor = 0;
@@ -183,6 +181,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private long lastDashTime = 0;
     private float dashDX = 0f;
     private float dashDY = 0f;
+    private int dashTicks = 0, dashWay = 0;
+    private static final int DASH_BLUE = Color.rgb(122, 184, 255), DASH_GOLD = Color.rgb(255, 214, 90);
 
     // Perfect dodge: an attack meets the player early in a dash
     private long lastPerfectDodge = 0;
@@ -386,6 +386,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
         // Daily run: today's seeded dungeon for everyone, one life, no save
         dailySeed = getIntent().getLongExtra(EXTRA_DAILY_SEED, 0L);
+        // The guided tutorial (MenuActivity's ?): its own fixed floor, offline content, nothing saved
+        tutorialRun = getIntent().getBooleanExtra(EXTRA_TUTORIAL, false) && coopCode == null;
         dailyDay = getIntent().getStringExtra(EXTRA_DAILY_DAY);
         // Weekly challenge: a daily-style seeded run with a twist
         String mod = getIntent().getStringExtra(EXTRA_WEEKLY_MOD);
@@ -408,13 +410,14 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         floorManager = new FloorManager();
 
         // Fire batch for floors 1-5 (floor 1 now included so it has shop items + named enemies)
-        generateBatch(1, 5);
+        if (tutorialRun) batchCache.put(1, BatchGenerator.fallbackBatch(1, 5, 7L));
+        else generateBatch(1, 5);
 
         // Start floor 1 immediately with generic placeholder enemies while the batch loads.
         // When the batch arrives, applyBatchToCurrentFloorIfReady() will re-spawn with
         // AI templates and the shop will auto-populate via pollForBatchThenPopulate().
 
-        currentLayout = generateLayout();
+        currentLayout = tutorialRun ? FloorLayout.tutorial() : generateLayout();
         gameDisplay.setFloorLayout(currentLayout);
         player.x = currentLayout.entryRoom.centerX();
         player.y = currentLayout.entryRoom.centerY();
@@ -495,8 +498,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             if (weeklyMod != null)
                 effects.banner(player.x, player.y - player.radius - 120f, weeklyMod.title.toUpperCase(),
                         Color.rgb(224, 72, 72));
-            // First solo run on this phone: a guided first floor
-            if (coop == null && dailySeed == 0
+            // The guided tutorial starts with its welcome; otherwise a first solo run gets hints on floor 1
+            if (tutorialRun) coachPending = C_WELCOME;
+            else if (coop == null && dailySeed == 0
                     && !getSharedPreferences("tutorial_" + tutorialKey(), MODE_PRIVATE).getBoolean("done", false))
                 setTutorialStep(0);
         });
@@ -530,9 +534,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         // A fallen solo player can't open these (closing them would unpause mid-revive)
         menuBtn.setOnClickListener(v -> { if (playerHealth > 0 || coop != null) showMenuDialog(); });
         btnInventory.setOnClickListener(v -> { if (playerHealth > 0 || coop != null) showInventoryDialog(); });
-        btnLevelUp = findViewById(R.id.btn_level_up);
-        btnLevelUp.setOnClickListener(v -> showPerkDialog());
-        findViewById(R.id.txt_tutorial).setOnClickListener(v -> finishTutorial(true));
+        txtBagPoints = findViewById(R.id.txt_bag_points);
+        findViewById(R.id.txt_tutorial).setOnClickListener(v -> {
+            if (tutorialRun) confirmLeaveTutorial();
+            else finishTutorial(true);
+        });
 
         // Held down = keep attacking; polled by the logic thread in tick()
         aimJoystick = findViewById(R.id.aim_joystick);
@@ -579,9 +585,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return coop != null ? coop.seed : dailySeed;
     }
 
-    /** Co-op and daily runs are one-offs: no save file, no stored items, no solo content cache. */
+    /** Co-op, daily and tutorial runs are one-offs: no save file, no stored items, no solo content cache. */
     private boolean oneOffRun() {
-        return coop != null || dailySeed != 0;
+        return coop != null || dailySeed != 0 || tutorialRun;
     }
 
     /* ============================================================
@@ -723,6 +729,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 if ("p".equals(f[0])) {
                     spawnHostileShot(x, y, dirX, dirY, Float.parseFloat(f[6]), Float.parseFloat(f[7]),
                             Integer.parseInt(f[8]), Float.parseFloat(f[9]), null);
+                } else if ("m".equals(f[0])) {
+                    effects.mark(x, y, Float.parseFloat(f[6]), Integer.parseInt(f[7]), Long.parseLong(f[8]), null);
                 } else {
                     resolveStrike(x, y, dirX, dirY, Float.parseFloat(f[6]), Float.parseFloat(f[7]),
                             Integer.parseInt(f[8]), Float.parseFloat(f[9]), Float.parseFloat(f[10]),
@@ -940,10 +948,11 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         float prevPlayerX = player.x, prevPlayerY = player.y;
         if (isDashing) {
             player.update(dashDX * (DASH_POWER / player.speed), dashDY * (DASH_POWER / player.speed));
-            effects.trail(player.x, player.y, Color.argb(160, 90, 140, 255));
+            dashTrail(now);
             if (has(Synergy.PHANTOM)) phantomCuts(now);
             if (now - dashStartTime > DASH_DURATION) {
                 isDashing = false;
+                endDash(now);
             }
         } else if (playerHealth > 0) {
             // Charging a heavy attack slows the walk
@@ -1156,9 +1165,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
         }
         SoundManager.setGameIntensity(inShopRoom ? 0f : Math.min(1f, fight / 3f));
-        // A living boss that has noticed you gets its own theme
+        // A living boss that has noticed you gets its own theme; otherwise each biome plays its own
         boolean bossAlive = activeBoss != null && !activeBoss.isDead && activeBoss.isAwake && !inShopRoom;
-        SoundManager.setGameTrack(this, bossAlive ? R.raw.boss_music : R.raw.game_music);
+        Biome biome = Biome.forFloor(floorManager.getCurrentFloor());
+        SoundManager.setGameTrack(this, bossAlive ? R.raw.boss_music : biome.music());
 
         // Low on health in a fight: the heart pounds and the screen edges throb red
         boolean danger = lowHealthEffects && alive && playerHealth <= maxHealth / 4
@@ -1174,6 +1184,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         // --- 4. Enemy strikes and shots that finished their wind-up ---
         resolveEnemyAttacks(now);
+        tickBlasts(now);
+        tickRage(now);
 
         // --- 5. Collision: Attack ---
         if (isAttacking) {
@@ -1194,8 +1206,41 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         checkShopPortalCollision();
         checkShopRoomInteractions();
         checkBossStatus();
+        tickBossSeal();
 
         effects.update();
+    }
+
+    /**
+     * The boss room's doors: they slam shut once this phone's player is all the way inside with the boss alive,
+     * and lift when it falls. Per phone, so a co-op teammate still outside can walk in (and is shut in too).
+     */
+    private void tickBossSeal() {
+        FloorLayout layout = currentLayout;
+        if (layout == null || inShopRoom || layout.bossRoom == null || layout.bossGates.isEmpty()) return;
+        boolean fighting = activeBoss != null && !activeBoss.isDead && !floorManager.isBossDefeated();
+        Room arena = layout.bossRoom;
+        if (layout.bossSealed) {
+            if (fighting) return;
+            layout.bossSealed = false;
+            for (float[] g : layout.bossGates)
+                effects.burst((g[0] + g[2]) / 2f, (g[1] + g[3]) / 2f, Color.rgb(244, 215, 122), 18, 8f);
+            effects.banner(arena.centerX(), arena.centerY() - 200f, "THE WAY IS OPEN", Color.rgb(244, 215, 122));
+            soundManager.play(SoundManager.Sfx.VAULT_UNLOCK);
+            return;
+        }
+        if (!fighting || playerHealth <= 0) return;
+        // all of the body past the door line, so the gate never closes on top of anyone
+        float m = player.radius + 40f;
+        if (player.x < arena.x + m || player.x > arena.x + arena.width - m
+                || player.y < arena.y + m || player.y > arena.y + arena.height - m) return;
+        layout.bossSealed = true;
+        int crimson = Color.rgb(224, 72, 72);
+        for (float[] g : layout.bossGates)
+            effects.burst((g[0] + g[2]) / 2f, (g[1] + g[3]) / 2f, crimson, 22, 9f);
+        effects.banner(arena.centerX(), arena.centerY() - 200f, "THE DOORS SEAL", crimson);
+        if (camera != null) camera.startShake(260, 10f);
+        soundManager.play(SoundManager.Sfx.GATE_LOCKED);
     }
 
     /* ============================================================
@@ -1600,15 +1645,27 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     soundManager.play(SoundManager.Sfx.BLINK);
                 }
                 if (e.justUltimate) {
-                    // the boss's last stand: everything stops a beat while it gathers itself
+                    // the boss's last stand: it roars, the screen flashes, everything stops a beat while it
+                    // gathers itself, and then it rages
                     e.justUltimate = false;
                     effects.banner(e.x, e.y - e.radius - 90f, "LAST STAND", Color.rgb(224, 40, 40));
+                    effects.play("fx.roar", e.x, e.y + e.radius * 0.78f, false);
                     effects.play("fx.hex", e.x, e.y + e.radius * 0.78f, false);
+                    effects.burst(e.x, e.y, Color.rgb(255, 60, 30), 60, 18f);
                     soundManager.play(SoundManager.Sfx.ENRAGE);
-                    if (camera != null) camera.startShake(600, 16f);
-                    slowMo(500, 0.5f);
-                    buzz(120, 255);
+                    soundManager.play(SoundManager.Sfx.GUARD_BREAK);
+                    gameDisplay.roar();
+                    gameDisplay.punchZoom(500, 0.08f);
+                    if (camera != null) camera.startShake(900, 22f);
+                    slowMo(600, 0.45f);
+                    buzz(220, 255);
                 }
+                for (float[] b : e.pendingBlasts) {
+                    effects.mark(b[0], b[1], b[2], (int) b[3], (long) b[4], e.killerName());
+                    if (coop != null) coop.publishEvent("m," + floorManager.getCurrentFloor() + "," + b[0] + "," + b[1]
+                            + ",0,0," + b[2] + "," + (int) b[3] + "," + (long) b[4]);
+                }
+                e.pendingBlasts.clear();
                 if (e.justFrenzied) {
                     e.justFrenzied = false;
                     effects.banner(e.x, e.y - e.radius - 60f, "FINAL FURY", Color.rgb(255, 120, 40));
@@ -1661,6 +1718,34 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             }
             enemies.addAll(raised);
         }
+    }
+
+    /** A boss's meteors landing: a blast of fire on each mark, hurting this phone's player if inside. */
+    private void tickBlasts(long now) {
+        for (GameEffects.Blast b : effects.due(now)) {
+            effects.play("fx.blast", b.x, b.y, false);
+            effects.burst(b.x, b.y, Color.rgb(255, 90, 40), 22, 12f);
+            effects.stain(b.x, b.y, b.r * 0.7f, Color.argb(120, 14, 11, 9));
+            soundManager.play(SoundManager.Sfx.THUD);
+            if (camera != null) camera.startShake(150, 8f);
+            if (playerHealth > 0 && getDistance(player.x, player.y, b.x, b.y) < b.r + player.radius * 0.5f)
+                hitPlayer(b.damage, b.x, b.y, 12f, now, b.by);
+        }
+    }
+
+    private long lastRageBeat;
+
+    /** While a boss rages: the screen's edges burn, the ground shakes on its heartbeat and embers fly. */
+    private void tickRage(long now) {
+        Enemy boss = activeBoss;
+        boolean raging = boss != null && boss.isRaging() && !inShopRoom;
+        gameDisplay.setRaging(raging);
+        if (!raging || now - lastRageBeat < 600) return;
+        lastRageBeat = now;
+        if (camera != null) camera.startShake(260, 7f);
+        soundManager.play(SoundManager.Sfx.HEARTBEAT);
+        effects.burst(boss.x, boss.y - boss.radius * 0.5f, Color.rgb(255, 70, 30), 14, 9f);
+        buzz(30, 140);
     }
 
     /** Necromancer: the nearest fallen bodies rise again as thralls, at most five alive at once. */
@@ -1868,6 +1953,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     /** Counts daily quest progress and cheers when one is done. */
     private void quest(Quests q, int amount) {
+        if (tutorialRun) return; // the tutorial could be replayed for quests otherwise
         if (!Quests.add(this, q, amount)) return;
         // pixelfx's ribbon unrolls over the player; the plain banner if the pack lacks it
         if (Sprites.get("fx.quest") != null) effects.play("fx.quest", player.x, player.y - player.radius - 200f, false);
@@ -1937,8 +2023,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             buzz(15, 90);
             if (Math.random() < 0.3) spawnGoldCoins(d.x, d.y, 1 + (int) (Math.random() * 3));
             // Now and then a barrel (not a crate) holds a small healing draught; none in the Dry Throat week
-            if (d.kind == Props.BARREL && weeklyMod != WeeklyMod.NO_POTIONS && Math.random() < BARREL_POTION_CHANCE)
+            boolean draught = d.kind == Props.BARREL && weeklyMod != WeeklyMod.NO_POTIONS
+                    && (Math.random() < BARREL_POTION_CHANCE || (tutorialRun && !coachPotionGiven));
+            if (draught) {
+                coachPotionGiven = true;
                 dropBarrelPotion(d.x, d.y);
+            }
         }
     }
 
@@ -2030,6 +2120,13 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void damageEnemy(Enemy e, int damage, boolean crit, float pushX, float pushY, boolean stagger,
                              boolean heavy) {
         bestiary(e, false);
+        if (e.isRaging()) {
+            // its last stand: blows glance off the fire
+            effects.number(e.x, e.y - e.radius - 20f, "IMMUNE", Color.rgb(255, 120, 90));
+            effects.burst(e.x, e.y, Color.rgb(255, 90, 40), 6, 6f);
+            soundManager.play(SoundManager.Sfx.BLOCK);
+            return;
+        }
         float dx = e.x - player.x, dy = e.y - player.y;
         float d = Math.max(1f, (float) Math.sqrt(dx * dx + dy * dy));
         boolean guardBroken = false;
@@ -2127,6 +2224,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 }
             }
 
+            if (playerHealth <= 0 && tutorialRun) {
+                // the tutorial never lets you fall
+                playerHealth = 1;
+                animateHealthBar(0, playerHealth);
+                invulnerableUntil = System.currentTimeMillis() + 1500;
+            }
             if (playerHealth <= 0 && altar[Altar.SECOND_WIND.ordinal()] > 0 && !secondWindUsed) {
                 secondWindUsed = true;
                 playerHealth = Math.max(1, maxHealth * 3 / 10);
@@ -2271,8 +2374,9 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 if (e.isDead && !e.counted) {
                     e.counted = true;
                     // Guests copy the host's count; mimics, thralls and the Trial's waves don't count at all
-                    if (!isGuest() && !e.mimic && !e.summoned && !trialFoes.contains(e))
+                    if (!isGuest() && !tutorialRun && !e.mimic && !e.summoned && !trialFoes.contains(e))
                         floorManager.onEnemyKilled(player.x, player.y);
+                    if (tutorialRun && e.mimic) coachMimicDead = true;
                     statsManager.onEnemyKilled();
                     if (!e.summoned) quest(Quests.KILLS, 1);
                     bestiary(e, true);
@@ -2428,6 +2532,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         soundManager.play(SoundManager.Sfx.HEAVY_SWING);
         buzz(40, 200);
         if (w.isProjectile) {
+            breakSecretWall(charge, 240f);
             Projectile p = new Projectile(player.x, player.y, aimDX, aimDY, 22f, w.range * 1.2f,
                     Math.round(w.damage * damageMultiplier() * power), w.knockback * 3f, 24f, Color.rgb(255, 210, 90));
             p.heavy = true;
@@ -2437,6 +2542,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         }
         float reach = player.radius + w.range * kind.reach * 1.25f + 20f;
         float arc = kind == Weapon.Kind.SPEAR ? 30f : Math.max(70f, kind.finisherArc);
+        breakSecretWall(charge, reach);
         player.startSwing(angle, Math.min(arc, 120f), kind == Weapon.Kind.SPEAR, 220, true);
         effects.slash(player.x, player.y, angle, reach, arc, Color.rgb(255, 210, 90));
         if (camera != null) camera.startShake(160, 7f);
@@ -2460,6 +2566,41 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             gameDisplay.punchZoom(200, 0.05f);
             soundManager.play(SoundManager.Sfx.THUD);
         }
+    }
+
+    /**
+     * A heavy blow by the secret room's cracked wall: fully charged it blows the wall in (rubble, a shake, the
+     * room and its loot revealed); not quite, a little grit falls and nothing more.
+     * Logic thread.
+     */
+    private void breakSecretWall(float charge, float reach) {
+        FloorLayout layout = currentLayout;
+        if (layout == null || !layout.secretSealed || layout.secretWall == null || inShopRoom) return;
+        float[] g = layout.secretWall;
+        float cx = (g[0] + g[2]) / 2f, cy = (g[1] + g[3]) / 2f;
+        if (layout.secretSide == Room.NORTH) cy += 60f; // the brick face hangs below the wall's line
+        if (getDistance(player.x, player.y, cx, cy) > reach + 120f) return;
+        int stone = Color.rgb(150, 140, 125);
+        if (charge < 1f) {
+            // not hard enough: a little grit falls, and that's all
+            effects.burst(cx, cy, stone, 4, 3f);
+            return;
+        }
+        layout.secretSealed = false;
+        effects.play("fx.slam", cx, cy, false);
+        effects.burst(cx, cy, stone, 60, 16f);
+        effects.burst(cx, cy, Color.rgb(90, 82, 74), 40, 11f);
+        effects.burst(cx, cy, Color.rgb(255, 200, 110), 20, 9f);
+        effects.stain(cx, cy, 110f, Color.argb(120, 14, 11, 9));
+        effects.banner(cx, cy - 110f, "SECRET ROOM!", Color.rgb(244, 215, 122));
+        soundManager.play(SoundManager.Sfx.CRATE_SMASH);
+        soundManager.play(SoundManager.Sfx.GUARD_BREAK);
+        soundManager.play(SoundManager.Sfx.VAULT_UNLOCK);
+        if (camera != null) camera.startShake(500, 18f);
+        gameDisplay.punchZoom(260, 0.06f);
+        hitStop(140);
+        buzz(120, 255);
+        if (layout.secretRoom != null) layout.secretRoom.explored = true;
     }
 
     /** Closest awake enemy within the given distance, or null. */
@@ -2537,6 +2678,36 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         invulnerableUntil = Math.max(invulnerableUntil, now + DASH_DURATION + 80);
         soundManager.playDash();
         behaviorTracker.recordDash(dashDX, dashDY);
+        // The kick: air and dust thrown back from the heel, and the speed lines start here
+        dashTicks = 0;
+        dashWay = Sprites.facing(-1, dashDX, dashDY);
+        float feet = player.y + player.radius * 0.78f;
+        effects.play(Sprites.viewName("fx.dash.kick", dashWay), player.x, feet, Sprites.mirrored(dashWay));
+        effects.dashStart(player.x, player.y);
+        player.leaveGhost(effects, DASH_BLUE, 340);
+        gameDisplay.punchZoom(160, 0.025f);
+    }
+
+    /**
+     * Mid-dash: afterimages of the body every other tick (gold after a perfect dodge), the speed lines' heads
+     * riding along, and pixel sparks shed back the way it came.
+     */
+    private void dashTrail(long now) {
+        boolean perfect = now - lastPerfectDodge < 600;
+        effects.dashMove(player.x, player.y);
+        if (++dashTicks % 2 == 0) player.leaveGhost(effects, perfect ? DASH_GOLD : DASH_BLUE, perfect ? 520 : 320);
+        for (int i = 0; i < 2; i++)
+            effects.dashSpark(player.x, player.y, -dashDX * 2.4f, -dashDY * 2.4f,
+                    perfect ? DASH_GOLD : i == 0 ? DASH_BLUE : Color.rgb(180, 220, 255));
+    }
+
+    /** The dash is over: the lines draw in behind, a last afterimage, and the skid where the feet stop. */
+    private void endDash(long now) {
+        boolean perfect = now - lastPerfectDodge < 600;
+        effects.dashEnd(player.x, player.y);
+        player.leaveGhost(effects, perfect ? DASH_GOLD : DASH_BLUE, perfect ? 520 : 300);
+        effects.play(Sprites.viewName("fx.dash.skid", dashWay), player.x, player.y + player.radius * 0.78f,
+                Sprites.mirrored(dashWay));
     }
 
     /**
@@ -2659,6 +2830,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
      * Prepares the next floor while the screen is black.
      */
     private void triggerFloorTransition() {
+        if (tutorialRun) {
+            coachFinale();
+            return;
+        }
         if (coop != null && coop.isHost()) coop.publishFloor(floorManager.getCurrentFloor() + 1);
         txtFloorTitle.setText(floorTitle(floorManager.getCurrentFloor() + 1));
         txtFloorTitle.setAlpha(0f);
@@ -2736,6 +2911,15 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         // Safe zone — clear all enemies and coins
         synchronized (enemies)    { enemies.clear(); }
         synchronized (goldCoins)  { goldCoins.clear(); }
+        if (tutorialRun && !coachShopShown) {
+            coachShopShown = true;
+            coachHint("The Shop", "Buy something if you like, then step into the portal to finish.", C_STEP);
+            gameDisplay.postDelayed(() -> coachPages(new int[]{R.drawable.ic_coin}, new String[][]{{"The Shop",
+                    "Walk up to the counter to browse. Tap a card to see the item, then buy it with your coins.\n\n"
+                            + "Green numbers beat what you carry now and red ones are worse; UPGRADE marks anything "
+                            + "better than yours, and one item every floor is on SALE.\n\n"
+                            + "The shop is safe: no enemy follows you in. Its portal takes you on down."}}, null), 1300);
+        }
     }
 
     /**
@@ -3615,15 +3799,26 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     private void spawnRoomChest() {
         synchronized (treasureChests) {
             treasureChests.clear();
-            for (Room room : new Room[]{currentLayout.treasureRoom, currentLayout.vaultRoom}) {
+            Room secret = currentLayout.secretRoom;
+            for (Room room : new Room[]{currentLayout.treasureRoom, currentLayout.vaultRoom, secret}) {
                 if (room == null) continue;
                 TreasureChest chest = new TreasureChest(room.centerX(), room.centerY(),
                         room.centerX(), room.centerY(), 0L);
                 chest.landed = true; // already sitting there, no landing burst
-                chest.vault = room == currentLayout.vaultRoom;
+                chest.secret = room == secret;
+                chest.vault = room == currentLayout.vaultRoom || chest.secret; // a secret room's loot is the vault's
                 chest.mimic = !chest.vault && currentLayout.treasureMimic;
                 pickChestReward(chest);
                 treasureChests.add(chest);
+            }
+        }
+        // coins strewn round the secret room's chest
+        Room secret = currentLayout.secretRoom;
+        if (secret != null && currentLayout.secretSealed) {
+            for (int i = 0; i < 4; i++) {
+                double a = Math.PI / 4 + i * Math.PI / 2;
+                spawnGoldCoins(secret.centerX() + (float) Math.cos(a) * 180f, secret.centerY() + (float) Math.sin(a) * 160f,
+                        2 + floorManager.getCurrentFloor() / 3);
             }
         }
         setUpEventRooms();
@@ -3919,8 +4114,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             inventoryPage = 0;
 
             int[] ids = {R.id.filter_all, R.id.filter_weapons,
-                    R.id.filter_armor, R.id.filter_consumables, R.id.filter_perks, R.id.filter_relics};
-            String[] filters = {"ALL", "WEAPONS", "ARMOR", "CONSUMABLES", "PERKS", "RELICS"};
+                    R.id.filter_armor, R.id.filter_consumables, R.id.filter_relics};
+            String[] filters = {"ALL", "WEAPONS", "ARMOR", "CONSUMABLES", "RELICS"};
 
             for (int i = 0; i < ids.length; i++) {
                 TextView t = dialog.findViewById(ids[i]);
@@ -3986,17 +4181,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (f.equals("ALL") || f.equals("WEAPONS")) items.addAll(weapons);
         if (f.equals("ALL") || f.equals("ARMOR")) items.addAll(inventoryArmors);
         if (f.equals("ALL") || f.equals("CONSUMABLES")) items.addAll(consumableInventory);
-        boolean perkTab = f.equals("PERKS");
         boolean relicTab = f.equals("RELICS");
-        if (perkTab) {
-            for (Perk p : Perk.values()) if (stacks(p) > 0) items.add(p);
-            for (Synergy s : Synergy.values()) if (has(s)) items.add(s);
-        }
         if (relicTab) items.addAll(relics);
-        // Stable sorts, so ties keep the weapons / armor / consumables order; perks and relics keep theirs
-        if (!perkTab && !relicTab && inventorySort.equals("Name"))
+        // Stable sorts, so ties keep the weapons / armor / consumables order; relics keep theirs
+        if (!relicTab && inventorySort.equals("Name"))
             items.sort((a, b) -> itemName(a).compareToIgnoreCase(itemName(b)));
-        else if (!perkTab && !relicTab && !inventorySort.equals("Type"))
+        else if (!relicTab && !inventorySort.equals("Type"))
             items.sort((a, b) -> Float.compare(sortValue(b), sortValue(a)));
 
         // As many square cells as fit: rows of at least 80dp, at least 4 per row
@@ -4018,8 +4208,6 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             Object item = items.get(i);
             if (item instanceof Weapon) addWeaponRow(row, dialog, (Weapon) item);
             else if (item instanceof Armor) addArmorRow(row, dialog, (Armor) item);
-            else if (item instanceof Perk) addPerkCell(row, (Perk) item);
-            else if (item instanceof Synergy) addSynergyCell(row, (Synergy) item);
             else if (item instanceof Relic) addRelicCell(row, dialog, (Relic) item);
             else addConsumableRow(row, dialog, (ConsumableStack) item);
         }
@@ -4034,8 +4222,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
         if (items.isEmpty()) {
             TextView empty = new TextView(this);
-            empty.setText(perkTab ? "No blessings yet. Level up to earn one."
-                    : relicTab ? "No relics yet. Vaults, boss chests and cursed chests hold them." : "Nothing here...");
+            empty.setText(relicTab ? "No relics yet. Vaults, boss chests and cursed chests hold them." : "Nothing here...");
             empty.setTextColor(ContextCompat.getColor(this, R.color.bone_muted));
             empty.setTextSize(16f);
             empty.setGravity(android.view.Gravity.CENTER);
@@ -4211,6 +4398,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
 
     private void showInventoryDialog() {
         soundManager.play(SoundManager.Sfx.CLICK);
+        if (tutorialRun) coachSawBag = true;
         if (coop == null) isGamePaused = true;
         currentInventoryFilter = "ALL";
 
@@ -4247,8 +4435,10 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         setupFilterTab(dialog, R.id.filter_weapons,      "WEAPONS");
         setupFilterTab(dialog, R.id.filter_armor,        "ARMOR");
         setupFilterTab(dialog, R.id.filter_consumables,  "CONSUMABLES");
-        setupFilterTab(dialog, R.id.filter_perks,        "PERKS");
         setupFilterTab(dialog, R.id.filter_relics,       "RELICS");
+        dialog.findViewById(R.id.filter_stats).setOnClickListener(v -> showStatSheet(dialog));
+        dialog.findViewById(R.id.btn_stats_back).setOnClickListener(v -> hideStatSheet(dialog));
+        updateStatsTab(dialog);
 
         updateEquippedDisplay(dialog);
         populateInventoryList(dialog);
@@ -4323,36 +4513,164 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         addCell(row, cell);
     }
 
-    /** One owned perk: its stacks and their combined effect, in the perk's colour. */
-    private void addPerkCell(LinearLayout row, Perk perk) {
-        View cell = getLayoutInflater().inflate(R.layout.dialog_inventory_item, row, false);
-        android.widget.ImageView icon = cell.findViewById(R.id.inv_item_icon);
-        icon.setImageResource(perk.icon);
-        icon.setImageTintList(android.content.res.ColorStateList.valueOf(perk.color));
-        TextView nameView = cell.findViewById(R.id.inv_item_name);
-        nameView.setText(perk.title);
-        nameView.setTextColor(perk.color);
-        ((TextView) cell.findViewById(R.id.inv_item_subtitle)).setText(perk.describe(stacks(perk)));
-        TextView quantityView = cell.findViewById(R.id.inv_item_quantity);
-        quantityView.setVisibility(View.VISIBLE);
-        quantityView.setText("x" + stacks(perk));
-        applyRarityBorder(cell, perk.color, perk.title);
-        addCell(row, cell);
+    /* ---------------------------------------------------------------- the stat sheet (the bag's Stats tab) */
+
+    private final View[] statTiles = new View[Perk.values().length];
+
+    /** The bag's Stats tab label: gold with the count while points wait. */
+    private void updateStatsTab(Dialog dialog) {
+        TextView tab = dialog.findViewById(R.id.filter_stats);
+        if (tab == null) return;
+        tab.setText(pendingPerks > 0 ? "STATS  " + pendingPerks : "STATS");
+        tab.setTextColor(ContextCompat.getColor(this, pendingPerks > 0 ? R.color.gold_bright : R.color.bone_muted));
     }
 
-    /** An awakened synergy, in gold, with what it does. */
-    private void addSynergyCell(LinearLayout row, Synergy synergy) {
+    /** Opens the stat sheet over the whole bag. */
+    private void showStatSheet(Dialog dialog) {
+        soundManager.play(SoundManager.Sfx.CLICK);
+        dialog.findViewById(R.id.inventory_main).setVisibility(View.INVISIBLE);
+        View panel = dialog.findViewById(R.id.stats_panel);
+        panel.setVisibility(View.VISIBLE);
+        panel.setAlpha(0f);
+        panel.setScaleX(0.97f);
+        panel.setScaleY(0.97f);
+        panel.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start();
+        buildStatSheet(dialog);
+    }
+
+    /** Back to the bag's items. */
+    private void hideStatSheet(Dialog dialog) {
+        soundManager.play(SoundManager.Sfx.CLICK);
+        dialog.findViewById(R.id.stats_panel).setVisibility(View.GONE);
+        dialog.findViewById(R.id.inventory_main).setVisibility(View.VISIBLE);
+        updateStatsTab(dialog);
+    }
+
+    /** Nine tiles, three rows of three, each a ninth of the sheet; tapping one puts a point into it. */
+    private void buildStatSheet(Dialog dialog) {
+        LinearLayout grid = dialog.findViewById(R.id.stats_grid);
+        grid.removeAllViews();
+        float dp = getResources().getDisplayMetrics().density;
+        int gap = Math.round(3 * dp);
+        Perk[] all = Perk.values();
+        LinearLayout row = null;
+        for (int i = 0; i < all.length; i++) {
+            Perk perk = all[i];
+            if (i % 3 == 0) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                grid.addView(row, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+            }
+            View tile = getLayoutInflater().inflate(R.layout.item_stat_tile, row, false);
+            tile.setBackground(statFrame(perk.color, 0.55f, 0.07f));
+            tile.findViewById(R.id.stat_plate).setBackground(statFrame(perk.color, 0.9f, 0.22f));
+            android.widget.ImageView icon = tile.findViewById(R.id.stat_icon);
+            icon.setImageResource(perk.icon);
+            icon.setImageTintList(android.content.res.ColorStateList.valueOf(perk.color));
+            ((TextView) tile.findViewById(R.id.stat_name)).setTextColor(perk.color);
+            ((TextView) tile.findViewById(R.id.stat_kind)).setText(perk.title + "  \u00b7  each point");
+            android.text.SpannableStringBuilder gives = new android.text.SpannableStringBuilder(perk.amount(1) + " ");
+            int at = gives.length();
+            gives.append(perk.stat);
+            gives.setSpan(new android.text.style.ForegroundColorSpan(perk.color), at, gives.length(), 0);
+            ((TextView) tile.findViewById(R.id.stat_gives)).setText(gives);
+            tile.setOnClickListener(v -> tapStat(dialog, perk, tile));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+            lp.setMargins(gap, gap, gap, gap);
+            row.addView(tile, lp);
+            statTiles[i] = tile;
+        }
+        refreshStatSheet(dialog);
+        Wear.apply(grid);
+    }
+
+    /** A square pixel frame in a stat's colour: its border at that strength, its fill a faint wash of it. */
+    private android.graphics.drawable.GradientDrawable statFrame(int color, float border, float fill) {
+        float dp = getResources().getDisplayMetrics().density;
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setCornerRadius(0f);
+        int base = ContextCompat.getColor(this, R.color.bg_surface);
+        d.setColor(blend(base, color, fill));
+        d.setStroke(Math.round(2 * dp), (Math.round(255 * border) << 24) | (color & 0xFFFFFF));
+        return d;
+    }
+
+    /** Every tile's points and total, the synergies, and the points left at the top right. */
+    private void refreshStatSheet(Dialog dialog) {
+        ((TextView) dialog.findViewById(R.id.txt_stats_title)).setText("Stats  \u00b7  Level " + playerLevel);
+        TextView left = dialog.findViewById(R.id.txt_stat_points);
+        left.setText(String.valueOf(pendingPerks));
+        left.setTextColor(ContextCompat.getColor(this, pendingPerks > 0 ? R.color.gold_bright : R.color.bone_muted));
+        ((TextView) dialog.findViewById(R.id.txt_stat_points_label)).setText(pendingPerks == 1 ? "point" : "points");
+        ((android.widget.ImageView) dialog.findViewById(R.id.img_stat_points)).setImageTintList(
+                android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this,
+                        pendingPerks > 0 ? R.color.gold_bright : R.color.bone_muted)));
+        ((TextView) dialog.findViewById(R.id.txt_stats_hint)).setText(pendingPerks > 0
+                ? "Tap a stat to put a point into it. Every level gives " + STAT_POINTS_PER_LEVEL + "."
+                : "No points left. Every level gives " + STAT_POINTS_PER_LEVEL + " more. Two stats at "
+                        + SYNERGY_POINTS + " awaken a synergy.");
+        Perk[] all = Perk.values();
         int gold = Color.rgb(244, 215, 122);
-        View cell = getLayoutInflater().inflate(R.layout.dialog_inventory_item, row, false);
-        android.widget.ImageView icon = cell.findViewById(R.id.inv_item_icon);
-        icon.setImageResource(R.drawable.ic_trophy);
-        icon.setImageTintList(android.content.res.ColorStateList.valueOf(gold));
-        TextView nameView = cell.findViewById(R.id.inv_item_name);
-        nameView.setText(synergy.title);
-        nameView.setTextColor(gold);
-        ((TextView) cell.findViewById(R.id.inv_item_subtitle)).setText(synergy.effect);
-        applyRarityBorder(cell, gold, synergy.title);
-        addCell(row, cell);
+        for (int i = 0; i < all.length; i++) {
+            View tile = statTiles[i];
+            if (tile == null) continue;
+            Perk perk = all[i];
+            int have = stacks(perk);
+            ((TextView) tile.findViewById(R.id.stat_name)).setText(perk.name);
+            TextView points = tile.findViewById(R.id.stat_points);
+            points.setText(String.valueOf(have));
+            points.setTextColor(have > 0 ? perk.color : ContextCompat.getColor(this, R.color.bone_faint));
+            android.text.SpannableStringBuilder total = new android.text.SpannableStringBuilder(
+                    have >= perk.cap ? "Maxed at " + perk.amount(have) + " " + perk.stat
+                            : have > 0 ? "Now " + perk.amount(have) + " " + perk.stat : "Nothing yet");
+            Synergy synergy = Synergy.of(perk);
+            if (synergy != null) {
+                int at = total.length();
+                if (has(synergy)) {
+                    total.append("  \u00b7  ").append(synergy.title).append(" awake");
+                    total.setSpan(new android.text.style.ForegroundColorSpan(gold), at, total.length(), 0);
+                } else {
+                    total.append("  \u00b7  ").append(String.valueOf(SYNERGY_POINTS)).append(" + ")
+                            .append(synergy.partner(perk).name).append(": ").append(synergy.title);
+                }
+            }
+            ((TextView) tile.findViewById(R.id.stat_total)).setText(total);
+            tile.setAlpha(pendingPerks > 0 && have < perk.cap ? 1f : 0.8f);
+        }
+    }
+
+    /** A tap on a stat: a point goes in with a pop, or, with none left (or the stat maxed), a buzz and a shake. */
+    private void tapStat(Dialog dialog, Perk perk, View tile) {
+        if (pendingPerks <= 0 || stacks(perk) >= perk.cap) {
+            soundManager.play(SoundManager.Sfx.GATE_LOCKED);
+            buzz(60, 120);
+            tile.animate().cancel();
+            tile.setTranslationX(0f);
+            ObjectAnimator shake = ObjectAnimator.ofFloat(tile, "translationX", 0f, -14f, 12f, -9f, 6f, -3f, 0f);
+            shake.setDuration(320);
+            shake.start();
+            View chip = dialog.findViewById(R.id.stats_points_chip);
+            ObjectAnimator.ofFloat(chip, "translationX", 0f, -10f, 9f, -6f, 4f, 0f).setDuration(300).start();
+            TextView left = dialog.findViewById(R.id.txt_stat_points);
+            left.setTextColor(ContextCompat.getColor(this, R.color.crimson_bright));
+            left.postDelayed(() -> refreshStatSheet(dialog), 420);
+            return;
+        }
+        spendStatPoint(perk);
+        buzz(18, 90);
+        tile.setScaleX(1.07f);
+        tile.setScaleY(1.07f);
+        tile.animate().scaleX(1f).scaleY(1f).setDuration(260)
+                .setInterpolator(new android.view.animation.OvershootInterpolator(2.5f)).start();
+        // the frame flashes the stat's colour for a moment
+        tile.setBackground(statFrame(perk.color, 1f, 0.45f));
+        tile.postDelayed(() -> tile.setBackground(statFrame(perk.color, 0.55f, 0.07f)), 140);
+        TextView points = tile.findViewById(R.id.stat_points);
+        points.setScaleX(1.8f);
+        points.setScaleY(1.8f);
+        points.animate().scaleX(1f).scaleY(1f).setDuration(300).start();
+        refreshStatSheet(dialog);
+        updateStatsTab(dialog);
     }
 
     /** One relic, in gold, with what it does; the worn one is marked. */
@@ -5123,29 +5441,42 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return 30 + (playerLevel - 1) * 20;
     }
 
-    /** Level-up blessings: small on purpose, they add up over a long run. The stat word shows in its colour. */
+    /**
+     * The nine stats. Every level gives STAT_POINTS_PER_LEVEL points to spend on them in the bag's Stats tab; a point
+     * is small on purpose, they add up over a long run. Each has a name of its own (name) and the plain stat it
+     * raises (title); cap is how many points it can take (Agility and Defense stop at 60%).
+     */
     enum Perk {
-        MIGHT("Strength", 5f, "%", "damage", 0xFFE04848, R.drawable.ic_crossed_swords),
-        VIGOR("Vigor", 15f, "", "max HP", 0xFF7AB85C, R.drawable.ic_heart),
-        SWIFTNESS("Agility", 3f, "%", "move speed", 0xFF4F8FFF, R.drawable.ic_boots),
-        KEEN_EYE("Precision", 2f, "%", "crit chance", 0xFFFF9A3C, R.drawable.ic_target),
-        QUICK_HANDS("Dexterity", 5f, "%", "attack speed", 0xFFE86AD0, R.drawable.ic_hourglass),
-        WHIRLWIND("Whirlwind", 6f, "%", "Spin recharge", 0xFF4FD8E0, R.drawable.ic_knockback),
-        SHADOW_STEP("Shadow Step", 6f, "%", "Dash recharge", 0xFFA070E8, R.drawable.ic_range),
-        IRON_SKIN("Defense", 3f, "%", "damage resist", 0xFFB4BEC8, R.drawable.ic_shield),
-        GREED("Fortune", 8f, "%", "gold", 0xFFF4D77A, R.drawable.ic_coin);
+        MIGHT("Brute Force", "Strength", 3f, "%", "damage", 0xFFE04848, R.drawable.ic_crossed_swords, 0),
+        VIGOR("Iron Heart", "Vigor", 6f, "", "max HP", 0xFF7AB85C, R.drawable.ic_heart, 0),
+        SWIFTNESS("Fleetfoot", "Agility", 2f, "%", "move speed", 0xFF4F8FFF, R.drawable.ic_boots, 30),
+        KEEN_EYE("Hawk Eye", "Precision", 1f, "%", "crit chance", 0xFFFF9A3C, R.drawable.ic_target, 0),
+        QUICK_HANDS("Quickblade", "Dexterity", 2f, "%", "attack speed", 0xFFE86AD0, R.drawable.ic_hourglass, 0),
+        WHIRLWIND("Tempest", "Whirlwind", 3f, "%", "Spin recharge", 0xFF4FD8E0, R.drawable.ic_knockback, 0),
+        SHADOW_STEP("Phantom Stride", "Shadow Step", 3f, "%", "Dash recharge", 0xFFA070E8, R.drawable.ic_range, 0),
+        IRON_SKIN("Stoneskin", "Defense", 1f, "%", "damage resist", 0xFFB4BEC8, R.drawable.ic_shield, 60),
+        GREED("Gilded Palm", "Fortune", 4f, "%", "gold", 0xFFF4D77A, R.drawable.ic_coin, 0);
 
-        final String title, unit, stat;
+        final String name, title, unit, stat;
         final float step;
-        final int color, icon;
+        final int color, icon, cap;
 
-        Perk(String title, float step, String unit, String stat, int color, int icon) {
+        Perk(String name, String title, float step, String unit, String stat, int color, int icon, int cap) {
+            this.name = name;
             this.title = title;
             this.step = step;
             this.unit = unit;
             this.stat = stat;
             this.color = color;
             this.icon = icon;
+            this.cap = cap > 0 ? cap : Integer.MAX_VALUE;
+        }
+
+        /** "+3%" for that many points, without the stat. */
+        String amount(int stacks) {
+            float total = step * stacks;
+            return "+" + (total == (int) total ? String.valueOf((int) total)
+                    : String.format(java.util.Locale.US, "%.1f", total)) + unit;
         }
 
         /** The bonus that many stacks give as a fraction (Might 5% a stack: 3 stacks = 0.15). */
@@ -5169,7 +5500,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         return perks[p.ordinal()];
     }
 
-    /** Two perks at three stacks each awaken a synergy with an effect of its own. */
+    /** Two stats at SYNERGY_POINTS each awaken a synergy with an effect of its own. */
     private enum Synergy {
         BLADESTORM("Bladestorm", Perk.WHIRLWIND, Perk.MIGHT, "Spin hits harder and reaches a little further"),
         PHANTOM("Phantom", Perk.SHADOW_STEP, Perk.KEEN_EYE, "Dashing through enemies grazes them"),
@@ -5190,10 +5521,16 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             for (Synergy s : values()) if (s.a == p || s.b == p) return s;
             return null;
         }
+
+        Perk partner(Perk p) {
+            return p == a ? b : a;
+        }
     }
 
+    private static final int STAT_POINTS_PER_LEVEL = 3, SYNERGY_POINTS = 6;
+
     private boolean has(Synergy s) {
-        return stacks(s.a) >= 3 && stacks(s.b) >= 3;
+        return stacks(s.a) >= SYNERGY_POINTS && stacks(s.b) >= SYNERGY_POINTS;
     }
 
     /* ============================================================
@@ -5435,6 +5772,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         if (near == eventNear) return;
         eventNear = near;
         if (near == null) return;
+        if (tutorialRun) coachSawEvent = true;
         Props.Decor event = near;
         isGamePaused = true;
         runOnUiThread(() -> {
@@ -5461,11 +5799,12 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                     int old = playerHealth;
                     playerHealth = Math.max(1, playerHealth - cost);
                     animateHealthBar(old, playerHealth);
-                    pendingPerks++;
-                    updateLevelBadge();
+                    pendingPerks += STAT_POINTS_PER_LEVEL;
+                    updateBagPip();
                     int red = Color.rgb(224, 72, 72);
                     effects.burst(shrine.x, shrine.y, red, 30, 10f);
-                    effects.banner(player.x, player.y - player.radius - 50f, "BLESSING EARNED", red);
+                    effects.banner(player.x, player.y - player.radius - 50f,
+                            "+" + STAT_POINTS_PER_LEVEL + " STAT POINTS", red);
                     soundManager.play(SoundManager.Sfx.PERK_PICK);
                 });
     }
@@ -5805,6 +6144,472 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         setTutorialStep(step + 1);
     }
 
+    /* ============================================================
+       GUIDED TUTORIAL - MenuActivity's ? button starts it: FloorLayout.tutorial()'s fixed floor, walked room
+       by room. Each step is a task shown in the hint card (move, dash, beat these foes...) or a card that
+       pauses to explain something; a room's door opens once its lessons are done. Nothing is saved, kills
+       don't count, you can't fall, and either portal at the end closes it with a last look at the rest.
+       ============================================================ */
+
+    static final String EXTRA_TUTORIAL = "guided_tutorial";
+    private boolean tutorialRun;
+    private volatile int coach = -1, coachPending = -1; // the step running, and one to start on the logic thread
+    private long coachAt;
+    private float coachFromX, coachFromY;
+    private final List<Enemy> coachFoes = new ArrayList<>();
+    private volatile boolean coachSawBag, coachSawEvent, coachMimicDead, coachShopShown, coachPotionGiven;
+
+    private static final int C_WELCOME = 0, C_MOVE = 1, C_DASH = 2, C_TO_B = 3, C_ATTACK = 4, C_HEAVY = 5,
+            C_SPIN = 6, C_TO_C = 7, C_READ = 8, C_FIGHT = 9, C_LEVEL = 10, C_SPEND = 11, C_TO_D = 12, C_SMASH = 13,
+            C_DRINK = 14, C_EVENT = 15, C_TO_E = 16, C_ELITE = 17, C_VAULT = 18, C_CHEST = 19, C_BAG = 20,
+            C_MIMIC = 21, C_TO_F = 22, C_PORTALS = 23, C_STEP = 24, C_COUNT = 25;
+
+    // What each task step asks, in the hint card (the info steps fill theirs in coachEnter)
+    private static final String[][] COACH = {
+            {"", ""},
+            {"Move", "Drag the left stick to walk around the room."},
+            {"Dash", "Tap DASH. Nothing can hit you mid-dash, so dash through attacks."},
+            {"Onward", "The door is open. Head east into the next room."},
+            {"Attack", "Hold the ATK stick to attack: it aims at the nearest enemy. Drag it to aim yourself."},
+            {"Heavy Blow", "This brute guards behind the bright arc. Hold the anvil button to charge a heavy blow, let go to smash through."},
+            {"Spin", "Surrounded! Tap SPIN to hit everything around you."},
+            {"Onward", "The next door is open. Head east."},
+            {"", ""},
+            {"Fight", "Beat them all. Step out of the red marks, or dash through them."},
+            {"", ""},
+            {"Spend Points", "Tap the bag at the top right, then STATS, and tap stats until all 3 points are spent."},
+            {"Onward", "Head south into the store room."},
+            {"Smash", "Break the barrels and crates: they hide coins, and now and then a healing draught."},
+            {"Drink", "A dart trap! Tap the potion button: a potion heals you over a few seconds."},
+            {"Event Room", "The side room to the east holds an event, a Blood Shrine. Walk up to it and choose."},
+            {"Onward", "Head west, past the stores."},
+            {"Elites", "A glowing elite! Elites hit harder, but every one drops a key."},
+            {"The Vault", "The gold gate to the south seals a vault. Walk up to it with your key."},
+            {"Treasure", "Walk up to the chest to open it. Chests hold weapons and armor."},
+            {"Your Bag", "Your new gear went into your bag. Tap the bag at the top right to look at it and equip it."},
+            {"Mimic", "Another chest... but some chests are mimics. Go and see."},
+            {"Onward", "Head west to the exit."},
+            {"", ""},
+            {"The Way Down", "Step into a portal: purple goes deeper, gold visits the shop first."},
+    };
+
+    /** Shows a task in the hint card: its title, what to do, and how far through the tutorial it is. */
+    private void coachHint(String title, String text, int step) {
+        runOnUiThread(() -> {
+            TextView hint = findViewById(R.id.txt_tutorial);
+            android.text.SpannableStringBuilder b = new android.text.SpannableStringBuilder();
+            b.append(title.toUpperCase());
+            b.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, b.length(), 0);
+            int body = b.length();
+            b.append("\n").append(text);
+            b.setSpan(new android.text.style.ForegroundColorSpan(getColor(R.color.bone_white)), body, b.length(), 0);
+            int foot = b.length();
+            b.append("\n").append(String.valueOf(step + 1)).append(" / ").append(String.valueOf(C_COUNT)).append("  \u00b7  tap to leave");
+            b.setSpan(new android.text.style.ForegroundColorSpan(getColor(R.color.bone_muted)), foot, b.length(), 0);
+            b.setSpan(new android.text.style.RelativeSizeSpan(0.8f), foot, b.length(), 0);
+            hint.setText(b);
+            hint.setVisibility(View.VISIBLE);
+            hint.bringToFront();
+            hint.setElevation(20f);
+            hint.animate().cancel();
+            hint.setScaleX(1.08f);
+            hint.setScaleY(1.08f);
+            hint.animate().scaleX(1f).scaleY(1f).setDuration(220).start();
+        });
+    }
+
+    /**
+     * A card that pauses the game to explain something (the menu guide's card): one page, or several with
+     * Back / Next. after runs once it's closed.
+     */
+    private void coachPages(int[] icons, String[][] pages, Runnable after) {
+        isGamePaused = true;
+        runOnUiThread(() -> {
+            Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+            dialog.setContentView(R.layout.dialog_tutorial);
+            dialog.setCancelable(false);
+            if (dialog.getWindow() != null)
+                dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            LinearLayout dots = dialog.findViewById(R.id.tutorial_dots);
+            int size = getResources().getDimensionPixelSize(R.dimen.space_sm);
+            for (int i = 0; pages.length > 1 && i < pages.length; i++) {
+                View dot = new View(this);
+                android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+                shape.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                dot.setBackground(shape);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
+                lp.setMargins(size / 2, 0, size / 2, 0);
+                dots.addView(dot, lp);
+            }
+            int[] page = {0};
+            Runnable render = () -> {
+                int p = page[0];
+                ((android.widget.ImageView) dialog.findViewById(R.id.tutorial_icon)).setImageResource(icons[Math.min(p, icons.length - 1)]);
+                ((TextView) dialog.findViewById(R.id.tutorial_title)).setText(pages[p][0]);
+                ((TextView) dialog.findViewById(R.id.tutorial_page)).setText(pages.length > 1 ? (p + 1) + " / " + pages.length : "");
+                ((TextView) dialog.findViewById(R.id.tutorial_body)).setText(pages[p][1]);
+                dialog.findViewById(R.id.btn_tutorial_back).setVisibility(p > 0 ? View.VISIBLE : View.INVISIBLE);
+                ((MaterialButton) dialog.findViewById(R.id.btn_tutorial_next)).setText(
+                        p + 1 < pages.length ? "Next" : pages.length > 1 ? "Done" : "Got it");
+                for (int i = 0; i < dots.getChildCount(); i++)
+                    ((android.graphics.drawable.GradientDrawable) dots.getChildAt(i).getBackground())
+                            .setColor(getColor(i == p ? R.color.gold_bright : R.color.bone_faint));
+            };
+            boolean[] closed = {false};
+            Runnable close = () -> {
+                if (closed[0]) return;
+                closed[0] = true;
+                dialog.dismiss();
+                hideSystemUI();
+                isGamePaused = false;
+                if (after != null) after.run();
+            };
+            dialog.findViewById(R.id.btn_close_tutorial).setOnClickListener(v -> close.run());
+            dialog.findViewById(R.id.btn_tutorial_back).setOnClickListener(v -> {
+                soundManager.play(SoundManager.Sfx.CARD_FLIP);
+                page[0]--;
+                render.run();
+            });
+            dialog.findViewById(R.id.btn_tutorial_next).setOnClickListener(v -> {
+                soundManager.play(SoundManager.Sfx.CARD_FLIP);
+                if (page[0] + 1 >= pages.length) close.run();
+                else {
+                    page[0]++;
+                    render.run();
+                }
+            });
+            render.run();
+            dialog.show();
+            hideSystemUIOnWindow(dialog.getWindow());
+        });
+    }
+
+    /** Starts a step: its foes, its door, its card or its hint. Logic thread. */
+    private void coachEnter(int step) {
+        coach = step;
+        coachAt = System.currentTimeMillis();
+        coachFromX = player.x;
+        coachFromY = player.y;
+        FloorLayout layout = currentLayout;
+        Room[] rooms = layout != null ? layout.stageRooms : null;
+        if (rooms == null) return;
+        Room room;
+        switch (step) {
+            case C_WELCOME:
+                coachPages(new int[]{R.drawable.ic_flag}, new String[][]{{"Welcome Down",
+                        "This floor walks you through everything you need to know. Each room teaches one thing, "
+                                + "and its door opens once you've done it.\n\n"
+                                + "You can't fall here. Tap the hint card at the bottom any time to leave."}},
+                        () -> coachPending = C_MOVE);
+                return;
+            case C_TO_B: case C_TO_C: case C_TO_D: case C_TO_E: case C_TO_F:
+                openStage(step == C_TO_B ? 1 : step == C_TO_C ? 2 : step == C_TO_D ? 3 : step == C_TO_E ? 4 : 5);
+                break;
+            case C_ATTACK:
+                room = rooms[1];
+                coachFoe(Enemy.Type.GRUNT, room.centerX() + 300f, room.centerY() - 160f, false);
+                coachFoe(Enemy.Type.GRUNT, room.centerX() + 360f, room.centerY() + 150f, false);
+                break;
+            case C_HEAVY:
+                room = rooms[1];
+                coachFoe(Enemy.Type.BRUTE, room.centerX() + 320f, room.centerY(), false);
+                break;
+            case C_SPIN:
+                for (int i = 0; i < 4; i++) {
+                    double a = Math.PI / 4 + i * Math.PI / 2;
+                    coachFoe(Enemy.Type.GRUNT, player.x + (float) Math.cos(a) * 230f, player.y + (float) Math.sin(a) * 230f, false);
+                }
+                break;
+            case C_READ:
+                coachPages(new int[]{R.drawable.ic_warning}, new String[][]{{"Read the Enemy",
+                        "A red ! over an enemy means it's about to strike, and the red cone or circle on the floor "
+                                + "shows where. Step out of it, or dash through.\n\n"
+                                + "Dash just as a hit lands for a PERFECT dodge: time slows, the dash recharges, your next "
+                                + "hits are sure crits and you heal a little.\n\n"
+                                + "A critical hit or a combo's last blow during a wind-up STAGGERS the enemy."}},
+                        () -> coachPending = C_FIGHT);
+                return;
+            case C_FIGHT:
+                room = rooms[2];
+                coachFoe(Enemy.Type.ARCHER, room.centerX() + 520f, room.centerY() - 320f, false);
+                coachFoe(Enemy.Type.GRUNT, room.centerX() + 260f, room.centerY() + 200f, false);
+                coachFoe(Enemy.Type.GRUNT, room.centerX() + 300f, room.centerY() - 120f, false);
+                coachFoe(Enemy.Type.BOMBER, room.centerX() + 480f, room.centerY() + 360f, false);
+                break;
+            case C_LEVEL:
+                // make sure there's a point to spend: a level's worth of XP if none is waiting
+                runOnUiThread(() -> { if (pendingPerks == 0) gainXp(Math.max(1, xpForNextLevel() - playerXp)); });
+                coachPages(new int[]{R.drawable.ic_level, R.drawable.ic_crossed_swords}, new String[][]{{"Level Up",
+                        "Kills give XP. Every level gives you " + STAT_POINTS_PER_LEVEL + " stat points, and a "
+                                + "little health back.\n\n"
+                                + "Points you don't spend are kept: level up three times without spending and you "
+                                + "have 9. The gold number on your bag counts the points waiting."},
+                        {"Your Stats",
+                                "Spend points in your bag: tap the bag at the top right, then STATS. Each stat shows "
+                                        + "what a point in it gives; tap one to put a point in. Your points left show at "
+                                        + "the top right.\n\nHow you build is up to you."}},
+                        () -> coachPending = C_SPEND);
+                return;
+            case C_DRINK: {
+                // a draught to drink, if the barrels' one is gone
+                boolean potion = false;
+                try {
+                    for (ConsumableStack c : consumableInventory) if ("heal".equals(c.item.effect)) potion = true;
+                } catch (java.util.ConcurrentModificationException busy) {
+                    potion = true; // the bag is changing on the UI thread this moment: it holds one
+                }
+                if (!potion) dropBarrelPotion(player.x, player.y);
+                // a dart trap takes half your health, so there's something to heal
+                if (playerHealth > maxHealth / 2) {
+                    int dart = playerHealth - maxHealth / 2;
+                    effects.banner(player.x, player.y - player.radius - 70f, "DART TRAP", Color.rgb(224, 72, 72));
+                    if (camera != null) camera.startShake(200, 8f);
+                    damagePlayer(dart);
+                }
+                break;
+            }
+            case C_BAG:
+                coachSawBag = false;
+                break;
+            case C_EVENT:
+                coachSawEvent = false;
+                coachPages(new int[]{R.drawable.ic_map}, new String[][]{{"Event Rooms",
+                        "Some side rooms hold events: you'll know them by their own coloured floor and their icon on "
+                                + "the map. This one is a Blood Shrine, but it's only one of many, and a floor can have "
+                                + "one, two or none.\n\nWhat the others do is for you to find out."}},
+                        () -> coachHint(COACH[C_EVENT][0], COACH[C_EVENT][1], C_EVENT));
+                return;
+
+            case C_ELITE:
+                room = rooms[4];
+                coachFoe(Enemy.Type.GRUNT, room.centerX() - 250f, room.centerY() - 160f, true);
+                break;
+            case C_MIMIC: {
+                coachMimicDead = false;
+                room = rooms[4];
+                float[] spot = landing(room.centerX() + 220f, room.centerY() - 240f, 48f, room.centerX(), room.centerY());
+                TreasureChest mimic = new TreasureChest(spot[0], spot[1], spot[0], spot[1], 0L);
+                mimic.landed = true;
+                mimic.mimic = true;
+                pickChestReward(mimic);
+                synchronized (treasureChests) { treasureChests.add(mimic); }
+                effects.burst(mimic.x, mimic.y, Color.rgb(244, 215, 122), 18, 8f);
+                break;
+            }
+            case C_PORTALS:
+                floorManager.openPortalNow();
+                soundManager.play(SoundManager.Sfx.PORTAL_OPEN);
+                coachPages(new int[]{R.drawable.ic_stairs}, new String[][]{{"The Way Down",
+                        "Beating a floor's enemies opens two portals in its exit room: purple to the next floor, "
+                                + "gold to the shop, where your coins buy gear.\n\n"
+                                + "Every 5th floor a boss waits instead, and its doors seal until it falls. "
+                                + "Your run saves at the start of every floor."}},
+                        () -> coachPending = C_STEP);
+                return;
+            default:
+                break;
+        }
+        coachHint(COACH[step][0], COACH[step][1], step);
+    }
+
+    /** Raises one of a step's foes there, awake at once (elite when asked); the step waits on them. */
+    private void coachFoe(Enemy.Type type, float x, float y, boolean elite) {
+        // always inside the room you're in, never in the rock past its walls
+        Room room = currentLayout.getRoomAt(player.x, player.y);
+        if (room != null) {
+            x = Math.max(room.x + 110f, Math.min(room.x + room.width - 110f, x));
+            y = Math.max(room.y + 130f, Math.min(room.y + room.height - 110f, y));
+        }
+        Enemy foe = new Enemy(x, y, type);
+        float[] spot = new float[2];
+        Props.pushOut(currentLayout.decor, x, y, foe.radius, spot);
+        foe.x = spot[0];
+        foe.y = spot[1];
+        foe.applyFloorScaling(1);
+        List<EnemyTemplate> pool = getEnemyPoolForFloor(1);
+        if (!pool.isEmpty()) {
+            foe.templateIndex = (int) (Math.random() * pool.size());
+            foe.applyTemplate(pool.get(foe.templateIndex));
+        }
+        if (elite) foe.makeElite();
+        foe.isAwake = true;
+        foe.setBehaviorTracker(behaviorTracker);
+        foe.setLayout(currentLayout);
+        synchronized (enemies) {
+            enemies.add(foe);
+            coachFoes.add(foe);
+        }
+        effects.play("fx.summon", foe.x, foe.y + foe.radius * 0.78f, false);
+        effects.burst(foe.x, foe.y, Color.rgb(224, 72, 72), 18, 8f);
+        soundManager.play(SoundManager.Sfx.SUMMON);
+    }
+
+    /** True once every foe the step raised is dead. */
+    private boolean coachFoesDown() {
+        synchronized (enemies) {
+            for (Enemy e : coachFoes) if (!e.isDead) return false;
+            coachFoes.clear();
+        }
+        return true;
+    }
+
+    /** Lifts the tutorial's door number n (1-5) with a flourish, so the next room can be walked into. */
+    private void openStage(int n) {
+        FloorLayout layout = currentLayout;
+        if (layout == null || layout.stagesOpen >= n) return;
+        float[] g = layout.stageGates.get(n - 1);
+        layout.stagesOpen = n;
+        float gx = (g[0] + g[2]) / 2f, gy = (g[1] + g[3]) / 2f;
+        effects.burst(gx, gy, Color.rgb(244, 215, 122), 26, 9f);
+        effects.banner(gx, gy - 80f, "THE WAY IS OPEN", Color.rgb(244, 215, 122));
+        soundManager.play(SoundManager.Sfx.VAULT_UNLOCK);
+    }
+
+    /** True when the player stands well inside the room. */
+    private boolean standingIn(Room r, float inset) {
+        return player.x > r.x + inset && player.x < r.x + r.width - inset
+                && player.y > r.y + inset && player.y < r.y + r.height - inset;
+    }
+
+    /** Moves the tutorial on once the current step is done. Logic thread, from tickExtras. */
+    private void tickCoach() {
+        if (!tutorialRun) return;
+        int pending = coachPending;
+        if (pending >= 0) {
+            coachPending = -1;
+            soundManager.play(SoundManager.Sfx.CLICK);
+            coachEnter(pending);
+            return;
+        }
+        int step = coach;
+        FloorLayout layout = currentLayout;
+        if (step < 0 || layout == null || layout.stageRooms == null || inShopRoom) return;
+        Room[] rooms = layout.stageRooms;
+        boolean done = false;
+        switch (step) {
+            case C_MOVE:   done = getDistance(player.x, player.y, coachFromX, coachFromY) > 300f; break;
+            case C_DASH:   done = lastDashTime > coachAt; break;
+            case C_TO_B:   done = standingIn(rooms[1], 140f); break;
+            case C_TO_C:   done = standingIn(rooms[2], 140f); break;
+            case C_TO_D:   done = standingIn(rooms[3], 140f); break;
+            case C_TO_E:   done = standingIn(rooms[4], 140f); break;
+            case C_TO_F:   done = standingIn(rooms[5], 120f); break;
+            case C_ATTACK: case C_HEAVY: case C_SPIN: case C_FIGHT: case C_ELITE:
+                done = coachFoesDown(); break;
+            case C_SPEND:  done = pendingPerks == 0; break;
+            case C_SMASH: {
+                done = true;
+                for (Props.Decor d : layout.decor)
+                    if (Props.breakable(d) && rooms[3].contains(d.x, d.y)) { done = false; break; }
+                break;
+            }
+            case C_DRINK:  done = lastPotionAt > coachAt; break;
+            case C_EVENT:  done = coachSawEvent; break;
+            case C_VAULT:  done = !layout.vaultLocked; break;
+            case C_CHEST: {
+                synchronized (treasureChests) {
+                    for (TreasureChest c : treasureChests) if (c.vault && !c.secret && c.opened) done = true;
+                }
+                break;
+            }
+            case C_BAG:    done = coachSawBag; break;
+            case C_MIMIC:  done = coachMimicDead; break;
+            default:       break;
+        }
+        if (!done) return;
+        // the next step starts a beat later, so a win or a door has its moment
+        if (now() - coachAt < 600) return;
+        int next = step + 1;
+        if (next == C_READ || next == C_LEVEL || next == C_PORTALS) {
+            effects.banner(player.x, player.y - player.radius - 60f, "WELL DONE", Color.rgb(244, 215, 122));
+        }
+        soundManager.play(SoundManager.Sfx.PERK_PICK);
+        coachEnter(next);
+    }
+
+    private static long now() {
+        return System.currentTimeMillis();
+    }
+
+    /** A portal at the end: what's beyond this floor, then back to the menu with the tutorial done. */
+    private void coachFinale() {
+        coach = -1;
+        runOnUiThread(() -> findViewById(R.id.txt_tutorial).setVisibility(View.GONE));
+        coachPages(new int[]{R.drawable.ic_trophy, R.drawable.ic_level, R.drawable.ic_hourglass,
+                        R.drawable.ic_volume, R.drawable.ic_flag},
+                new String[][]{
+                        {"Bosses & Biomes",
+                                "Every 5th floor a boss guards the way down. Its doors seal until it falls. "
+                                        + "Don't think it's over when it's nearly dead.\n\n"
+                                        + "Past each boss the dungeon changes: the Flooded Catacombs slow your steps, the "
+                                        + "Infernal Forge's vents erupt, and in the Hollow Void your light reaches less far. "
+                                        + "Each has its own enemies, its own gear in the shop and its own music."},
+                        {"Souls & the Altar",
+                                "Every run earns Souls, even the runs you lose.\n\n"
+                                        + "Spend them at the Soul Altar on the main menu on lasting upgrades, and in its "
+                                        + "Wardrobe on new looks for your body, your swing and your last breath."},
+                        {"Every Day",
+                                "Daily Quests pay Souls. The Daily Run and the Weekly Challenge put everyone on the "
+                                        + "same dungeon with one life, for the leaderboard.\n\n"
+                                        + "The Bestiary keeps every enemy you've met and how to beat it, and Co-op takes "
+                                        + "friends down with you. Your solo run saves at the start of every floor."},
+                        {"Settings",
+                                "Audio: sound effects, menu music and game music.\n"
+                                        + "Controls: aim with the attack stick or strike where you walk, vibration, "
+                                        + "stick size and opacity, and left-handed sticks.\n"
+                                        + "Effects: screen shake, damage numbers, blood and bodies, the low health "
+                                        + "warning and camera lean.\n"
+                                        + "Account: sign out (your saves stay) and ad privacy.\n\n"
+                                        + "Open them from the main menu or the pause menu."},
+                        {"You're Ready",
+                                "That's everything. You can walk through this again any time from the ? on the "
+                                        + "main menu.\n\nGood luck down there."}},
+                this::completeTutorial);
+    }
+
+    /** The tutorial is done: floor 1's hints won't show again, and it's back to the menu. */
+    private void completeTutorial() {
+        getSharedPreferences("tutorial_" + tutorialKey(), MODE_PRIVATE).edit()
+                .putBoolean("done", true).putBoolean("guided", true).apply();
+        leaveTutorial();
+    }
+
+    private void leaveTutorial() {
+        threadsRunning = false;
+        SoundManager.stopGameMusic();
+        startActivity(new Intent(this, MenuActivity.class));
+        finish();
+    }
+
+    /** Tapping the hint card: leave the tutorial, after asking. */
+    private void confirmLeaveTutorial() {
+        isGamePaused = true;
+        Dialog confirm = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        confirm.setContentView(R.layout.dialog_confirm);
+        confirm.setCancelable(false);
+        if (confirm.getWindow() != null)
+            confirm.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        ((android.widget.ImageView) confirm.findViewById(R.id.confirm_icon)).setImageResource(R.drawable.ic_flag);
+        ((TextView) confirm.findViewById(R.id.confirm_title)).setText("Leave the tutorial?");
+        ((TextView) confirm.findViewById(R.id.confirm_message)).setText(
+                "You can walk through it again any time from the ? on the main menu.");
+        MaterialButton no = confirm.findViewById(R.id.btn_confirm_no);
+        MaterialButton yes = confirm.findViewById(R.id.btn_confirm_yes);
+        no.setText("Stay");
+        yes.setText("Leave");
+        no.setOnClickListener(v -> {
+            confirm.dismiss();
+            isGamePaused = false;
+            hideSystemUI();
+        });
+        yes.setOnClickListener(v -> {
+            confirm.dismiss();
+            leaveTutorial();
+        });
+        confirm.show();
+        hideSystemUIOnWindow(confirm.getWindow());
+    }
+
     /** Per-tick upkeep: burning foes, delayed elite blasts, room events and the tutorial. */
     private void tickExtras(long now) {
         for (java.util.Iterator<Burn> it = burns.iterator(); it.hasNext(); ) {
@@ -5839,6 +6644,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         tickTrial(now);
         tickVents(now);
         tickTutorial();
+        tickCoach();
     }
 
     /** Player damage multiplier: +1% per Might, +2% per Altar Strength; levels give perks, not raw stats. */
@@ -5906,8 +6712,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
     }
 
     /**
-     * Adds XP and handles level-ups (+20 HP heal and a perk pick per level).
-     * Each level-up also earns a perk pick, waiting behind the badge.
+     * Adds XP and handles level-ups: +20 HP and STAT_POINTS_PER_LEVEL stat points a level, spent whenever the player
+     * likes in the bag's Stats tab (the bag shows a gold pip while any wait). Unspent points add up.
      * Must run on the UI thread, like every other change to playerHealth.
      */
     private void gainXp(int amount) {
@@ -5929,114 +6735,46 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             effects.burst(player.x, player.y, Color.rgb(255, 215, 0), 30, 10f);
             soundManager.play(SoundManager.Sfx.LEVEL_UP);
             effects.play("fx.levelup", player.x, playerFeet(), false);
-            pendingPerks += gained;
-            updateLevelBadge();
+            int points = gained * STAT_POINTS_PER_LEVEL;
+            pendingPerks += points;
+            effects.banner(player.x, player.y - player.radius - 100f, "+" + points + " STAT POINTS",
+                    Color.rgb(244, 215, 122));
+            updateBagPip();
         }
         updateLevelHUD();
     }
 
-    /** The pulsing "Level up!" badge, shown while perk picks are waiting. */
-    private void updateLevelBadge() {
+    /** The gold pip on the bag: how many stat points wait to be spent, with a pop when it grows. */
+    private void updateBagPip() {
+        if (txtBagPoints == null) return;
         if (pendingPerks <= 0) {
-            btnLevelUp.setVisibility(View.GONE);
-            if (levelBadgePulse != null) levelBadgePulse.cancel();
+            txtBagPoints.setVisibility(View.GONE);
             return;
         }
-        btnLevelUp.setText(pendingPerks > 1 ? "Level up! x" + pendingPerks : "Level up!");
-        if (btnLevelUp.getVisibility() == View.VISIBLE) return;
-        btnLevelUp.setVisibility(View.VISIBLE);
-        levelBadgePulse = ObjectAnimator.ofPropertyValuesHolder(btnLevelUp,
-                android.animation.PropertyValuesHolder.ofFloat("scaleX", 1f, 1.08f),
-                android.animation.PropertyValuesHolder.ofFloat("scaleY", 1f, 1.08f));
-        levelBadgePulse.setDuration(550);
-        levelBadgePulse.setRepeatCount(ObjectAnimator.INFINITE);
-        levelBadgePulse.setRepeatMode(ObjectAnimator.REVERSE);
-        levelBadgePulse.start();
-    }
-
-    /**
-     * Level-up cards: three random perks grow in face down, flip one by one from left to right,
-     * and only then can one be picked. Solo pauses while choosing; co-op keeps running.
-     */
-    /**
-     * Level up: a stat sheet instead of three random cards. Every level gives a point to put into any stat
-     * (the perks: Strength, Vigor, Agility, Precision, Dexterity, Whirlwind, Shadow Step, Defense, Fortune), so a
-     * run can go all in on one play style: a glass cannon, a tank, a dodger. Two stats at 3 points each still
-     * awaken their synergy. The sheet stays open while points are left and closes on the last one (Back keeps the rest).
-     */
-    private void showPerkDialog() {
-        if (pendingPerks <= 0 || perkDialogOpen) return;
-        perkDialogOpen = true;
-        if (coop == null) isGamePaused = true;
-
-        Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
-        dialog.setContentView(R.layout.dialog_level_up);
-        // Back closes the sheet; points not spent wait on the badge
-        dialog.setOnCancelListener(d -> {
-            perkDialogOpen = false;
-            if (coop == null) isGamePaused = false;
-            hideSystemUI();
-        });
-        if (dialog.getWindow() != null)
-            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        dialog.findViewById(R.id.btn_perk_reroll).setVisibility(View.GONE); // nothing random left to reroll
-        LinearLayout grid = dialog.findViewById(R.id.perk_cards);
-        grid.setOrientation(LinearLayout.VERTICAL);
-        fillStatSheet(dialog, grid);
-        dialog.show();
-        hideSystemUIOnWindow(dialog.getWindow());
-    }
-
-    /** One cell per stat, three to a row: its points, what a point gives, and what it adds up to now. */
-    private void fillStatSheet(Dialog dialog, LinearLayout grid) {
-        ((TextView) dialog.findViewById(R.id.txt_perk_title)).setText("Level " + playerLevel + "  ·  "
-                + pendingPerks + (pendingPerks == 1 ? " point" : " points"));
-        grid.removeAllViews();
-        float dp = getResources().getDisplayMetrics().density;
-        int gap = Math.round(3 * dp);
-        Perk[] all = Perk.values();
-        LinearLayout row = null;
-        for (int i = 0; i < all.length; i++) {
-            Perk perk = all[i];
-            if (i % 3 == 0) {
-                row = new LinearLayout(this);
-                grid.addView(row, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Math.round(50 * dp)));
-            }
-            View cell = getLayoutInflater().inflate(R.layout.item_stat_cell, row, false);
-            android.widget.ImageView icon = cell.findViewById(R.id.stat_icon);
-            icon.setImageResource(perk.icon);
-            icon.setImageTintList(android.content.res.ColorStateList.valueOf(perk.color));
-            int have = stacks(perk);
-            ((TextView) cell.findViewById(R.id.stat_value)).setText(perk.title + "  " + have);
-            android.text.SpannableStringBuilder label = new android.text.SpannableStringBuilder(perk.describe(1)).append(" each");
-            Synergy synergy = Synergy.of(perk);
-            if (synergy != null && !has(synergy)) label.append(" · ").append(synergy.title);
-            ((TextView) cell.findViewById(R.id.stat_label)).setText(label);
-            cell.setOnClickListener(v -> {
-                spendStatPoint(perk);
-                if (pendingPerks <= 0 || !dialog.isShowing()) {
-                    closeStatSheet(dialog);
-                } else {
-                    fillStatSheet(dialog, grid);
-                }
-            });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
-            lp.setMargins(gap, gap, gap, gap);
-            row.addView(cell, lp);
+        String count = String.valueOf(pendingPerks);
+        boolean grew = txtBagPoints.getVisibility() != View.VISIBLE
+                || !count.equals(txtBagPoints.getText().toString()) && pendingPerks > parseOr(txtBagPoints.getText(), 0);
+        txtBagPoints.setText(count);
+        txtBagPoints.setVisibility(View.VISIBLE);
+        if (grew) {
+            txtBagPoints.setScaleX(1.6f);
+            txtBagPoints.setScaleY(1.6f);
+            txtBagPoints.animate().scaleX(1f).scaleY(1f).setDuration(320)
+                    .setInterpolator(new android.view.animation.OvershootInterpolator(3f)).start();
         }
-        Wear.apply(grid);
     }
 
-    private void closeStatSheet(Dialog dialog) {
-        dialog.dismiss();
-        perkDialogOpen = false;
-        if (coop == null) isGamePaused = false;
-        hideSystemUI();
+    private static int parseOr(CharSequence text, int fallback) {
+        try {
+            return Integer.parseInt(text.toString());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
-    /** Puts a level's point into a stat; the badge stays while more points are waiting. */
+    /** Puts a stat point into a stat (from the bag's stat sheet). UI thread. */
     private void spendStatPoint(Perk perk) {
-        if (pendingPerks <= 0) return;
+        if (pendingPerks <= 0 || stacks(perk) >= perk.cap) return;
         pendingPerks--;
         Synergy synergy = Synergy.of(perk);
         boolean awakened = synergy != null && !has(synergy);
@@ -6050,8 +6788,8 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
             animateHealthBar(old, playerHealth);
         }
         applySpeedPerk();
-        updateLevelBadge();
-        effects.banner(player.x, player.y - player.radius - 50f, perk.title + " " + stacks(perk), perk.color);
+        updateBagPip();
+        effects.banner(player.x, player.y - player.radius - 50f, perk.name + " " + stacks(perk), perk.color);
         if (awakened) {
             effects.banner(player.x, player.y - player.radius - 110f, synergy.title.toUpperCase() + " AWAKENS",
                     Color.rgb(244, 215, 122));
@@ -6274,7 +7012,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
         super.onDestroy();
         threadsRunning = false;
         leaveCoop();
-        if (statsManager != null) statsManager.flush();
+        if (statsManager != null && !tutorialRun) statsManager.flush();
         if (soundManager != null) soundManager.release();
     }
 
@@ -6559,7 +7297,7 @@ public class GameActivity extends AppCompatActivity implements CoopSession.Liste
                 for (Relic r : relics) if (r.name().equals(wornRelic)) relic = r;
                 updateKeysHUD();
                 applySpeedPerk();
-                updateLevelBadge();
+                updateBagPip();
                 maxHealth = computeMaxHealth();
                 // A run still at its very start begins at full health; older saves are capped
                 if (savedFloor == 1 && playerLevel == 1 && playerXp == 0) playerHealth = maxHealth;

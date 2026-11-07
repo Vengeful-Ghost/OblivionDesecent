@@ -280,7 +280,7 @@
                             style="@style/OD.Text.Caption"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Dungeon, boss and game over themes"
+                            android:text="A theme for each biome, the boss and game over"
                             android:textSize="@dimen/text_caption"
                             tools:ignore="HardcodedText"/>
 
@@ -540,7 +540,7 @@
                             style="@style/OD.Text.Caption"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="The view shakes on heavy hits and slams"
+                            android:text="The view shakes on heavy hits, slams and a boss's last stand"
                             android:textSize="@dimen/text_caption"
                             tools:ignore="HardcodedText"/>
 
